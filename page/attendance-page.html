@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="fa" dir="rtl" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Karbon | ورودی اعضا</title>
+
+    <link rel="stylesheet" href="../src/output.css" />
+  </head>
+
+  <body class="min-h-screen bg-alabaster text-mirage">
+    <!-- ==================== Sidebar ==================== -->
+    <aside
+      class="fixed inset-y-0 right-0 z-50 flex h-screen w-72 shrink-0 flex-col border-l border-french-gray/40 bg-white px-5 py-6"
+    >
+      <!-- Logo -->
+      <div class="mb-10 flex items-center justify-center gap-3 px-3">
+        <h1 class="text-2xl font-bold tracking-[0.7rem] text-mirage">Karbon</h1>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="flex flex-1 flex-col gap-2">
+        <!-- Dashboard -->
+        <a
+          href="../index.html"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+
+          <span> داشبورد </span>
+        </a>
+
+        <!-- Customers -->
+        <a
+          href="#"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+            />
+
+            <circle cx="9" cy="7" r="4" />
+
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
+            />
+          </svg>
+
+          <span> مشتریان </span>
+        </a>
+
+        <!-- Orders -->
+        <a
+          href="#"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6 2h12l2 4v16H4V6l2-4Z"
+            />
+
+            <path stroke-linecap="round" d="M4 6h16M9 10h6" />
+          </svg>
+
+          <span> سفارشات </span>
+        </a>
+
+        <!-- Finance -->
+        <a
+          href="#"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+
+            <path stroke-linecap="round" d="M3 10h18M7 15h3" />
+          </svg>
+
+          <span> مالی </span>
+        </a>
+
+        <!-- Member Entry -->
+        <a
+          href="./attendance-page.html"
+          aria-current="page"
+          class="flex items-center gap-3 rounded-xl bg-persian-blue/10 px-4 py-3 text-sm font-semibold text-persian-blue transition-colors duration-300"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
+            />
+
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m10 17 5-5-5-5M15 12H3"
+            />
+          </svg>
+
+          <span> ورودی اعضا </span>
+        </a>
+
+        <!-- Daily Tasks -->
+        <a
+          href="#"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+
+            <path stroke-linecap="round" d="M8 2v4M16 2v4M3 10h18" />
+
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m8 15 2 2 5-5"
+            />
+          </svg>
+
+          <span> کارهای روزانه </span>
+        </a>
+
+        <!-- Documents -->
+        <a
+          href="#"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"
+            />
+
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M14 2v6h6M8 13h8M8 17h5"
+            />
+          </svg>
+
+          <span> ثبت سند </span>
+        </a>
+
+        <!-- Reports -->
+        <a
+          href="#"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 19V5M4 19h16"
+            />
+
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m7 15 4-5 3 3 5-7"
+            />
+          </svg>
+
+          <span> گزارشات </span>
+        </a>
+
+        <!-- Banks -->
+        <a
+          href="#"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m3 10 9-7 9 7"
+            />
+
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M5 10h14M5 21h14M7 10v8M12 10v8M17 10v8M3 21h18"
+            />
+          </svg>
+
+          <span> بانک ها </span>
+        </a>
+
+        <!-- Settings -->
+        <a
+          href="#"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+        >
+          <svg
+            class="h-5 w-5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+            />
+
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.9 1.9-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-2.7v-.1a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.9-1.9.06-.06A1.7 1.7 0 0 0 7.76 15a1.7 1.7 0 0 0-1.56-1.03H6v-2.7h.2a1.7 1.7 0 0 0 1.56-1.03 1.7 1.7 0 0 0-.34-1.88l-.06-.06 1.9-1.9.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 12.23 5.2V5h2.7v.2a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.9 1.9-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 11H21v2.7h-.2A1.7 1.7 0 0 0 19.4 15Z"
+            />
+          </svg>
+
+          <span> تنظیمات </span>
+        </a>
+      </nav>
+
+      <!-- User Profile -->
+      <div class="mt-8 border-t border-french-gray/40 pt-6">
+        <div
+          class="flex flex-col items-center gap-3 rounded-2xl bg-alabaster px-4 py-5"
+        >
+          <!-- User Image -->
+          <div
+            class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-french-gray/40 text-2xl font-bold text-mirage"
+          >
+            <span> م </span>
+          </div>
+
+          <!-- User Information -->
+          <div class="text-center">
+            <h2 class="text-sm font-bold text-mirage">محمد امین</h2>
+
+            <p class="mt-1 text-xs text-mirage/50">مدیر سیستم</p>
+          </div>
+
+          <!-- Logout -->
+          <button
+            type="button"
+            id="logoutButton"
+            class="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-french-gray/50 bg-white px-3 py-2 text-xs font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
+          >
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
+              />
+
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="m10 17 5-5-5-5M15 12H3"
+              />
+            </svg>
+
+            <span> خروج از حساب </span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ==================== Main Content ==================== -->
+    <!-- ==================== Main Content ==================== -->
+    <main class="mr-72 min-h-screen bg-alabaster">
+      <div class="mx-auto w-full max-w-[1700px] px-7 py-7 xl:px-9">
+        <!-- ==================== Top Header ==================== -->
+        <header
+          class="flex flex-col gap-6 border-b border-french-gray/30 pb-6 xl:flex-row xl:items-center xl:justify-between"
+        >
+          <!-- Page Identity -->
+          <div class="flex items-center gap-4">
+            <div
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-persian-blue text-white shadow-sm"
+            >
+              <svg
+                class="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+                />
+
+                <circle cx="9" cy="7" r="4" />
+
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M17 11h5M19.5 8.5v5"
+                />
+              </svg>
+            </div>
+
+            <div>
+              <div
+                class="mb-1 flex items-center gap-2 text-xs font-medium text-mirage/40"
+              >
+                <span>اعضا</span>
+                <span>/</span>
+                <span class="text-persian-blue"> حضور و غیاب </span>
+              </div>
+
+              <h1 class="text-2xl font-black tracking-tight text-mirage">
+                ورودی اعضا
+              </h1>
+
+              <p class="mt-1.5 text-sm text-mirage/50">
+                مدیریت وضعیت روزانه حضور و غیبت اعضا
+              </p>
+            </div>
+          </div>
+
+          <!-- Date / Time -->
+          <div class="flex flex-wrap items-stretch gap-2">
+            <!-- Persian Date -->
+            <div
+              class="flex min-w-44 flex-col justify-center rounded-xl border border-french-gray/30 bg-white px-4 py-3"
+            >
+              <span class="text-[11px] font-medium text-mirage/40">
+                امروز
+              </span>
+
+              <span
+                id="attendancePersianDate"
+                class="mt-1 text-sm font-bold text-mirage"
+              >
+                --
+              </span>
+            </div>
+
+            <!-- Day Number -->
+            <div
+              class="flex min-w-28 flex-col justify-center rounded-xl border border-french-gray/30 bg-white px-4 py-3"
+            >
+              <span class="text-[11px] font-medium text-mirage/40">
+                روز ماه
+              </span>
+
+              <span
+                id="attendanceMonthDay"
+                class="mt-1 text-sm font-bold text-mirage"
+              >
+                --
+              </span>
+            </div>
+
+            <!-- Clock -->
+            <div
+              class="flex min-w-36 flex-col justify-center rounded-xl bg-mirage px-4 py-3 text-white"
+            >
+              <span class="text-[11px] font-medium text-white/50"> ساعت </span>
+
+              <span
+                id="attendanceClock"
+                dir="ltr"
+                class="mt-1 text-lg font-black tracking-wider"
+              >
+                --:--:--
+              </span>
+            </div>
+          </div>
+        </header>
+
+        <!-- ==================== Calendar ==================== -->
+        <section
+          id="attendanceCalendarSection"
+          class="mt-6 overflow-hidden rounded-2xl border border-french-gray/30 bg-white shadow-sm"
+        >
+          <!-- Calendar Header -->
+          <div
+            class="flex items-center justify-between border-b border-french-gray/25 px-5 py-4"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="flex h-9 w-9 items-center justify-center rounded-xl bg-persian-blue/10 text-persian-blue"
+              >
+                <svg
+                  class="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  viewBox="0 0 24 24"
+                >
+                  <rect x="3" y="4" width="18" height="17" rx="2" />
+
+                  <path stroke-linecap="round" d="M8 2v4M16 2v4M3 9h18" />
+                </svg>
+              </div>
+
+              <div>
+                <h2 class="text-sm font-black text-mirage">
+                  تقویم حضور و غیاب
+                </h2>
+
+                <p class="mt-0.5 text-xs text-mirage/40">وضعیت روزهای اخیر</p>
+              </div>
+            </div>
+
+            <div
+              class="hidden items-center gap-4 text-[11px] font-medium text-mirage/45 sm:flex"
+            >
+              <div class="flex items-center gap-1.5">
+                <span class="h-2 w-2 rounded-full bg-eucalyptus"></span>
+
+                <span> حاضر </span>
+              </div>
+
+              <div class="flex items-center gap-1.5">
+                <span class="h-2 w-2 rounded-full bg-alizarin-crimson"></span>
+
+                <span> غایب </span>
+              </div>
+            </div>
+          </div>
+          <!-- Calendar Content -->
+          <div class="p-4">
+            <div
+              id="attendanceCalendar"
+              class="overflow-x-auto scroll-smooth pb-2"
+            >
+              <div
+                id="attendanceCalendarTrack"
+                class="flex w-max min-w-full gap-3"
+              >
+                <!-- Days render with JavaScript -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== Members ==================== -->
+        <section id="attendanceMembersSection" class="mt-8">
+          <!-- Members Header -->
+          <div class="mb-4 flex items-center justify-between">
+            <div>
+              <div class="flex items-center gap-3">
+                <h2 class="text-lg font-black text-mirage">اعضا</h2>
+
+                <div
+                  id="attendanceMembersCount"
+                  class="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-mirage/50 shadow-sm ring-1 ring-french-gray/25"
+                >
+                  <span> تعداد </span>
+
+                  <span
+                    id="attendanceMembersCountValue"
+                    class="font-black text-mirage"
+                  >
+                    --
+                  </span>
+                </div>
+              </div>
+
+              <p class="mt-1.5 text-xs text-mirage/40">
+                ثبت وضعیت حضور یا غیبت اعضای مجموعه
+              </p>
+            </div>
+          </div>
+
+          <!-- Member Cards -->
+          <div
+            id="attendanceMembers"
+            class="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3"
+          ></div>
+
+          <!-- Members Loading State -->
+          <div
+            id="attendanceMembersLoading"
+            class="hidden overflow-hidden rounded-2xl border border-french-gray/30 bg-white shadow-sm"
+          >
+            <div class="flex min-h-64 items-center justify-center px-8 py-12">
+              <div class="text-center">
+                <span
+                  class="mx-auto block h-8 w-8 animate-spin rounded-full border-[3px] border-persian-blue/15 border-t-persian-blue"
+                ></span>
+
+                <p class="mt-4 text-sm font-bold text-mirage">
+                  در حال دریافت اعضا...
+                </p>
+
+                <p class="mt-1 text-xs text-mirage/40">لطفاً کمی صبر کنید</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Members Error State -->
+          <div
+            id="attendanceMembersError"
+            class="hidden overflow-hidden rounded-2xl border border-alizarin-crimson/15 bg-white shadow-sm"
+          >
+            <div class="flex min-h-64 items-center justify-center px-8 py-12">
+              <div class="max-w-sm text-center">
+                <div
+                  class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-alizarin-crimson/10 text-xl font-black text-alizarin-crimson"
+                >
+                  !
+                </div>
+
+                <h3 class="mt-4 text-sm font-black text-mirage">
+                  خطایی در دریافت اطلاعات رخ داد
+                </h3>
+
+                <p class="mt-2 text-xs leading-6 text-mirage/45">
+                  دریافت اعضا انجام نشد. لطفاً دوباره تلاش کنید.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <!-- Initial / Empty State -->
+          <!-- Empty State -->
+          <div
+            id="attendanceInitialState"
+            class="overflow-hidden rounded-2xl border border-french-gray/30 bg-white shadow-sm"
+          >
+            <div class="flex min-h-64 items-center justify-center px-8 py-12">
+              <div class="flex max-w-md flex-col items-center text-center">
+                <div
+                  class="flex h-16 w-16 items-center justify-center rounded-2xl bg-persian-blue/10 text-persian-blue"
+                >
+                  <svg
+                    class="h-7 w-7"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+                    />
+
+                    <circle cx="9" cy="7" r="4" />
+
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M19 8v6M22 11h-6"
+                    />
+                  </svg>
+                </div>
+
+                <h3 class="mt-5 text-base font-black text-mirage">
+                  هنوز عضوی ثبت نشده است
+                </h3>
+
+                <p class="mt-2 text-sm leading-7 text-mirage/45">
+                  اعضای مجموعه از بخش تنظیمات مدیریت می‌شوند. بعد از ثبت عضو،
+                  کارت او به‌صورت خودکار در این صفحه نمایش داده خواهد شد.
+                </p>
+
+                <div
+                  class="mt-5 inline-flex items-center gap-2 rounded-xl bg-alabaster px-4 py-2.5 text-xs font-medium text-mirage/45"
+                >
+                  <span class="h-2 w-2 rounded-full bg-french-gray"></span>
+
+                  <span> اطلاعات اعضا هنوز به Backend متصل نشده است </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <!-- ==================== Page Script ==================== -->
+    <script type="module" src="../src/js/page/attendance.js"></script>
+  </body>
+</html>
