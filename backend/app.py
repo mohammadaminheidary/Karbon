@@ -2,13 +2,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
+
+import models
+
 from routes.auth import router as auth_router
 
 
 # ایجاد برنامه FastAPI
 app = FastAPI(
     title="Karbon API",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 
@@ -47,15 +50,11 @@ app.include_router(
 )
 
 
-
 # تست سلامت Backend
 @app.get("/")
 def home():
 
     return {
-
         "status": "running",
-
-        "message": "Karbon Backend is running"
-
+        "message": "Karbon Backend is running",
     }
