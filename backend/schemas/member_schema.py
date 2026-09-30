@@ -67,15 +67,20 @@ class MemberCreate(BaseModel):
 
 
     @field_validator(
-        "first_name",
-        "last_name",
-        mode="before",
+    "first_name",
+    "last_name",
+    mode="before",
     )
     @classmethod
-    def validate_required_text(
+    def validate_name_fields(
         cls,
         value,
     ):
+        if value is None:
+            raise ValueError(
+                "نام و نام خانوادگی نمی‌توانند null باشند"
+            )
+
         return normalize_required_text(
             value
         )

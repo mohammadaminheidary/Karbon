@@ -6,6 +6,7 @@ from database import engine, Base
 import models
 
 from routes.auth import router as auth_router
+from routes.members import router as members_router
 
 
 # ایجاد برنامه FastAPI
@@ -33,8 +34,10 @@ app.add_middleware(
     allow_credentials=False,
 
     allow_methods=[
-        "GET",
-        "POST",
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
     ],
 
     allow_headers=[
@@ -49,6 +52,9 @@ app.include_router(
     auth_router
 )
 
+app.include_router(
+    members_router
+)
 
 # تست سلامت Backend
 @app.get("/")
