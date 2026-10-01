@@ -1,7 +1,40 @@
-let modalElements = null;
+const persianDateFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+  weekday: "long",
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
 
-function createElement(tagName, className = "") {
-  const element = document.createElement(tagName);
+/* ======================================================
+   Helpers
+====================================================== */
+
+function parseLocalDateKey(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+
+  return new Date(year, month - 1, day);
+}
+
+function formatDate(dateKey) {
+  try {
+    return persianDateFormatter.format(parseLocalDateKey(dateKey));
+  } catch {
+    return dateKey;
+  }
+}
+
+function formatTime(value) {
+  if (!value) {
+    return "—";
+  }
+
+  return String(value)
+    .slice(0, 5)
+    .replace(/\d/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]);
+}
+
+function createElement(tag, className = "") {
+  const element = document.createElement(tag);
 
   if (className) {
     element.className = className;
@@ -10,91 +43,83 @@ function createElement(tagName, className = "") {
   return element;
 }
 
-function getMemberName(member) {
-  if (typeof member === "string") {
-    return member;
-  }
-
-  return (
-    [member?.first_name, member?.last_name].filter(Boolean).join(" ").trim() ||
-    "بدون نام"
-  );
-}
+/* ======================================================
+   Modal Creation
+====================================================== */
 
 function ensureModal() {
-  if (modalElements) {
-    return modalElements;
+  let modal = document.getElementById("attendanceDayDetailsModal");
+
+  if (modal) {
+    return modal;
   }
 
-  const root = createElement(
+  /* Root */
+
+  modal = createElement("div");
+
+  modal.id = "attendanceDayDetailsModal";
+
+  Object.assign(modal.style, {
+    position: "fixed",
+    inset: "0",
+    zIndex: "99990",
+    display: "none",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "16px",
+    isolation: "isolate",
+  });
+
+  /* Backdrop */
+
+  const backdrop = createElement("div");
+
+  backdrop.dataset.dayModalBackdrop = "true";
+
+  Object.assign(backdrop.style, {
+    position: "absolute",
+    inset: "0",
+    zIndex: "99991",
+    background: "rgba(15, 23, 42, 0.58)",
+    backdropFilter: "blur(3px)",
+    WebkitBackdropFilter: "blur(3px)",
+  });
+
+  /* Dialog */
+
+  const dialog = createElement(
     "div",
     [
-      "fixed",
-      "inset-0",
-      "z-[100]",
-      "hidden",
-      "items-center",
-      "justify-center",
-      "p-4",
-      "sm:p-6",
-    ].join(" "),
-  );
-
-  root.id = "attendanceDayModal";
-
-  root.setAttribute("role", "dialog");
-
-  root.setAttribute("aria-modal", "true");
-
-  root.setAttribute("aria-labelledby", "attendanceDayModalTitle");
-
-  const backdrop = createElement(
-    "div",
-    "absolute inset-0 bg-mirage/45 backdrop-blur-[2px]",
-  );
-
-  backdrop.dataset.modalBackdrop = "true";
-
-  const panel = createElement(
-    "div",
-    [
-      "relative",
-      "z-10",
-      "flex",
-      "max-h-[85vh]",
       "w-full",
       "max-w-2xl",
-      "flex-col",
       "overflow-hidden",
       "rounded-3xl",
-      "border",
-      "border-french-gray/30",
       "bg-white",
       "shadow-2xl",
     ].join(" "),
   );
 
-  /*
-   * Header
-   */
+  Object.assign(dialog.style, {
+    position: "relative",
+    zIndex: "99992",
+    maxHeight: "calc(100vh - 48px)",
+  });
+
+  dialog.setAttribute("role", "dialog");
+
+  dialog.setAttribute("aria-modal", "true");
+
+  /* Header */
+
   const header = createElement(
     "div",
-    [
-      "flex",
-      "items-center",
-      "justify-between",
-      "gap-4",
-      "border-b",
-      "border-french-gray/25",
-      "px-5",
-      "py-4",
-      "sm:px-6",
-    ].join(" "),
+    "flex items-start justify-between border-b border-french-gray/25 px-6 py-5",
   );
 
-  const headerContent = createElement("div");
+  const headerText = createElement("div");
 
-  const eyebrow = createElement("p", "text-[11px] font-medium text-mirage/40");
+  const eyebrow = createElement("p", "text-[11px] font-bold text-mirage/35");
 
   eyebrow.textContent = "جزئیات حضور و غیاب";
 
@@ -102,29 +127,11 @@ function ensureModal() {
 
   title.id = "attendanceDayModalTitle";
 
-  title.textContent = "—";
-
-  headerContent.append(eyebrow, title);
+  headerText.append(eyebrow, title);
 
   const closeButton = createElement(
     "button",
-    [
-      "flex",
-      "h-9",
-      "w-9",
-      "shrink-0",
-      "items-center",
-      "justify-center",
-      "rounded-xl",
-      "border",
-      "border-french-gray/30",
-      "bg-white",
-      "text-xl",
-      "text-mirage/50",
-      "transition-colors",
-      "hover:bg-alabaster",
-      "hover:text-mirage",
-    ].join(" "),
+    "flex h-9 w-9 items-center justify-center rounded-xl bg-alabaster text-xl text-mirage/45 transition-colors hover:text-mirage",
   );
 
   closeButton.type = "button";
@@ -133,342 +140,408 @@ function ensureModal() {
 
   closeButton.textContent = "×";
 
-  header.append(headerContent, closeButton);
-
-  /*
-   * Body
-   */
-  const body = createElement("div", "overflow-y-auto p-5 sm:p-6");
-
-  body.dataset.modalBody = "true";
-
-  panel.append(header, body);
-
-  root.append(backdrop, panel);
-
-  document.body.appendChild(root);
-
   closeButton.addEventListener("click", closeDayDetailsModal);
+
+  header.append(headerText, closeButton);
+
+  /* Content */
+
+  const content = createElement("div", "overflow-y-auto p-6");
+
+  content.id = "attendanceDayModalContent";
+
+  content.style.maxHeight = "calc(100vh - 150px)";
+
+  dialog.append(header, content);
+
+  modal.append(backdrop, dialog);
+
+  /* Events */
 
   backdrop.addEventListener("click", closeDayDetailsModal);
 
-  modalElements = {
-    root,
-    panel,
-    title,
-    body,
-  };
+  dialog.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
 
-  return modalElements;
+  document.body.appendChild(modal);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && modal.style.display !== "none") {
+      closeDayDetailsModal();
+    }
+  });
+
+  return modal;
 }
 
-function clearBody() {
-  const { body } = ensureModal();
+/* ======================================================
+   Open / Close
+====================================================== */
 
-  body.innerHTML = "";
+export function openDayDetailsModal() {
+  const modal = ensureModal();
+
+  modal.style.display = "flex";
+
+  document.body.classList.add("overflow-hidden");
+
+  /* Entry animation */
+
+  const dialog = modal.querySelector('[role="dialog"]');
+
+  dialog?.animate(
+    [
+      {
+        opacity: 0,
+        transform: "translateY(18px) scale(0.97)",
+      },
+      {
+        opacity: 1,
+        transform: "translateY(0) scale(1)",
+      },
+    ],
+    {
+      duration: 260,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    },
+  );
 }
 
-function createCenteredState({ title, description, type = "neutral" }) {
+export function closeDayDetailsModal() {
+  const modal = document.getElementById("attendanceDayDetailsModal");
+
+  if (!modal) {
+    return;
+  }
+
+  modal.style.display = "none";
+
+  document.body.classList.remove("overflow-hidden");
+}
+
+/* ======================================================
+   State Preparation
+====================================================== */
+
+function prepare(dateKey) {
+  ensureModal();
+
+  const title = document.getElementById("attendanceDayModalTitle");
+
+  const content = document.getElementById("attendanceDayModalContent");
+
+  if (title) {
+    title.textContent = formatDate(dateKey);
+  }
+
+  return content;
+}
+
+/* ======================================================
+   Loading
+====================================================== */
+
+export function setDayDetailsLoading(dateKey) {
+  const content = prepare(dateKey);
+
+  if (!content) {
+    return;
+  }
+
+  content.innerHTML = "";
+
+  const wrapper = createElement(
+    "div",
+    "flex min-h-52 items-center justify-center",
+  );
+
+  const inner = createElement("div", "text-center");
+
+  const spinner = createElement(
+    "div",
+    "mx-auto h-8 w-8 animate-spin rounded-full border-[3px] border-persian-blue/15 border-t-persian-blue",
+  );
+
+  const text = createElement("p", "mt-4 text-sm font-bold text-mirage");
+
+  text.textContent = "در حال دریافت اطلاعات...";
+
+  inner.append(spinner, text);
+
+  wrapper.appendChild(inner);
+
+  content.appendChild(wrapper);
+
+  openDayDetailsModal();
+}
+
+/* ======================================================
+   Empty
+====================================================== */
+
+export function setDayDetailsEmpty(dateKey) {
+  const content = prepare(dateKey);
+
+  if (!content) {
+    return;
+  }
+
+  content.innerHTML = "";
+
   const wrapper = createElement(
     "div",
     "flex min-h-52 items-center justify-center text-center",
   );
 
-  const content = createElement("div", "max-w-sm");
+  const inner = createElement("div");
 
   const icon = createElement(
     "div",
-    [
-      "mx-auto",
-      "flex",
-      "h-12",
-      "w-12",
-      "items-center",
-      "justify-center",
-      "rounded-2xl",
-      "text-lg",
-      "font-black",
-
-      type === "error" ? "bg-alizarin-crimson/10 text-alizarin-crimson" : "",
-
-      type === "loading" ? "bg-persian-blue/10 text-persian-blue" : "",
-
-      type === "neutral" ? "bg-alabaster text-mirage/45" : "",
-    ]
-      .filter(Boolean)
-      .join(" "),
+    "mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-alabaster text-xl text-mirage/35",
   );
 
-  if (type === "error") {
-    icon.textContent = "!";
-  } else if (type === "loading") {
-    icon.innerHTML = `
-      <span
-        class="h-5 w-5 animate-spin rounded-full border-2 border-persian-blue/20 border-t-persian-blue"
-      ></span>
-    `;
-  } else {
-    icon.textContent = "—";
-  }
+  icon.textContent = "—";
 
-  const titleElement = createElement(
-    "h3",
-    "mt-4 text-sm font-black text-mirage",
-  );
+  const title = createElement("p", "mt-4 text-sm font-black text-mirage");
 
-  titleElement.textContent = title;
+  title.textContent = "رکوردی برای این روز وجود ندارد";
 
-  const descriptionElement = createElement(
-    "p",
-    "mt-2 text-xs leading-6 text-mirage/45",
-  );
+  const description = createElement("p", "mt-2 text-xs text-mirage/40");
 
-  descriptionElement.textContent = description;
+  description.textContent = "برای این تاریخ حضور یا غیبتی ثبت نشده است.";
 
-  content.append(icon, titleElement, descriptionElement);
+  inner.append(icon, title, description);
 
-  wrapper.appendChild(content);
+  wrapper.appendChild(inner);
 
-  return wrapper;
+  content.appendChild(wrapper);
+
+  openDayDetailsModal();
 }
 
-function createMemberRow(member, status) {
-  const row = createElement(
+/* ======================================================
+   Error
+====================================================== */
+
+export function setDayDetailsError(dateKey) {
+  const content = prepare(dateKey);
+
+  if (!content) {
+    return;
+  }
+
+  content.innerHTML = "";
+
+  const wrapper = createElement(
     "div",
-    [
-      "flex",
-      "items-center",
-      "justify-between",
-      "gap-3",
-      "rounded-xl",
-      "border",
-      "border-french-gray/25",
-      "bg-white",
-      "px-3",
-      "py-3",
-    ].join(" "),
+    "flex min-h-52 items-center justify-center text-center",
   );
 
-  const identity = createElement("div", "flex min-w-0 items-center gap-3");
+  const inner = createElement("div");
 
-  const indicator = createElement(
+  const icon = createElement(
+    "div",
+    "mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-alizarin-crimson/10 font-black text-alizarin-crimson",
+  );
+
+  icon.textContent = "!";
+
+  const title = createElement("p", "mt-4 text-sm font-black text-mirage");
+
+  title.textContent = "دریافت اطلاعات انجام نشد";
+
+  const description = createElement("p", "mt-2 text-xs text-mirage/40");
+
+  description.textContent = "لطفاً دوباره تلاش کنید.";
+
+  inner.append(icon, title, description);
+
+  wrapper.appendChild(inner);
+
+  content.appendChild(wrapper);
+
+  openDayDetailsModal();
+}
+
+/* ======================================================
+   Member Row
+====================================================== */
+
+function createMemberRow(member, type) {
+  const row = createElement(
+    "div",
+    "flex items-center justify-between gap-4 rounded-xl bg-alabaster px-4 py-3",
+  );
+
+  const info = createElement("div", "min-w-0");
+
+  const name = createElement("p", "truncate text-sm font-black text-mirage");
+
+  name.textContent = [member.first_name, member.last_name]
+    .filter(Boolean)
+    .join(" ");
+
+  const phone = createElement("p", "mt-1 text-[11px] text-mirage/40");
+
+  phone.textContent = member.phone || "بدون شماره تماس";
+
+  info.append(name, phone);
+
+  const statusBox = createElement("div", "shrink-0 text-left");
+
+  const status = createElement(
     "span",
     [
-      "flex",
-      "h-8",
-      "w-8",
-      "shrink-0",
-      "items-center",
-      "justify-center",
       "rounded-lg",
-      "text-sm",
+      "px-2.5",
+      "py-1.5",
+      "text-[10px]",
       "font-black",
 
-      status === "present"
+      type === "present"
         ? "bg-eucalyptus/10 text-eucalyptus"
         : "bg-alizarin-crimson/10 text-alizarin-crimson",
     ].join(" "),
   );
 
-  indicator.textContent = status === "present" ? "✓" : "×";
+  status.textContent = type === "present" ? "حاضر" : "غایب";
 
-  const name = createElement("span", "truncate text-sm font-bold text-mirage");
+  const time = createElement("p", "mt-2 text-[11px] font-bold text-mirage/45");
 
-  name.textContent = getMemberName(member);
+  time.textContent = formatTime(member.recorded_time);
 
-  identity.append(indicator, name);
+  statusBox.append(status, time);
 
-  row.appendChild(identity);
+  row.append(info, statusBox);
 
   return row;
 }
 
-function createMembersSection({ title, members, status }) {
-  const section = createElement("div", "rounded-2xl bg-alabaster p-4");
+/* ======================================================
+   Members Section
+====================================================== */
 
-  const header = createElement(
-    "div",
-    "mb-3 flex items-center justify-between gap-3",
-  );
+function createMembersSection(title, members, type) {
+  const section = createElement("section");
 
-  const titleElement = createElement("h3", "text-sm font-black text-mirage");
+  const header = createElement("div", "mb-3 flex items-center justify-between");
 
-  titleElement.textContent = title;
+  const heading = createElement("h3", "text-sm font-black text-mirage");
+
+  heading.textContent = title;
 
   const count = createElement(
-    ["span"][0],
-    [
-      "rounded-lg",
-      "px-2.5",
-      "py-1",
-      "text-xs",
-      "font-black",
-
-      status === "present"
-        ? "bg-eucalyptus/10 text-eucalyptus"
-        : "bg-alizarin-crimson/10 text-alizarin-crimson",
-    ].join(" "),
+    "span",
+    "rounded-lg bg-alabaster px-2.5 py-1 text-xs font-black text-mirage/50",
   );
 
   count.textContent = new Intl.NumberFormat("fa-IR").format(members.length);
 
-  header.append(titleElement, count);
+  header.append(heading, count);
+
+  section.appendChild(header);
 
   const list = createElement("div", "space-y-2");
 
   if (members.length === 0) {
     const empty = createElement(
       "div",
-      "rounded-xl border border-dashed border-french-gray/40 px-4 py-5 text-center text-xs text-mirage/40",
+      "rounded-xl border border-dashed border-french-gray/35 px-4 py-5 text-center text-xs text-mirage/35",
     );
 
     empty.textContent =
-      status === "present"
+      type === "present"
         ? "عضو حاضری ثبت نشده است."
         : "عضو غایبی ثبت نشده است.";
 
     list.appendChild(empty);
   } else {
     members.forEach((member) => {
-      list.appendChild(createMemberRow(member, status));
+      list.appendChild(createMemberRow(member, type));
     });
   }
 
-  section.append(header, list);
+  section.appendChild(list);
 
   return section;
 }
 
-export function openDayDetailsModal({ dateLabel } = {}) {
-  const { root, title } = ensureModal();
+/* ======================================================
+   Data
+====================================================== */
 
-  title.textContent = dateLabel || "جزئیات روز";
+export function setDayDetailsData(data) {
+  const dateKey = data?.date;
 
-  root.classList.remove("hidden");
+  const content = prepare(dateKey);
 
-  root.classList.add("flex");
-
-  document.body.classList.add("overflow-hidden");
-}
-
-export function setDayDetailsLoading({ dateLabel } = {}) {
-  openDayDetailsModal({
-    dateLabel,
-  });
-
-  clearBody();
-
-  const { body } = ensureModal();
-
-  body.appendChild(
-    createCenteredState({
-      title: "در حال دریافت اطلاعات...",
-
-      description: "اطلاعات حضور و غیبت این روز در حال دریافت است.",
-
-      type: "loading",
-    }),
-  );
-}
-
-export function setDayDetailsEmpty({ dateLabel } = {}) {
-  openDayDetailsModal({
-    dateLabel,
-  });
-
-  clearBody();
-
-  const { body } = ensureModal();
-
-  body.appendChild(
-    createCenteredState({
-      title: "اطلاعاتی برای این روز وجود ندارد",
-
-      description:
-        "پس از اتصال Frontend به Backend، اطلاعات ثبت‌شده این روز در این قسمت نمایش داده می‌شود.",
-
-      type: "neutral",
-    }),
-  );
-}
-
-export function setDayDetailsError({
-  dateLabel,
-  message = "خطایی در دریافت اطلاعات رخ داد.",
-} = {}) {
-  openDayDetailsModal({
-    dateLabel,
-  });
-
-  clearBody();
-
-  const { body } = ensureModal();
-
-  body.appendChild(
-    createCenteredState({
-      title: "دریافت اطلاعات انجام نشد",
-
-      description: message,
-
-      type: "error",
-    }),
-  );
-}
-
-export function setDayDetailsData({
-  dateLabel,
-  present = [],
-  absent = [],
-} = {}) {
-  openDayDetailsModal({
-    dateLabel,
-  });
-
-  clearBody();
-
-  const { body } = ensureModal();
-
-  const grid = createElement("grid grid-cols-1 gap-4 md:grid-cols-2");
-
-  grid.append(
-    createMembersSection({
-      title: "حاضر",
-
-      members: Array.isArray(present) ? present : [],
-
-      status: "present",
-    }),
-
-    createMembersSection({
-      title: "غایب",
-
-      members: Array.isArray(absent) ? absent : [],
-
-      status: "absent",
-    }),
-  );
-
-  body.appendChild(grid);
-}
-
-export function closeDayDetailsModal() {
-  if (!modalElements) {
+  if (!content) {
     return;
   }
 
-  modalElements.root.classList.add("hidden");
+  const present = Array.isArray(data?.present) ? data.present : [];
 
-  modalElements.root.classList.remove("flex");
+  const absent = Array.isArray(data?.absent) ? data.absent : [];
 
-  document.body.classList.remove("overflow-hidden");
+  content.innerHTML = "";
+
+  const summary = createElement("div", "mb-6 grid grid-cols-2 gap-3");
+
+  const presentSummary = createElement(
+    "div",
+    "rounded-2xl bg-eucalyptus/10 p-4",
+  );
+
+  const presentLabel = createElement("p", "text-xs font-bold text-eucalyptus");
+
+  presentLabel.textContent = "تعداد حاضرها";
+
+  const presentCount = createElement(
+    "p",
+    "mt-1 text-2xl font-black text-eucalyptus",
+  );
+
+  presentCount.textContent = new Intl.NumberFormat("fa-IR").format(
+    present.length,
+  );
+
+  presentSummary.append(presentLabel, presentCount);
+
+  const absentSummary = createElement(
+    "div",
+    "rounded-2xl bg-alizarin-crimson/10 p-4",
+  );
+
+  const absentLabel = createElement(
+    "p",
+    "text-xs font-bold text-alizarin-crimson",
+  );
+
+  absentLabel.textContent = "تعداد غایب‌ها";
+
+  const absentCount = createElement(
+    "p",
+    "mt-1 text-2xl font-black text-alizarin-crimson",
+  );
+
+  absentCount.textContent = new Intl.NumberFormat("fa-IR").format(
+    absent.length,
+  );
+
+  absentSummary.append(absentLabel, absentCount);
+
+  summary.append(presentSummary, absentSummary);
+
+  const grid = createElement("div", "grid grid-cols-1 gap-6 md:grid-cols-2");
+
+  grid.append(
+    createMembersSection("حاضرها", present, "present"),
+
+    createMembersSection("غایب‌ها", absent, "absent"),
+  );
+
+  content.append(summary, grid);
+
+  openDayDetailsModal();
 }
-
-document.addEventListener("keydown", (event) => {
-  if (
-    event.key === "Escape" &&
-    modalElements &&
-    !modalElements.root.classList.contains("hidden")
-  ) {
-    closeDayDetailsModal();
-  }
-});

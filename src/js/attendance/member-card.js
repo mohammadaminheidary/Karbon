@@ -5,54 +5,26 @@ const numberFormatter = new Intl.NumberFormat("fa-IR");
 const STATUS_CONFIG = {
   present: {
     label: "حاضر",
-    dotClass: "bg-eucalyptus",
-    badgeClass: "bg-eucalyptus/10 text-eucalyptus ring-eucalyptus/15",
+
+    badgeClass: "bg-eucalyptus/10 text-eucalyptus",
   },
 
   absent: {
     label: "غایب",
-    dotClass: "bg-alizarin-crimson",
-    badgeClass:
-      "bg-alizarin-crimson/10 text-alizarin-crimson ring-alizarin-crimson/15",
+
+    badgeClass: "bg-alizarin-crimson/10 text-alizarin-crimson",
   },
 
   unrecorded: {
     label: "ثبت نشده",
-    dotClass: "bg-french-gray",
-    badgeClass: "bg-french-gray/15 text-mirage/55 ring-french-gray/20",
+
+    badgeClass: "bg-french-gray/20 text-mirage/45",
   },
 };
 
-function normalizeStatus(status) {
-  if (status === "present" || status === "absent") {
-    return status;
-  }
-
-  return "unrecorded";
-}
-
-function formatCount(value) {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return "۰";
-  }
-
-  return numberFormatter.format(parsed);
-}
-
-function getMemberFullName(member) {
-  return (
-    [member?.first_name, member?.last_name].filter(Boolean).join(" ").trim() ||
-    "بدون نام"
-  );
-}
-
-function getMemberInitial(member) {
-  const fullName = getMemberFullName(member);
-
-  return fullName.charAt(0).toUpperCase();
-}
+/* ======================================================
+   Helpers
+====================================================== */
 
 function createElement(tagName, className = "") {
   const element = document.createElement(tagName);
@@ -64,476 +36,369 @@ function createElement(tagName, className = "") {
   return element;
 }
 
-function createStatusBadge(status) {
-  const normalizedStatus = normalizeStatus(status);
-
-  const config = STATUS_CONFIG[normalizedStatus];
-
-  const badge = createElement(
-    "div",
-    [
-      "inline-flex",
-      "items-center",
-      "gap-2",
-      "rounded-lg",
-      "px-2.5",
-      "py-1.5",
-      "text-[11px]",
-      "font-bold",
-      "ring-1",
-      "ring-inset",
-      config.badgeClass,
-    ].join(" "),
-  );
-
-  const dot = createElement(
-    "span",
-    ["h-1.5", "w-1.5", "shrink-0", "rounded-full", config.dotClass].join(" "),
-  );
-
-  const text = createElement("span");
-
-  text.textContent = config.label;
-
-  badge.append(dot, text);
-
-  return badge;
+function formatNumber(value) {
+  return numberFormatter.format(Number(value) || 0);
 }
 
-function createStatItem(label, value, type = "neutral") {
-  const wrapper = createElement("div", "rounded-xl bg-alabaster px-3 py-3");
-
-  const labelElement = createElement(
-    "p",
-    "text-[11px] font-medium text-mirage/40",
-  );
-
-  labelElement.textContent = label;
-
-  const valueElement = createElement(
-    "p",
-    [
-      "mt-1.5",
-      "text-lg",
-      "font-black",
-
-      type === "present" ? "text-eucalyptus" : "",
-
-      type === "absent" ? "text-alizarin-crimson" : "",
-
-      type === "neutral" ? "text-mirage" : "",
-    ]
-      .filter(Boolean)
-      .join(" "),
-  );
-
-  valueElement.textContent = formatCount(value);
-
-  wrapper.append(labelElement, valueElement);
-
-  return wrapper;
+function toPersianDigits(value) {
+  return String(value).replace(/\d/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]);
 }
 
-function createAttendanceButton({ status, currentStatus }) {
-  const isPresent = status === "present";
+function formatRecordedTime(value) {
+  if (!value) {
+    return "—";
+  }
 
-  const isActive = currentStatus === status;
-
-  const button = createElement(
-    "button",
-    [
-      "group",
-      "flex",
-      "h-11",
-      "flex-1",
-      "items-center",
-      "justify-center",
-      "gap-2",
-      "rounded-xl",
-      "text-sm",
-      "font-bold",
-      "transition-all",
-      "duration-200",
-      "disabled:cursor-not-allowed",
-      "disabled:opacity-60",
-
-      isPresent && isActive ? "bg-eucalyptus text-white shadow-sm" : "",
-
-      isPresent && !isActive
-        ? "border border-eucalyptus/20 bg-eucalyptus/5 text-eucalyptus hover:bg-eucalyptus hover:text-white"
-        : "",
-
-      !isPresent && isActive ? "bg-alizarin-crimson text-white shadow-sm" : "",
-
-      !isPresent && !isActive
-        ? "border border-alizarin-crimson/20 bg-alizarin-crimson/5 text-alizarin-crimson hover:bg-alizarin-crimson hover:text-white"
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" "),
-  );
-
-  button.type = "button";
-
-  button.dataset.attendanceStatus = status;
-
-  const icon = createElement("span", "text-base leading-none");
-
-  icon.textContent = isPresent ? "✓" : "×";
-
-  const label = createElement("span");
-
-  label.dataset.buttonLabel = "true";
-
-  label.textContent = isPresent ? "ورود" : "غیبت";
-
-  button.append(icon, label);
-
-  return button;
+  return toPersianDigits(String(value).slice(0, 5));
 }
 
-function createFeedbackElement() {
-  const feedback = createElement(
-    "div",
-    [
-      "hidden",
-      "items-center",
-      "justify-between",
-      "gap-3",
-      "rounded-xl",
-      "px-3",
-      "py-2.5",
-      "text-xs",
-      "font-semibold",
-    ].join(" "),
+function getFullName(member) {
+  return (
+    [member?.first_name, member?.last_name].filter(Boolean).join(" ").trim() ||
+    "بدون نام"
   );
-
-  feedback.dataset.memberFeedback = "true";
-
-  feedback.setAttribute("role", "status");
-
-  feedback.setAttribute("aria-live", "polite");
-
-  const message = createElement("span");
-
-  message.dataset.feedbackMessage = "true";
-
-  const time = createElement(
-    "span",
-    "shrink-0 font-mono text-[11px] opacity-70",
-  );
-
-  time.dataset.feedbackTime = "true";
-
-  feedback.append(message, time);
-
-  return feedback;
 }
+
+function getMemberStatus(member) {
+  if (member?.today_status === "present") {
+    return "present";
+  }
+
+  if (member?.today_status === "absent") {
+    return "absent";
+  }
+
+  return "unrecorded";
+}
+
+/* ======================================================
+   Statistics
+====================================================== */
+
+function createStatItem(label, value, valueClass = "text-mirage") {
+  const item = createElement("div", "rounded-xl bg-alabaster px-3 py-3");
+
+  const title = createElement("p", "text-[11px] font-medium text-mirage/40");
+
+  title.textContent = label;
+
+  const count = createElement("p", `mt-1 text-base font-black ${valueClass}`);
+
+  count.textContent = formatNumber(value);
+
+  item.append(title, count);
+
+  return item;
+}
+
+/* ======================================================
+   Card
+====================================================== */
 
 export function createMemberCard(member, { onAttendanceAction } = {}) {
-  const currentStatus = normalizeStatus(member?.today_status);
+  const status = getMemberStatus(member);
 
+  const statusConfig = STATUS_CONFIG[status];
+
+  /*
+   * Design اصلی کارت:
+   * همیشه سفید و خنثی.
+   */
   const card = createElement(
     "article",
     [
-      "group",
       "relative",
       "overflow-hidden",
       "rounded-2xl",
       "border",
       "border-french-gray/30",
       "bg-white",
+      "p-5",
       "shadow-sm",
-      "transition-all",
+      "transition-shadow",
       "duration-300",
-      "hover:-translate-y-0.5",
       "hover:shadow-md",
     ].join(" "),
   );
 
   card.dataset.memberId = String(member.id);
 
-  /*
-   * Header
-   */
+  /* Header */
+
   const header = createElement(
     "div",
-    "flex items-start justify-between gap-4 p-5 pb-4",
+    "relative z-10 flex items-start justify-between gap-4",
   );
-
-  const person = createElement("div", "flex min-w-0 items-center gap-3.5");
-
-  const avatar = createElement(
-    "div",
-    [
-      "flex",
-      "h-11",
-      "w-11",
-      "shrink-0",
-      "items-center",
-      "justify-center",
-      "rounded-xl",
-      "bg-mirage",
-      "text-base",
-      "font-black",
-      "text-white",
-    ].join(" "),
-  );
-
-  avatar.textContent = getMemberInitial(member);
 
   const identity = createElement("div", "min-w-0");
 
-  const name = createElement("h3", "truncate text-sm font-black text-mirage");
+  const name = createElement("h3", "truncate text-base font-black text-mirage");
 
-  name.textContent = getMemberFullName(member);
+  name.textContent = getFullName(member);
 
-  const phone = createElement("p", "mt-1 truncate text-xs text-mirage/40");
+  const phone = createElement("p", "mt-1.5 text-xs text-mirage/45");
 
   phone.dir = "ltr";
 
-  phone.textContent = member?.phone || "شماره تماس ثبت نشده";
+  phone.textContent = member.phone || "بدون شماره تماس";
 
   identity.append(name, phone);
 
-  person.append(avatar, identity);
-
-  header.append(person, createStatusBadge(currentStatus));
-
-  /*
-   * Today status
-   */
-  const todaySection = createElement(
-    "div",
-    "mx-5 rounded-xl border border-french-gray/25 bg-alabaster px-4 py-3",
-  );
-
-  const todayRow = createElement(
-    "div",
-    "flex items-center justify-between gap-3",
-  );
-
-  const todayLabel = createElement(
+  const badge = createElement(
     "span",
-    "text-xs font-medium text-mirage/45",
+    [
+      "shrink-0",
+      "rounded-lg",
+      "px-3",
+      "py-1.5",
+      "text-[11px]",
+      "font-black",
+      statusConfig.badgeClass,
+    ].join(" "),
   );
 
-  todayLabel.textContent = "وضعیت امروز";
+  badge.textContent = statusConfig.label;
 
-  const todayValue = createElement("span", "text-xs font-bold text-mirage");
+  header.append(identity, badge);
 
-  todayValue.textContent = STATUS_CONFIG[currentStatus].label;
+  card.appendChild(header);
 
-  todayRow.append(todayLabel, todayValue);
+  /* Today */
 
-  todaySection.append(todayRow);
+  const todayInfo = createElement(
+    "div",
+    [
+      "relative",
+      "z-10",
+      "mt-4",
+      "flex",
+      "items-center",
+      "justify-between",
+      "rounded-xl",
+      "border",
+      "border-french-gray/20",
+      "bg-white",
+      "px-3.5",
+      "py-3",
+    ].join(" "),
+  );
 
-  if (member?.recorded_time && currentStatus !== "unrecorded") {
-    const timeRow = createElement(
-      "div",
-      "mt-2 flex items-center justify-between border-t border-french-gray/20 pt-2",
-    );
+  const todayStatusBox = createElement("div");
 
-    const timeLabel = createElement("span", "text-[11px] text-mirage/35");
+  const todayTitle = createElement(
+    "p",
+    "text-[10px] font-medium text-mirage/40",
+  );
 
-    timeLabel.textContent = "زمان ثبت";
+  todayTitle.textContent = "وضعیت امروز";
 
-    const recordedTime = createElement(
-      "span",
-      "font-mono text-[11px] font-semibold text-mirage/55",
-    );
+  const todayValue = createElement(
+    "p",
+    "mt-1 text-xs font-black text-mirage/70",
+  );
 
-    recordedTime.dir = "ltr";
+  todayValue.textContent = statusConfig.label;
 
-    recordedTime.textContent = member.recorded_time;
+  todayStatusBox.append(todayTitle, todayValue);
 
-    timeRow.append(timeLabel, recordedTime);
+  const timeBox = createElement("div", "text-left");
 
-    todaySection.append(timeRow);
-  }
+  const timeTitle = createElement(
+    "p",
+    "text-[10px] font-medium text-mirage/40",
+  );
 
-  /*
-   * Actions
-   */
-  const actions = createElement("div", "flex gap-2 px-5 pt-4");
+  timeTitle.textContent = "ساعت ثبت";
 
-  const presentButton = createAttendanceButton({
-    status: "present",
-    currentStatus,
-  });
+  const timeValue = createElement(
+    "p",
+    "mt-1 text-xs font-black text-mirage/70",
+  );
 
-  const absentButton = createAttendanceButton({
-    status: "absent",
-    currentStatus,
-  });
+  timeValue.textContent = member.recorded_time
+    ? formatRecordedTime(member.recorded_time)
+    : "—";
+
+  timeBox.append(timeTitle, timeValue);
+
+  todayInfo.append(todayStatusBox, timeBox);
+
+  card.appendChild(todayInfo);
+
+  /* Statistics */
+
+  const stats = createElement(
+    "div",
+    "relative z-10 mt-4 grid grid-cols-2 gap-2",
+  );
+
+  stats.append(
+    createStatItem("کل حضور", member.total_present, "text-eucalyptus"),
+
+    createStatItem("کل غیبت", member.total_absent, "text-alizarin-crimson"),
+
+    createStatItem("حضور این ماه", member.monthly_present, "text-eucalyptus"),
+
+    createStatItem(
+      "غیبت این ماه",
+      member.monthly_absent,
+      "text-alizarin-crimson",
+    ),
+  );
+
+  card.appendChild(stats);
+
+  /* Actions */
+
+  const actions = createElement(
+    "div",
+    "relative z-30 mt-4 grid grid-cols-2 gap-2",
+  );
+
+  const presentButton = createElement(
+    "button",
+    [
+      "h-10",
+      "rounded-xl",
+      "text-xs",
+      "font-black",
+      "transition-all",
+      "duration-200",
+      "active:scale-[0.97]",
+
+      status === "present"
+        ? "bg-eucalyptus text-white"
+        : "bg-eucalyptus/10 text-eucalyptus hover:bg-eucalyptus hover:text-white",
+    ].join(" "),
+  );
+
+  presentButton.type = "button";
+
+  presentButton.dataset.attendanceAction = "present";
+
+  presentButton.textContent = "حاضر";
+
+  const absentButton = createElement(
+    "button",
+    [
+      "h-10",
+      "rounded-xl",
+      "text-xs",
+      "font-black",
+      "transition-all",
+      "duration-200",
+      "active:scale-[0.97]",
+
+      status === "absent"
+        ? "bg-alizarin-crimson text-white"
+        : "bg-alizarin-crimson/10 text-alizarin-crimson hover:bg-alizarin-crimson hover:text-white",
+    ].join(" "),
+  );
+
+  absentButton.type = "button";
+
+  absentButton.dataset.attendanceAction = "absent";
+
+  absentButton.textContent = "غایب";
 
   actions.append(presentButton, absentButton);
 
-  /*
-   * Feedback
-   */
-  const feedbackWrapper = createElement("div", "px-5 pt-3");
+  card.appendChild(actions);
 
-  feedbackWrapper.append(createFeedbackElement());
+  /* Events */
 
-  /*
-   * Statistics
-   */
-  const statistics = createElement("div", "grid grid-cols-2 gap-2 p-5 pt-4");
+  const handleAction = async (attendanceStatus) => {
+    if (typeof onAttendanceAction !== "function") {
+      return;
+    }
 
-  statistics.append(
-    createStatItem("کل حضور", member?.total_present, "present"),
+    await onAttendanceAction({
+      memberId: member.id,
 
-    createStatItem("کل غیبت", member?.total_absent, "absent"),
+      status: attendanceStatus,
 
-    createStatItem("حضور این ماه", member?.monthly_present, "present"),
-
-    createStatItem("غیبت این ماه", member?.monthly_absent, "absent"),
-  );
-
-  /*
-   * Button events
-   */
-  [presentButton, absentButton].forEach((button) => {
-    button.addEventListener("click", async () => {
-      if (typeof onAttendanceAction !== "function") {
-        return;
-      }
-
-      const status = button.dataset.attendanceStatus;
-
-      await onAttendanceAction({
-        memberId: member.id,
-
-        status,
-
-        card,
-      });
+      card,
     });
+  };
+
+  presentButton.addEventListener("click", () => {
+    handleAction("present");
   });
 
-  card.append(header, todaySection, actions, feedbackWrapper, statistics);
+  absentButton.addEventListener("click", () => {
+    handleAction("absent");
+  });
 
   return card;
 }
 
+/* ======================================================
+   Render
+====================================================== */
+
 export function renderMembers(members, { onAttendanceAction } = {}) {
   const container = document.getElementById("attendanceMembers");
 
-  const countElement = document.getElementById("attendanceMembersCountValue");
+  const count = document.getElementById("attendanceMembersCountValue");
 
   if (!container) {
-    console.error("Attendance members container not found");
-
     return;
   }
 
-  const normalizedMembers = Array.isArray(members) ? members : [];
+  const safeMembers = Array.isArray(members) ? members : [];
+
+  if (count) {
+    count.textContent = formatNumber(safeMembers.length);
+  }
 
   container.innerHTML = "";
 
-  if (countElement) {
-    countElement.textContent = formatCount(normalizedMembers.length);
-  }
-
-  if (normalizedMembers.length === 0) {
+  if (safeMembers.length === 0) {
     setMembersViewState("empty");
 
     return;
   }
 
-  setMembersViewState("ready");
-
-  container.classList.remove("hidden");
-
-  if (emptyState) {
-    emptyState.classList.add("hidden");
-  }
-
-  normalizedMembers.forEach((member) => {
+  safeMembers.forEach((member) => {
     container.appendChild(
       createMemberCard(member, {
         onAttendanceAction,
       }),
     );
   });
+
+  setMembersViewState("ready");
 }
 
-export function setMemberCardPending(memberId, status, isPending = true) {
-  const card = document.querySelector(`[data-member-id="${memberId}"]`);
+/* ======================================================
+   Pending
+====================================================== */
 
+export function setMemberCardPending(card, pending) {
   if (!card) {
     return;
   }
 
-  const buttons = card.querySelectorAll("[data-attendance-status]");
+  card.querySelectorAll("[data-attendance-action]").forEach((button) => {
+    button.disabled = pending;
 
-  buttons.forEach((button) => {
-    button.disabled = isPending;
+    button.style.opacity = pending ? "0.55" : "1";
 
-    const label = button.querySelector("[data-button-label]");
-
-    if (!label) {
-      return;
-    }
-
-    if (isPending && button.dataset.attendanceStatus === status) {
-      label.textContent = "در حال ثبت...";
-    } else {
-      label.textContent =
-        button.dataset.attendanceStatus === "present" ? "ورود" : "غیبت";
-    }
+    button.style.cursor = pending ? "wait" : "";
   });
-
-  card.classList.toggle("opacity-80", isPending);
 }
 
-export function showMemberCardFeedback(
-  memberId,
-  { type = "success", message = "", time = "" } = {},
+/* ======================================================
+   Replace
+====================================================== */
+
+export function replaceMemberCard(
+  oldCard,
+  member,
+  { onAttendanceAction } = {},
 ) {
-  const card = document.querySelector(`[data-member-id="${memberId}"]`);
-
-  if (!card) {
-    return;
-  }
-
-  const feedback = card.querySelector("[data-member-feedback]");
-
-  const messageElement = card.querySelector("[data-feedback-message]");
-
-  const timeElement = card.querySelector("[data-feedback-time]");
-
-  if (!feedback || !messageElement || !timeElement) {
-    return;
-  }
-
-  feedback.className = [
-    "flex",
-    "items-center",
-    "justify-between",
-    "gap-3",
-    "rounded-xl",
-    "px-3",
-    "py-2.5",
-    "text-xs",
-    "font-semibold",
-
-    type === "success"
-      ? "bg-eucalyptus/10 text-eucalyptus"
-      : "bg-alizarin-crimson/10 text-alizarin-crimson",
-  ].join(" ");
-
-  messageElement.textContent = message;
-
-  timeElement.textContent = time || "";
-}
-
-export function replaceMemberCard(member, { onAttendanceAction } = {}) {
-  const oldCard = document.querySelector(`[data-member-id="${member.id}"]`);
-
   if (!oldCard) {
-    return;
+    return null;
   }
 
   const newCard = createMemberCard(member, {
@@ -541,4 +406,168 @@ export function replaceMemberCard(member, { onAttendanceAction } = {}) {
   });
 
   oldCard.replaceWith(newCard);
+
+  return newCard;
+}
+
+/* ======================================================
+   Guaranteed Button Reaction Animation
+====================================================== */
+
+export function animateMemberCardStatus(card, status) {
+  if (!card || (status !== "present" && status !== "absent")) {
+    return;
+  }
+
+  const button = card.querySelector(`[data-attendance-action="${status}"]`);
+
+  if (!button) {
+    return;
+  }
+
+  const cardRect = card.getBoundingClientRect();
+
+  const buttonRect = button.getBoundingClientRect();
+
+  const centerX = buttonRect.left - cardRect.left + buttonRect.width / 2;
+
+  const centerY = buttonRect.top - cardRect.top + buttonRect.height / 2;
+
+  const color = status === "present" ? "22, 163, 74" : "220, 38, 38";
+
+  /*
+   * Layer کاملاً مستقل از Tailwind.
+   */
+  const effectLayer = document.createElement("div");
+
+  Object.assign(effectLayer.style, {
+    position: "absolute",
+
+    inset: "0",
+
+    overflow: "hidden",
+
+    pointerEvents: "none",
+
+    zIndex: "20",
+  });
+
+  const size = Math.max(cardRect.width * 0.9, 300);
+
+  const glow = document.createElement("div");
+
+  Object.assign(glow.style, {
+    position: "absolute",
+
+    width: `${size}px`,
+
+    height: `${size}px`,
+
+    left: `${centerX - size / 2}px`,
+
+    top: `${centerY - size / 2}px`,
+
+    borderRadius: "9999px",
+
+    opacity: "0",
+
+    background: `radial-gradient(
+          circle,
+          rgba(${color}, 0.42) 0%,
+          rgba(${color}, 0.22) 32%,
+          rgba(${color}, 0.08) 52%,
+          rgba(${color}, 0) 72%
+        )`,
+
+    transform: "scale(0.08)",
+  });
+
+  effectLayer.appendChild(glow);
+
+  card.appendChild(effectLayer);
+
+  /*
+   * خود دکمه یک Punch کوچک دارد.
+   */
+  button.animate(
+    [
+      {
+        transform: "scale(1)",
+      },
+
+      {
+        transform: "scale(0.92)",
+        offset: 0.18,
+      },
+
+      {
+        transform: "scale(1.08)",
+        offset: 0.45,
+      },
+
+      {
+        transform: "scale(1)",
+      },
+    ],
+    {
+      duration: 520,
+
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    },
+  );
+
+  /*
+   * موج از دقیقاً زیر همان دکمه
+   * شروع می‌شود و بالا می‌آید.
+   */
+  const animation = glow.animate(
+    [
+      {
+        opacity: 0,
+
+        transform: "scale(0.08) translateY(25px)",
+      },
+
+      {
+        opacity: 1,
+
+        transform: "scale(0.55) translateY(5px)",
+
+        offset: 0.22,
+      },
+
+      {
+        opacity: 0.7,
+
+        transform: "scale(1.2) translateY(-35px)",
+
+        offset: 0.56,
+      },
+
+      {
+        opacity: 0,
+
+        transform: "scale(1.9) translateY(-100px)",
+      },
+    ],
+    {
+      duration: 1150,
+
+      easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+
+      fill: "forwards",
+    },
+  );
+
+  animation.onfinish = () => {
+    effectLayer.remove();
+  };
+}
+
+/*
+ * برای Compatibility با Importهای قدیمی.
+ * دیگر پیام موفقیت داخل Card نداریم.
+ */
+export function showMemberCardFeedback() {
+  return;
 }

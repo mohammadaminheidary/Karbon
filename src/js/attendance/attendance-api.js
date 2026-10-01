@@ -2,14 +2,17 @@ import { getToken } from "../auth/auth-storage.js";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
-const VALID_ATTENDANCE_STATUSES = new Set(["present", "absent"]);
+const VALID_STATUSES = new Set(["present", "absent"]);
 
 /* ======================================================
-   API Error
+   Error
 ====================================================== */
 
 export class AttendanceApiError extends Error {
-  constructor(message, { status = 0, code = "UNKNOWN_ERROR" } = {}) {
+  constructor(
+    message,
+    { status = 0, code = "UNKNOWN_ERROR", data = null } = {},
+  ) {
     super(message);
 
     this.name = "AttendanceApiError";
@@ -17,14 +20,46 @@ export class AttendanceApiError extends Error {
     this.status = status;
 
     this.code = code;
+
+    this.data = data;
   }
 }
 
 /* ======================================================
-   Response Helpers
+   Helpers
 ====================================================== */
 
+function validatePositiveId(value, name = "id") {
+  const id = Number(value);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new TypeError(`Invalid ${name}`);
+  }
+
+  return id;
+}
+
+function validateStatus(status) {
+  if (!VALID_STATUSES.has(status)) {
+    throw new TypeError("Invalid attendance status");
+  }
+
+  return status;
+}
+
+function validateDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new TypeError("Invalid date");
+  }
+
+  return value;
+}
+
 async function parseResponse(response) {
+  if (response.status === 204) {
+    return null;
+  }
+
   const text = await response.text();
 
   if (!text) {
@@ -33,48 +68,41 @@ async function parseResponse(response) {
 
   try {
     return JSON.parse(text);
-  } catch (error) {
+  } catch {
     return null;
   }
 }
 
-function getSafeErrorMessage(status, data) {
-  const detail = typeof data?.detail === "string" ? data.detail.trim() : "";
+function getErrorMessage(response, data) {
+  if (typeof data?.detail === "string") {
+    return data.detail;
+  }
 
-  switch (status) {
-    case 400:
-      return detail || "اطلاعات ارسال‌شده صحیح نیست.";
-
+  switch (response.status) {
     case 401:
       return "نشست کاربری منقضی شده است.";
 
-    case 403:
-      return "اجازه انجام این عملیات را ندارید.";
-
     case 404:
-      return detail || "اطلاعات موردنظر پیدا نشد.";
-
-    case 409:
-      return detail || "امکان انجام این عملیات وجود ندارد.";
+      return "اطلاعات موردنظر پیدا نشد.";
 
     case 422:
       return "اطلاعات ارسال‌شده معتبر نیست.";
 
+    case 500:
+      return "خطایی در سرور رخ داد.";
+
     default:
-      return "خطایی در ارتباط با سرور رخ داد.";
+      return "ارتباط با سرور انجام نشد.";
   }
 }
 
-/* ======================================================
-   Request
-====================================================== */
-
-async function apiRequest(path, { method = "GET", body } = {}) {
+async function request(path, { method = "GET", body } = {}) {
   const token = getToken();
 
   if (!token) {
     throw new AttendanceApiError("نشست کاربری معتبر نیست.", {
       status: 401,
+
       code: "AUTH_REQUIRED",
     });
   }
@@ -98,9 +126,8 @@ async function apiRequest(path, { method = "GET", body } = {}) {
 
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-  } catch (error) {
+  } catch {
     throw new AttendanceApiError("ارتباط با سرور برقرار نشد.", {
-      status: 0,
       code: "NETWORK_ERROR",
     });
   }
@@ -108,10 +135,12 @@ async function apiRequest(path, { method = "GET", body } = {}) {
   const data = await parseResponse(response);
 
   if (!response.ok) {
-    throw new AttendanceApiError(getSafeErrorMessage(response.status, data), {
+    throw new AttendanceApiError(getErrorMessage(response, data), {
       status: response.status,
 
       code: `HTTP_${response.status}`,
+
+      data,
     });
   }
 
@@ -119,105 +148,85 @@ async function apiRequest(path, { method = "GET", body } = {}) {
 }
 
 /* ======================================================
-   Validators
-====================================================== */
-
-function validatePositiveInteger(value, fieldName) {
-  const normalized = Number(value);
-
-  if (!Number.isInteger(normalized) || normalized <= 0) {
-    throw new TypeError(`${fieldName} must be a positive integer`);
-  }
-
-  return normalized;
-}
-
-function validateStatus(status) {
-  if (!VALID_ATTENDANCE_STATUSES.has(status)) {
-    throw new TypeError("Invalid attendance status");
-  }
-
-  return status;
-}
-
-function validateDateKey(date) {
-  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    throw new TypeError("Date must use YYYY-MM-DD format");
-  }
-
-  return date;
-}
-
-/* ======================================================
    Members
 ====================================================== */
 
-export async function getMembers() {
-  return apiRequest("/members");
+export function getMembers() {
+  return request("/members?skip=0&limit=500");
 }
 
 /* ======================================================
    Attendance
 ====================================================== */
 
-export async function getAttendanceHistory() {
-  return apiRequest("/attendance");
+export function getAttendanceHistory({
+  memberId = null,
+  skip = 0,
+  limit = 100,
+} = {}) {
+  const params = new URLSearchParams();
+
+  params.set("skip", String(skip));
+
+  params.set("limit", String(limit));
+
+  if (memberId !== null) {
+    params.set("member_id", String(validatePositiveId(memberId, "member id")));
+  }
+
+  return request(`/attendance?${params.toString()}`);
 }
 
-export async function getTodayAttendance() {
-  return apiRequest("/attendance/today");
+export function getTodayAttendance() {
+  return request("/attendance/today");
 }
 
-export async function getAttendanceByDate(date) {
-  const safeDate = validateDateKey(date);
+export function getAttendanceByDate(date) {
+  const safeDate = validateDate(date);
 
-  return apiRequest(`/attendance/date/${encodeURIComponent(safeDate)}`);
+  return request(`/attendance/date/${encodeURIComponent(safeDate)}`);
 }
 
-/* ======================================================
-   Record Attendance
-====================================================== */
+export function getAttendanceCalendar(startDate, endDate) {
+  const start = validateDate(startDate);
 
-export async function recordAttendance(memberId, status) {
-  const safeMemberId = validatePositiveInteger(memberId, "memberId");
+  const end = validateDate(endDate);
+
+  const params = new URLSearchParams({
+    start_date: start,
+
+    end_date: end,
+  });
+
+  return request(`/attendance/calendar?${params.toString()}`);
+}
+
+export function recordAttendance(memberId, status) {
+  const id = validatePositiveId(memberId, "member id");
 
   const safeStatus = validateStatus(status);
 
   /*
-   * عمداً تاریخ و ساعت ارسال نمی‌شوند.
-   *
-   * Backend مسئول تعیین:
-   * - current date
-   * - recorded time
-   * - create / update
-   *
-   * خواهد بود.
+   * فقط member_id و status.
+   * Date/Time توسط Backend.
    */
-
-  return apiRequest("/attendance", {
+  return request("/attendance", {
     method: "POST",
 
     body: {
-      member_id: safeMemberId,
+      member_id: id,
 
       status: safeStatus,
     },
   });
 }
 
-/* ======================================================
-   Update Attendance
-====================================================== */
-
-export async function updateAttendance(attendanceId, status) {
-  const safeAttendanceId = validatePositiveInteger(
-    attendanceId,
-    "attendanceId",
-  );
+export function updateAttendance(attendanceId, status) {
+  const id = validatePositiveId(attendanceId, "attendance id");
 
   const safeStatus = validateStatus(status);
 
-  return apiRequest(`/attendance/${safeAttendanceId}`, {
+  return request(`/attendance/${id}`, {
     method: "PUT",
 
     body: {

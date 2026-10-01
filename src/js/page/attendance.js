@@ -1,426 +1,390 @@
 import { protectPage } from "../guards/auth-guard.js";
+
 import { logout } from "../auth/auth-storage.js";
 
-import { renderMembers } from "../attendance/member-card.js";
+import { initializeAttendanceMembers } from "../attendance/members-controller.js";
 
-import { setDayDetailsEmpty } from "../attendance/day-details-modal.js";
+import {
+  AttendanceApiError,
+  getAttendanceByDate,
+  getAttendanceCalendar,
+} from "../attendance/attendance-api.js";
 
-import { setMembersViewState } from "../attendance/view-state.js";
+import {
+  setDayDetailsData,
+  setDayDetailsEmpty,
+  setDayDetailsError,
+  setDayDetailsLoading,
+} from "../attendance/day-details-modal.js";
 
 const CALENDAR_DAYS_BEFORE = 6;
+
 const CALENDAR_DAYS_AFTER = 6;
+
+const persianFullDateFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+  weekday: "long",
+
+  year: "numeric",
+
+  month: "long",
+
+  day: "numeric",
+});
+
+const persianDayFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+  day: "numeric",
+});
+
+const calendarWeekdayFormatter = new Intl.DateTimeFormat("fa-IR", {
+  weekday: "short",
+});
+
+const calendarDayFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+  day: "numeric",
+});
+
+const calendarMonthFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+  month: "short",
+});
+
+const clockFormatter = new Intl.DateTimeFormat("fa-IR", {
+  hour: "2-digit",
+
+  minute: "2-digit",
+
+  second: "2-digit",
+
+  hour12: false,
+});
+
+let calendarDates = [];
 
 let clockIntervalId = null;
 
 /* ======================================================
-   Authentication / Logout
+   Date Helpers
+====================================================== */
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function dateToLocalKey(date) {
+  return [
+    date.getFullYear(),
+    pad2(date.getMonth() + 1),
+    pad2(date.getDate()),
+  ].join("-");
+}
+
+function parseLocalDateKey(value) {
+  const [year, month, day] = value.split("-").map(Number);
+
+  return new Date(year, month - 1, day);
+}
+
+function getTodayKey() {
+  return dateToLocalKey(new Date());
+}
+
+/* ======================================================
+   Auth
 ====================================================== */
 
 function setupLogout() {
-  const logoutButton = document.getElementById("logoutButton");
+  const button = document.getElementById("logoutButton");
 
-  if (!logoutButton) {
-    console.error("Logout button not found");
-
-    return;
-  }
-
-  logoutButton.addEventListener("click", () => {
+  button?.addEventListener("click", () => {
     logout();
 
     window.location.replace("/page/login-page.html");
   });
 }
 
-/* ======================================================
-   Persian Date Utilities
-====================================================== */
+function handleUnauthorized(error) {
+  if (error instanceof AttendanceApiError && error.status === 401) {
+    logout();
 
-function getPersianDateParts(date) {
-  const formatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+    window.location.replace("/page/login-page.html");
 
-  const parts = formatter.formatToParts(date);
+    return true;
+  }
 
-  const result = {
-    weekday: "",
-    year: "",
-    month: "",
-    day: "",
-  };
-
-  parts.forEach((part) => {
-    if (Object.prototype.hasOwnProperty.call(result, part.type)) {
-      result[part.type] = part.value;
-    }
-  });
-
-  return result;
-}
-
-function formatFullPersianDate(date) {
-  const { weekday, day, month, year } = getPersianDateParts(date);
-
-  return `${weekday} ${day} ${month} ${year}`;
-}
-
-function formatPersianMonthDay(date) {
-  const { day } = getPersianDateParts(date);
-
-  return `روز ${day} ماه`;
-}
-
-function formatPersianWeekday(date) {
-  return new Intl.DateTimeFormat("fa-IR", {
-    weekday: "short",
-  }).format(date);
+  return false;
 }
 
 /* ======================================================
-   Clock
+   Header Date / Clock
 ====================================================== */
 
-function formatCurrentTime(date) {
-  return new Intl.DateTimeFormat("fa-IR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date);
-}
-
-function updateHeaderDateTime() {
-  const dateElement = document.getElementById("attendancePersianDate");
-
-  const monthDayElement = document.getElementById("attendanceMonthDay");
-
-  const clockElement = document.getElementById("attendanceClock");
-
+function updateHeaderDate() {
   const now = new Date();
 
+  const dateElement = document.getElementById("attendancePersianDate");
+
+  const dayElement = document.getElementById("attendanceMonthDay");
+
   if (dateElement) {
-    dateElement.textContent = formatFullPersianDate(now);
+    dateElement.textContent = persianFullDateFormatter.format(now);
   }
 
-  if (monthDayElement) {
-    monthDayElement.textContent = formatPersianMonthDay(now);
-  }
-
-  if (clockElement) {
-    clockElement.textContent = formatCurrentTime(now);
+  if (dayElement) {
+    dayElement.textContent = persianDayFormatter.format(now);
   }
 }
 
-function startClock() {
-  updateHeaderDateTime();
+function updateClock() {
+  const clock = document.getElementById("attendanceClock");
+
+  if (!clock) {
+    return;
+  }
+
+  clock.textContent = clockFormatter.format(new Date());
+}
+
+function initializeClock() {
+  updateClock();
 
   if (clockIntervalId) {
     clearInterval(clockIntervalId);
   }
 
-  clockIntervalId = window.setInterval(() => {
-    updateHeaderDateTime();
-  }, 1000);
+  clockIntervalId = window.setInterval(updateClock, 1000);
 }
 
 /* ======================================================
-   Calendar Utilities
+   Calendar Dates
 ====================================================== */
 
-function createDateWithOffset(baseDate, offset) {
-  const date = new Date(baseDate);
-
-  date.setHours(12, 0, 0, 0);
-
-  date.setDate(date.getDate() + offset);
-
-  return date;
-}
-
-function getLocalDateKey(date) {
-  const year = date.getFullYear();
-
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function isSameLocalDay(firstDate, secondDate) {
-  return (
-    firstDate.getFullYear() === secondDate.getFullYear() &&
-    firstDate.getMonth() === secondDate.getMonth() &&
-    firstDate.getDate() === secondDate.getDate()
-  );
-}
-
-function parseLocalDateKey(dateKey) {
-  if (!dateKey) {
-    return null;
-  }
-
-  const parts = dateKey.split("-").map(Number);
-
-  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) {
-    return null;
-  }
-
-  const [year, month, day] = parts;
-
-  return new Date(year, month - 1, day, 12, 0, 0, 0);
-}
-
-/* ======================================================
-   Calendar Day
-====================================================== */
-
-function createCalendarDay(date, today) {
-  const { day, month } = getPersianDateParts(date);
-
-  const isToday = isSameLocalDay(date, today);
-
-  const dayElement = document.createElement("article");
-
-  dayElement.dataset.date = getLocalDateKey(date);
-
-  dayElement.setAttribute("role", "button");
-
-  dayElement.setAttribute("tabindex", "0");
-
-  dayElement.setAttribute(
-    "aria-label",
-    `مشاهده جزئیات ${formatFullPersianDate(date)}`,
-  );
-
-  dayElement.className = [
-    "cursor-pointer",
-    "attendance-calendar-day",
-    "snap-center",
-    "w-[150px]",
-    "min-w-[150px]",
-    "select-none",
-    "rounded-2xl",
-    "border",
-    "p-4",
-    "transition-all",
-    "duration-300",
-
-    isToday
-      ? "border-persian-blue bg-persian-blue text-white shadow-md shadow-persian-blue/15"
-      : "border-french-gray/30 bg-white text-mirage hover:border-persian-blue/25 hover:shadow-sm",
-  ].join(" ");
-
-  if (isToday) {
-    dayElement.dataset.today = "true";
-  }
-
-  dayElement.innerHTML = `
-    <div class="flex items-start justify-between gap-2">
-
-      <span
-        class="${
-          isToday ? "text-white/60" : "text-mirage/40"
-        } text-[11px] font-medium"
-      >
-        ${formatPersianWeekday(date)}
-      </span>
-
-      ${
-        isToday
-          ? `
-            <span
-              class="rounded-md bg-white/15 px-2 py-1 text-[10px] font-bold text-white"
-            >
-              امروز
-            </span>
-          `
-          : ""
-      }
-
-    </div>
-
-
-    <div class="mt-4">
-
-      <div class="flex items-end gap-1.5">
-
-        <span
-          class="text-2xl font-black"
-        >
-          ${day}
-        </span>
-
-        <span
-          class="${
-            isToday ? "text-white/65" : "text-mirage/45"
-          } mb-0.5 text-xs font-medium"
-        >
-          ${month}
-        </span>
-
-      </div>
-
-    </div>
-
-
-    <div
-      class="${
-        isToday ? "border-white/15" : "border-french-gray/25"
-      } mt-4 border-t pt-3"
-    >
-
-      <div
-        class="flex items-center justify-between gap-2 text-[11px]"
-      >
-
-        <div
-          class="flex items-center gap-1.5"
-        >
-          <span
-            class="${
-              isToday ? "bg-white" : "bg-eucalyptus"
-            } h-1.5 w-1.5 rounded-full"
-          ></span>
-
-          <span
-            class="${isToday ? "text-white/75" : "text-mirage/50"}"
-          >
-            حاضر
-          </span>
-        </div>
-
-        <span
-          data-present-count
-          class="${isToday ? "text-white" : "text-eucalyptus"} font-black"
-        >
-          —
-        </span>
-
-      </div>
-
-
-      <div
-        class="mt-2 flex items-center justify-between gap-2 text-[11px]"
-      >
-
-        <div
-          class="flex items-center gap-1.5"
-        >
-          <span
-            class="${
-              isToday ? "bg-white/70" : "bg-alizarin-crimson"
-            } h-1.5 w-1.5 rounded-full"
-          ></span>
-
-          <span
-            class="${isToday ? "text-white/75" : "text-mirage/50"}"
-          >
-            غایب
-          </span>
-        </div>
-
-        <span
-          data-absent-count
-          class="${isToday ? "text-white" : "text-alizarin-crimson"} font-black"
-        >
-          —
-        </span>
-
-      </div>
-
-    </div>
-  `;
-
-  return dayElement;
-}
-
-/* ======================================================
-   Render Calendar
-====================================================== */
-
-function renderAttendanceCalendar() {
-  const track = document.getElementById("attendanceCalendarTrack");
-
-  if (!track) {
-    console.error("Attendance calendar track not found");
-
-    return;
-  }
-
-  track.innerHTML = "";
-
+function buildCalendarDates() {
   const today = new Date();
 
-  today.setHours(12, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  const dates = [];
 
   for (
     let offset = -CALENDAR_DAYS_BEFORE;
     offset <= CALENDAR_DAYS_AFTER;
     offset += 1
   ) {
-    const date = createDateWithOffset(today, offset);
+    const date = new Date(today);
 
-    const dayElement = createCalendarDay(date, today);
+    date.setDate(today.getDate() + offset);
 
-    track.appendChild(dayElement);
+    dates.push(date);
   }
 
-  requestAnimationFrame(() => {
-    scrollTodayIntoView();
+  return dates;
+}
+
+/* ======================================================
+   Calendar Render
+====================================================== */
+
+function createCalendarDay(date) {
+  const todayKey = getTodayKey();
+
+  const dateKey = dateToLocalKey(date);
+
+  const isToday = dateKey === todayKey;
+
+  const button = document.createElement("button");
+
+  button.type = "button";
+
+  button.dataset.calendarDate = dateKey;
+
+  button.className = [
+    "relative",
+    "w-[92px]",
+    "shrink-0",
+    "rounded-2xl",
+    "border",
+    "px-3",
+    "py-3",
+    "text-center",
+    "transition-all",
+    "duration-200",
+
+    isToday
+      ? "border-persian-blue bg-persian-blue text-white shadow-md"
+      : "border-french-gray/30 bg-white text-mirage hover:border-persian-blue/30 hover:shadow-sm",
+  ].join(" ");
+
+  const weekday = document.createElement("p");
+
+  weekday.className = isToday
+    ? "text-[10px] font-bold text-white/65"
+    : "text-[10px] font-bold text-mirage/35";
+
+  weekday.textContent = calendarWeekdayFormatter.format(date);
+
+  const day = document.createElement("p");
+
+  day.className = "mt-1 text-xl font-black";
+
+  day.textContent = calendarDayFormatter.format(date);
+
+  const month = document.createElement("p");
+
+  month.className = isToday
+    ? "mt-0.5 text-[10px] text-white/65"
+    : "mt-0.5 text-[10px] text-mirage/35";
+
+  month.textContent = calendarMonthFormatter.format(date);
+
+  const counts = document.createElement("div");
+
+  counts.className = "mt-2 flex items-center justify-center gap-2";
+
+  const present = document.createElement("span");
+
+  present.dataset.calendarPresent = "true";
+
+  present.className = isToday
+    ? "text-[9px] font-black text-white/80"
+    : "text-[9px] font-black text-eucalyptus";
+
+  present.textContent = "ح ۰";
+
+  const absent = document.createElement("span");
+
+  absent.dataset.calendarAbsent = "true";
+
+  absent.className = isToday
+    ? "text-[9px] font-black text-white/80"
+    : "text-[9px] font-black text-alizarin-crimson";
+
+  absent.textContent = "غ ۰";
+
+  counts.append(present, absent);
+
+  button.append(weekday, day, month, counts);
+
+  return button;
+}
+
+function renderCalendar() {
+  const track = document.getElementById("attendanceCalendarTrack");
+
+  if (!track) {
+    return;
+  }
+
+  calendarDates = buildCalendarDates();
+
+  track.innerHTML = "";
+
+  calendarDates.forEach((date) => {
+    track.appendChild(createCalendarDay(date));
+  });
+
+  window.requestAnimationFrame(() => {
+    const today = track.querySelector(
+      `[data-calendar-date="${getTodayKey()}"]`,
+    );
+
+    today?.scrollIntoView({
+      behavior: "smooth",
+
+      inline: "center",
+
+      block: "nearest",
+    });
   });
 }
 
 /* ======================================================
-   Calendar Scroll
+   Calendar Statistics
 ====================================================== */
 
-function scrollTodayIntoView() {
-  const todayElement = document.querySelector('[data-today="true"]');
+function updateCalendarStatistics(statistics) {
+  const safeStatistics = Array.isArray(statistics) ? statistics : [];
 
-  if (!todayElement) {
+  safeStatistics.forEach((day) => {
+    const button = document.querySelector(`[data-calendar-date="${day.date}"]`);
+
+    if (!button) {
+      return;
+    }
+
+    const present = button.querySelector("[data-calendar-present]");
+
+    const absent = button.querySelector("[data-calendar-absent]");
+
+    if (present) {
+      present.textContent = `ح ${new Intl.NumberFormat("fa-IR").format(
+        day.present_count || 0,
+      )}`;
+    }
+
+    if (absent) {
+      absent.textContent = `غ ${new Intl.NumberFormat("fa-IR").format(
+        day.absent_count || 0,
+      )}`;
+    }
+  });
+}
+
+async function refreshCalendarStatistics() {
+  if (calendarDates.length === 0) {
     return;
   }
 
-  todayElement.scrollIntoView({
-    behavior: "smooth",
-    block: "nearest",
-    inline: "center",
-  });
+  const startDate = dateToLocalKey(calendarDates[0]);
+
+  const endDate = dateToLocalKey(calendarDates[calendarDates.length - 1]);
+
+  try {
+    const statistics = await getAttendanceCalendar(startDate, endDate);
+
+    updateCalendarStatistics(statistics);
+  } catch (error) {
+    if (handleUnauthorized(error)) {
+      return;
+    }
+
+    console.error("Calendar statistics error:", error);
+  }
 }
 
 /* ======================================================
-   Calendar Interactions
+   Day Details
 ====================================================== */
 
-function openCalendarDayDetails(dayElement) {
-  const dateKey = dayElement?.dataset?.date;
+async function openDayDetails(dateKey) {
+  setDayDetailsLoading(dateKey);
 
-  const date = parseLocalDateKey(dateKey);
+  try {
+    const data = await getAttendanceByDate(dateKey);
 
-  if (!date) {
-    return;
+    const present = Array.isArray(data?.present) ? data.present : [];
+
+    const absent = Array.isArray(data?.absent) ? data.absent : [];
+
+    if (present.length === 0 && absent.length === 0) {
+      setDayDetailsEmpty(dateKey);
+
+      return;
+    }
+
+    setDayDetailsData(data);
+  } catch (error) {
+    if (handleUnauthorized(error)) {
+      return;
+    }
+
+    console.error("Day details error:", error);
+
+    setDayDetailsError(dateKey);
   }
-
-  /*
-   * Backend هنوز متصل نشده است.
-   *
-   * هیچ فرد حاضر یا غایب ساختگی
-   * ایجاد نمی‌کنیم.
-   *
-   * در Phase اتصال API ابتدا Modal
-   * وارد Loading State می‌شود و سپس
-   * داده واقعی نمایش داده خواهد شد.
-   */
-
-  setDayDetailsEmpty({
-    dateLabel: formatFullPersianDate(date),
-  });
 }
+
+/* ======================================================
+   Calendar Events
+====================================================== */
 
 function setupCalendarInteractions() {
   const track = document.getElementById("attendanceCalendarTrack");
@@ -430,29 +394,21 @@ function setupCalendarInteractions() {
   }
 
   track.addEventListener("click", (event) => {
-    const dayElement = event.target.closest(".attendance-calendar-day");
+    const button = event.target.closest("[data-calendar-date]");
 
-    if (!dayElement) {
+    if (!button) {
       return;
     }
 
-    openCalendarDayDetails(dayElement);
+    openDayDetails(button.dataset.calendarDate);
   });
 
-  track.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-
-    const dayElement = event.target.closest(".attendance-calendar-day");
-
-    if (!dayElement) {
-      return;
-    }
-
-    event.preventDefault();
-
-    openCalendarDayDetails(dayElement);
+  /*
+   * بعد از ثبت حاضر/غایب
+   * آمار Calendar امروز Refresh شود.
+   */
+  window.addEventListener("attendance:updated", () => {
+    refreshCalendarStatistics();
   });
 }
 
@@ -460,54 +416,36 @@ function setupCalendarInteractions() {
    Members
 ====================================================== */
 
-function initializeMembersSection() {
-  /*
-   * بعد از اتصال API ترتیب واقعی:
-   *
-   * loading
-   *    ↓
-   * request
-   *    ↓
-   * ready / empty / error
-   *
-   * در حال حاضر Backend وجود ندارد،
-   * بنابراین هیچ Request یا Fake Data
-   * ایجاد نمی‌شود.
-   */
-
-  setMembersViewState("empty");
-
-  renderMembers([]);
+async function initializeMembersSection() {
+  await initializeAttendanceMembers();
 }
 
 /* ======================================================
-   Page Initialization
+   Init
 ====================================================== */
 
-async function initAttendancePage() {
-  const isAuthenticated = await protectPage();
+async function initializeAttendancePage() {
+  const authenticated = await protectPage();
 
-  if (!isAuthenticated) {
+  if (!authenticated) {
     return;
   }
 
   setupLogout();
 
-  startClock();
+  updateHeaderDate();
 
-  renderAttendanceCalendar();
+  initializeClock();
+
+  renderCalendar();
 
   setupCalendarInteractions();
 
-  initializeMembersSection();
+  await Promise.all([initializeMembersSection(), refreshCalendarStatistics()]);
 }
 
-/* ======================================================
-   Start
-====================================================== */
-
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initAttendancePage);
+  document.addEventListener("DOMContentLoaded", initializeAttendancePage);
 } else {
-  initAttendancePage();
+  initializeAttendancePage();
 }
