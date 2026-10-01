@@ -2,7 +2,10 @@ import { protectPage } from "../guards/auth-guard.js";
 
 import { logout } from "../auth/auth-storage.js";
 
-import { initializeAttendanceMembers } from "../attendance/members-controller.js";
+import {
+  initializeAttendanceMembers,
+  reloadAttendanceMembers,
+} from "../attendance/members-controller.js";
 
 import {
   AttendanceApiError,
@@ -60,6 +63,12 @@ const clockFormatter = new Intl.DateTimeFormat("fa-IR", {
 let calendarDates = [];
 
 let clockIntervalId = null;
+
+let syncIntervalId = null;
+
+let currentDayKey = null;
+
+let backgroundRefreshRunning = false;
 
 /* ======================================================
    Date Helpers
@@ -421,6 +430,127 @@ async function initializeMembersSection() {
 }
 
 /* ======================================================
+   Screen Synchronization
+====================================================== */
+
+async function refreshAttendanceData({ rebuildCalendar = false } = {}) {
+  if (backgroundRefreshRunning) {
+    return;
+  }
+
+  backgroundRefreshRunning = true;
+
+  try {
+    if (rebuildCalendar) {
+      updateHeaderDate();
+
+      renderCalendar();
+    }
+
+    await Promise.all([
+      reloadAttendanceMembers({
+        showLoading: false,
+      }),
+
+      refreshCalendarStatistics(),
+    ]);
+  } finally {
+    backgroundRefreshRunning = false;
+  }
+}
+
+/* ======================================================
+   Day Change
+====================================================== */
+
+async function checkForDayChange() {
+  const todayKey = getTodayKey();
+
+  if (currentDayKey === null) {
+    currentDayKey = todayKey;
+
+    return;
+  }
+
+  if (todayKey === currentDayKey) {
+    return;
+  }
+
+  currentDayKey = todayKey;
+
+  /*
+   * روز جدید شروع شده:
+   *
+   * Header
+   * Calendar
+   * Member Status
+   * Statistics
+   *
+   * همگی باید Refresh شوند.
+   */
+  await refreshAttendanceData({
+    rebuildCalendar: true,
+  });
+}
+
+/* ======================================================
+   Visibility Sync
+====================================================== */
+
+async function handleVisibilityChange() {
+  if (document.visibilityState !== "visible") {
+    return;
+  }
+
+  const todayKey = getTodayKey();
+
+  /*
+   * اگر هنگام مخفی بودن Tab
+   * روز عوض شده باشد.
+   */
+  if (todayKey !== currentDayKey) {
+    currentDayKey = todayKey;
+
+    await refreshAttendanceData({
+      rebuildCalendar: true,
+    });
+
+    return;
+  }
+
+  /*
+   * اگر همان روز است،
+   * فقط اطلاعات واقعی Server
+   * را دوباره دریافت می‌کنیم.
+   */
+  await refreshAttendanceData();
+}
+
+/* ======================================================
+   Automatic Sync
+====================================================== */
+
+function setupAutomaticSynchronization() {
+  currentDayKey = getTodayKey();
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  if (syncIntervalId) {
+    clearInterval(syncIntervalId);
+  }
+
+  /*
+   * برای تشخیص عبور از نیمه شب.
+   *
+   * نیازی نیست Server را هر دقیقه
+   * Query کنیم.
+   *
+   * فقط تغییر Date بررسی می‌شود.
+   */
+  syncIntervalId = window.setInterval(checkForDayChange, 60 * 1000);
+}
+
+/* ======================================================
    Init
 ====================================================== */
 
@@ -440,6 +570,8 @@ async function initializeAttendancePage() {
   renderCalendar();
 
   setupCalendarInteractions();
+
+  setupAutomaticSynchronization();
 
   await Promise.all([initializeMembersSection(), refreshCalendarStatistics()]);
 }

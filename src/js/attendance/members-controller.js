@@ -539,8 +539,10 @@ async function handleAttendanceAction({ memberId, status, card }) {
    Init
 ====================================================== */
 
-export async function initializeAttendanceMembers() {
-  setMembersViewState("loading");
+export async function reloadAttendanceMembers({ showLoading = false } = {}) {
+  if (showLoading) {
+    setMembersViewState("loading");
+  }
 
   try {
     await refreshMembers();
@@ -548,13 +550,29 @@ export async function initializeAttendanceMembers() {
     renderMembers(currentMembers, {
       onAttendanceAction: handleAttendanceAction,
     });
+
+    return true;
   } catch (error) {
     if (handleUnauthorized(error)) {
-      return;
+      return false;
     }
 
     console.error(error);
 
-    setMembersViewState("error");
+    /*
+     * اگر Refresh پس‌زمینه‌ای شکست خورد،
+     * Cardهای فعلی را نابود نمی‌کنیم.
+     */
+    if (showLoading) {
+      setMembersViewState("error");
+    }
+
+    return false;
   }
+}
+
+export async function initializeAttendanceMembers() {
+  return reloadAttendanceMembers({
+    showLoading: true,
+  });
 }
