@@ -1,4 +1,7 @@
+import os
+
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 
 APP_DATA_DIR = (
@@ -21,4 +24,15 @@ DATABASE_PATH = (
 
 DATABASE_URL = (
     f"sqlite:///{DATABASE_PATH.as_posix()}"
+)
+
+
+APP_TIMEZONE_NAME = os.getenv(
+    "KARBON_TIMEZONE",
+    "Asia/Tehran",
+)
+
+
+APP_TIMEZONE = ZoneInfo(
+    APP_TIMEZONE_NAME
 )

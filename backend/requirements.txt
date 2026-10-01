@@ -5,3 +5,5 @@ bcrypt
 python-dotenv
 pydantic
 python-jose[cryptography]
+tzdata
+jdatetime
