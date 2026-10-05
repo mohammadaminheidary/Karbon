@@ -1,3 +1,7 @@
+import { initializeNavbar } from "../components/navbar.js";
+
+initializeNavbar();
+
 import { protectPage } from "../guards/auth-guard.js";
 import { logout } from "../auth/auth-storage.js";
 

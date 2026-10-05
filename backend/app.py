@@ -22,6 +22,7 @@ from routes.members import (
 from routes.attendance import (
     router as attendance_router,
 )
+from routes.customers import router as customers_router
 
 
 # ======================================================
@@ -91,6 +92,7 @@ app.include_router(
 app.include_router(
     attendance_router
 )
+app.include_router(customers_router)
 
 
 # ======================================================

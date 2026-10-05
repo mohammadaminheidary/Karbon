@@ -16,10 +16,10 @@ APP_DATA_DIR.mkdir(
 )
 
 
-DATABASE_PATH = (
-    APP_DATA_DIR
-    / "karbon.db"
-)
+DATABASE_PATH = Path(os.getenv(
+    "KARBON_DATABASE_PATH",
+    str(APP_DATA_DIR / "karbon.db"),
+)).expanduser().resolve()
 
 
 DATABASE_URL = (
