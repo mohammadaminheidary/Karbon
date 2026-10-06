@@ -1,0 +1,158 @@
+[
+  {
+    "code": "mellat",
+    "name": "بانک ملت",
+    "logo_url": "/assets/image/banks/mellat.svg",
+    "active": true
+  },
+  {
+    "code": "melli",
+    "name": "بانک ملی ایران",
+    "logo_url": "/assets/image/banks/melli.svg",
+    "active": true
+  },
+  {
+    "code": "tejarat",
+    "name": "بانک تجارت",
+    "logo_url": "/assets/image/banks/tejarat.svg",
+    "active": true
+  },
+  {
+    "code": "saderat",
+    "name": "بانک صادرات ایران",
+    "logo_url": "/assets/image/banks/saderat.svg",
+    "active": true
+  },
+  {
+    "code": "sepah",
+    "name": "بانک سپه",
+    "logo_url": "/assets/image/banks/sepah.svg",
+    "active": true
+  },
+  {
+    "code": "saman",
+    "name": "بانک سامان",
+    "logo_url": "/assets/image/banks/saman.svg",
+    "active": true
+  },
+  {
+    "code": "pasargad",
+    "name": "بانک پاسارگاد",
+    "logo_url": "/assets/image/banks/pasargad.svg",
+    "active": true
+  },
+  {
+    "code": "parsian",
+    "name": "بانک پارسیان",
+    "logo_url": "/assets/image/banks/parsian.svg",
+    "active": true
+  },
+  {
+    "code": "refah",
+    "name": "بانک رفاه کارگران",
+    "logo_url": "/assets/image/banks/refah.svg",
+    "active": true
+  },
+  {
+    "code": "keshavarzi",
+    "name": "بانک کشاورزی",
+    "logo_url": "/assets/image/banks/keshavarzi.svg",
+    "active": true
+  },
+  {
+    "code": "maskan",
+    "name": "بانک مسکن",
+    "logo_url": "/assets/image/banks/maskan.svg",
+    "active": true
+  },
+  {
+    "code": "shahr",
+    "name": "بانک شهر",
+    "logo_url": "/assets/image/banks/shahr.svg",
+    "active": true
+  },
+  {
+    "code": "eghtesad-novin",
+    "name": "بانک اقتصاد نوین",
+    "logo_url": "/assets/image/banks/eghtesad-novin.svg",
+    "active": true
+  },
+  {
+    "code": "karafarin",
+    "name": "بانک کارآفرین",
+    "logo_url": "/assets/image/banks/karafarin.svg",
+    "active": true
+  },
+  {
+    "code": "resalat",
+    "name": "بانک قرض‌الحسنه رسالت",
+    "logo_url": "/assets/image/banks/resalat.svg",
+    "active": true
+  },
+  {
+    "code": "mehr-iran",
+    "name": "بانک قرض‌الحسنه مهر ایران",
+    "logo_url": "/assets/image/banks/mehr-iran.svg",
+    "active": true
+  },
+  {
+    "code": "dey",
+    "name": "بانک دی",
+    "logo_url": "/assets/image/banks/dey.svg",
+    "active": true
+  },
+  {
+    "code": "sina",
+    "name": "بانک سینا",
+    "logo_url": "/assets/image/banks/sina.svg",
+    "active": true
+  },
+  {
+    "code": "sanat-madan",
+    "name": "بانک صنعت و معدن",
+    "logo_url": "/assets/image/banks/sanat-madan.svg",
+    "active": true
+  },
+  {
+    "code": "post",
+    "name": "پست بانک ایران",
+    "logo_url": "/assets/image/banks/post.svg",
+    "active": true
+  },
+  {
+    "code": "tosee-saderat",
+    "name": "بانک توسعه صادرات ایران",
+    "logo_url": "/assets/image/banks/tosee-saderat.svg",
+    "active": true
+  },
+  {
+    "code": "tosee-taavon",
+    "name": "بانک توسعه تعاون",
+    "logo_url": "/assets/image/banks/tosee-taavon.svg",
+    "active": true
+  },
+  {
+    "code": "khavar-mianeh",
+    "name": "بانک خاورمیانه",
+    "logo_url": "/assets/image/banks/khavar-mianeh.svg",
+    "active": true
+  },
+  {
+    "code": "gardeshgari",
+    "name": "بانک گردشگری",
+    "logo_url": "/assets/image/banks/gardeshgari.svg",
+    "active": true
+  },
+  {
+    "code": "iran-zamin",
+    "name": "بانک ایران زمین",
+    "logo_url": "/assets/image/banks/iran-zamin.svg",
+    "active": true
+  },
+  {
+    "code": "sarmayeh",
+    "name": "بانک سرمایه",
+    "logo_url": "/assets/image/banks/sarmayeh.svg",
+    "active": true
+  }
+]

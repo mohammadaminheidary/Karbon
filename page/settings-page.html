@@ -8,6 +8,7 @@
     <title>Karbon | تنظیمات</title>
 
     <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/finance.css" />
   </head>
 
   <body class="min-h-screen bg-alabaster text-mirage">
@@ -94,6 +95,22 @@
                   class="settings-nav-button flex items-center gap-3 rounded-xl px-3.5 py-3 text-right text-sm font-bold transition-all"
                 >
                   <span>ظاهر</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-settings-target="expenses"
+                  class="settings-nav-button flex items-center gap-3 rounded-xl px-3.5 py-3 text-right text-sm font-bold transition-all"
+                >
+                  <span>عناوین هزینه</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-settings-target="banks"
+                  class="settings-nav-button flex items-center gap-3 rounded-xl px-3.5 py-3 text-right text-sm font-bold transition-all"
+                >
+                  <span>بانک</span>
                 </button>
 
                 <button
@@ -311,6 +328,128 @@
               </div>
             </section>
 
+            <!-- Bank accounts -->
+            <section
+              data-settings-panel="banks"
+              class="finance-surface hidden min-w-0 w-full max-w-full"
+            >
+              <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 class="text-xl font-black">
+                    بانک
+                    <span id="bankAccountCount" class="mr-2 text-sm text-mirage/40">—</span>
+                  </h2>
+                  <p class="mt-2 text-xs text-mirage/45">
+                    مدیریت اطلاعات صاحبان حساب، کارت‌ها و شماره شبا
+                  </p>
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    id="refreshBanks"
+                    type="button"
+                    class="finance-button border border-french-gray/40 bg-white"
+                  >
+                    بروزرسانی</button
+                  ><button
+                    id="addBankAccount"
+                    type="button"
+                    class="finance-button bg-persian-blue text-white"
+                  >
+                    + افزودن حساب
+                  </button>
+                </div>
+              </div>
+              <p
+                id="bankNotice"
+                class="mb-4 hidden rounded-xl bg-eucalyptus/10 p-4 text-sm text-eucalyptus"
+                role="status"
+              ></p>
+              <p
+                id="banksError"
+                class="mb-4 hidden rounded-xl bg-alizarin-crimson/10 p-4 text-sm text-alizarin-crimson"
+                role="alert"
+              ></p>
+              <p
+                id="banksStatus"
+                class="rounded-2xl border border-french-gray/30 bg-white p-8 text-center text-sm text-mirage/50"
+                role="status"
+              >
+                در حال دریافت حساب‌ها...
+              </p>
+              <div id="bankCards" data-display="rows" class="bank-settings-list"></div>
+            </section>
+
+            <!-- Expense categories -->
+            <section
+              data-settings-panel="expenses"
+              class="finance-surface hidden min-w-0 w-full max-w-full"
+            >
+              <div class="rounded-2xl border border-french-gray/30 bg-white p-5 sm:p-6">
+                <h2 class="text-lg font-black">عناوین هزینه</h2>
+                <p class="mt-2 text-sm text-mirage/45">
+                  عناوین فعال در ثبت هزینه نمایش داده می‌شوند. کد حساب‌ها خودکار و
+                  پس از حذف، بدون فاصله مرتب می‌شوند.
+                </p>
+                <form id="expenseCategoryForm" class="mt-5">
+                  <fieldset id="expenseCategoryFields" class="grid gap-4 sm:grid-cols-2">
+                    <label
+                      >عنوان هزینه
+                      <input
+                        id="expenseCategoryTitle"
+                        class="finance-field"
+                        required
+                        maxlength="150"
+                    /></label>
+                    <label
+                      >وضعیت
+                      <select id="expenseCategoryActive" class="finance-field">
+                        <option value="true">فعال</option>
+                        <option value="false">غیرفعال</option>
+                      </select></label
+                    >
+                  </fieldset>
+                  <p id="expenseCategoryCode" class="mt-3 text-xs text-mirage/45">
+                    کد حساب هنگام ثبت به‌صورت خودکار ساخته می‌شود.
+                  </p>
+                  <div class="mt-4 flex gap-3">
+                    <button
+                      id="saveExpenseCategory"
+                      type="submit"
+                      class="finance-button bg-persian-blue text-white"
+                    >
+                      ثبت عنوان</button
+                    ><button
+                      id="cancelExpenseCategoryEdit"
+                      type="button"
+                      class="finance-button hidden border border-french-gray/40"
+                    >
+                      انصراف از ویرایش
+                    </button>
+                  </div>
+                </form>
+                <p
+                  id="expenseCategoryMessage"
+                  class="mt-4 hidden text-sm"
+                  role="status"
+                ></p>
+                <div class="mt-6 flex items-center justify-between">
+                  <h3 class="font-bold">عناوین ثبت‌شده</h3>
+                  <button
+                    id="reloadExpenseCategories"
+                    type="button"
+                    class="finance-button border border-french-gray/40"
+                  >
+                    بروزرسانی
+                  </button>
+                </div>
+                <p
+                  id="expenseCategoriesStatus"
+                  class="mt-4 text-sm text-mirage/45"
+                  role="status"
+                ></p>
+                <div id="expenseCategoriesList" class="mt-4 space-y-3"></div>
+              </div>
+            </section>
             <!-- Appearance -->
             <section
               data-settings-panel="appearance"

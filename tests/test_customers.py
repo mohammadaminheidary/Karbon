@@ -191,14 +191,15 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         payload["last_contact_date"] = None
         self.assertIsNone(self.request("PUT", f'/customers/{customer["id"]}', payload)[1]["last_contact_date"])
 
-    def test_hard_delete_and_codes_not_reused(self):
+    def test_hard_delete_reuses_display_code_and_preserves_internal_sequence(self):
         customer = self.create()
         self.assertEqual(self.request("DELETE", f'/customers/{customer["id"]}')[0], 204)
         self.assertEqual(self.request("GET", f'/customers/{customer["id"]}')[0], 404)
         with closing(sqlite3.connect(self.database)) as db, db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM customers").fetchone()[0], 0)
         next_customer = self.create()
-        self.assertGreater(next_customer["customer_code"], customer["customer_code"])
+        self.assertEqual(next_customer["customer_code"], customer["customer_code"])
+        self.assertGreater(next_customer["id"], customer["id"])
 
     def test_concurrent_creates_unique_codes_and_duplicate_lock(self):
         def create_unique(index):

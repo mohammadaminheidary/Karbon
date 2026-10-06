@@ -11,7 +11,7 @@ def utc_now():
 
 class Customer(Base):
     __tablename__ = "customers"
-    # Retain the sequence after hard deletes; customer codes are never reused.
+    # Retain the sequence after hard deletes; internal IDs are never reused; display codes may be renumbered.
     __table_args__ = {"sqlite_autoincrement": True}
 
     id = Column(Integer, primary_key=True)
@@ -25,3 +25,5 @@ class Customer(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+    deleted_at = Column(DateTime(timezone=True), nullable=True)

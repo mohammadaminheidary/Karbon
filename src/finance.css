@@ -1,0 +1,341 @@
+/* Finance-only components; existing pages keep their current styles. */
+.finance-surface .finance-button {
+  min-height: 44px;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.finance-surface button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.finance-surface .finance-field {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid #b6c0c680;
+  border-radius: 12px;
+  background: white;
+  font-size: 14px;
+}
+.finance-surface .finance-field:focus {
+  outline: 2px solid #1e40af;
+  outline-offset: 2px;
+}
+.finance-surface label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.bank-account {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  transition: transform 0.15s ease;
+}
+.bank-account:hover {
+  transform: translateY(-3px);
+}
+.bank-account:focus-visible,
+.bank-balance-summary:focus-visible {
+  outline: 2px solid #1e40af;
+  outline-offset: 4px;
+}
+.bank-settings-list {
+  overflow: hidden;
+  border: 1px solid #b6c0c64d;
+  border-radius: 16px;
+  background: white;
+}
+.bank-settings-list:empty {
+  display: none;
+}
+.bank-settings-row {
+  display: grid;
+  grid-template-columns:
+    minmax(140px, 1fr) minmax(110px, 1fr) minmax(200px, 1.5fr)
+    auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid #b6c0c633;
+}
+.bank-settings-row:last-child {
+  border-bottom: 0;
+}
+.bank-settings-row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .bank-settings-row {
+    grid-template-columns: 1fr auto;
+  }
+  .bank-row-numbers {
+    grid-column: 1;
+  }
+}
+.bank-card-face {
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  color: white;
+  background: linear-gradient(125deg, #0f172a 0%, #1e40af 100%);
+}
+.bank-card-face::before,
+.bank-card-face::after {
+  content: "";
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  border: 1px solid #ffffff15;
+  border-radius: 50%;
+  left: -110px;
+  top: 40px;
+  pointer-events: none;
+}
+.bank-card-face::after {
+  width: 320px;
+  height: 320px;
+  left: -150px;
+  top: 0;
+}
+.bank-logo {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 8px;
+  border-radius: 16px;
+  background: white;
+  color: #0f172a;
+  font-size: 24px;
+}
+.bank-logo img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.bank-chip {
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 29px;
+  margin: 20px 0 16px auto;
+  border-radius: 7px;
+  border: 1px solid #f59e0b66;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 31%,
+      #0f172a44 32%,
+      #0f172a44 34%,
+      transparent 35%,
+      transparent 65%,
+      #0f172a44 66%,
+      #0f172a44 68%,
+      transparent 69%
+    ),
+    linear-gradient(
+      0deg,
+      #f59e0b88 32%,
+      #0f172a44 33%,
+      #0f172a44 36%,
+      #f59e0b88 37%,
+      #f59e0b88 64%,
+      #0f172a44 65%,
+      #0f172a44 68%,
+      #f59e0b88 69%
+    );
+}
+.bank-card-number {
+  position: relative;
+  font-size: clamp(18px, 2vw, 23px);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bank-sheba {
+  position: relative;
+  margin-top: 12px;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: #ffffffbb;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.bank-number {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+.finance-surface .finance-field[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+.finance-surface .finance-chart {
+  width: 100%;
+  min-width: 580px;
+  height: 280px;
+}
+.finance-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: finance-draw 1s ease-out forwards;
+}
+@keyframes finance-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .finance-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+#chartPeriods button {
+  background: #f8fafc;
+  color: #64748b;
+}
+#chartPeriods button[aria-pressed="true"] {
+  background: #1e40af;
+  color: white;
+}
+
+.ledger-filter-panel {
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+.ledger-filter-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.ledger-date-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 18px;
+}
+.ledger-date-tabs button {
+  padding: 9px 16px;
+  min-height: 42px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 0.18s,
+    color 0.18s;
+}
+.ledger-date-tabs button[aria-pressed="true"] {
+  background: #1e40af;
+  border-color: #1e40af;
+  color: white;
+  box-shadow: 0 3px 8px #1e40af25;
+}
+.ledger-filter-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.ledger-search-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  border: 1px solid #b6c0c680;
+  border-radius: 12px;
+  padding-inline: 14px;
+  background: white;
+}
+.ledger-search-input span {
+  font-size: 27px;
+  color: #64748b;
+}
+.finance-surface .ledger-search-input input {
+  border: 0;
+  margin: 0;
+  background: transparent;
+}
+.transaction-menu summary {
+  list-style: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.transaction-menu summary::-webkit-details-marker {
+  display: none;
+}
+.transaction-menu-options {
+  display: flex;
+  gap: 3px;
+  margin-top: 6px;
+}
+.transaction-menu-options button:last-child {
+  color: #dc2626;
+}
+.ledger-chart-enter {
+  animation: ledger-enter 0.4s ease both;
+}
+.ledger-point-enter {
+  animation: ledger-enter 0.75s ease both;
+}
+@keyframes ledger-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 600px) {
+  .ledger-filter-panel {
+    padding: 14px;
+  }
+  .ledger-filter-fields {
+    grid-template-columns: 1fr;
+  }
+  .ledger-date-tabs button {
+    padding-inline: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ledger-chart-enter,
+  .ledger-point-enter,
+  .finance-line {
+    animation: none !important;
+  }
+}
+
+.finance-surface button.finance-delete-blocked {
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .ledger-date-tabs {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .ledger-date-tabs button {
+    grid-column: span 2;
+  }
+  .ledger-date-tabs button:nth-child(-n + 2) {
+    grid-column: span 3;
+  }
+}

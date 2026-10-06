@@ -21,6 +21,8 @@ def customer_errors():
         yield
     except service.CustomerNotFound:
         raise HTTPException(404, "مشتری موردنظر پیدا نشد.")
+    except service.CustomerHasTransactions as error:
+        raise HTTPException(409, f"این مشتری {error.count} تراکنش حذف‌نشده دارد. ابتدا تراکنش‌های او را در بخش مالی حذف کنید، سپس مشتری را حذف کنید.")
     except service.DuplicateCustomers as error:
         raise HTTPException(409, detail={
             "code": "DUPLICATE_CUSTOMER",

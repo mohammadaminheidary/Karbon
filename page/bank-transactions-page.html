@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Karbon | تراکنش‌های حساب</title>
+    <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/finance.css" />
+  </head>
+  <body class="finance-surface min-h-screen bg-alabaster text-mirage">
+    <div id="navbarHost"></div>
+    <main class="min-h-screen overflow-x-hidden pt-16 lg:mr-72 lg:pt-0">
+      <div class="mx-auto w-full max-w-[1700px] px-4 py-7 sm:px-7 xl:px-9">
+        <header
+          class="flex flex-wrap items-center justify-between gap-4 border-b border-french-gray/30 pb-6"
+        >
+          <div>
+            <p class="mb-2 text-xs text-mirage/45">دفتر حساب بانکی</p>
+            <h1 class="text-2xl font-black">تراکنش‌های حساب</h1>
+            <div id="bankHeader" class="mt-4 flex items-center gap-3"></div>
+          </div>
+          <a
+            href="banks-page.html"
+            class="finance-button border border-french-gray/40 bg-white"
+            >بازگشت به بانک‌ها</a
+          >
+        </header>
+        <section
+          class="mt-7 rounded-2xl border border-french-gray/30 bg-white p-5 sm:p-6"
+          aria-label="نمودار درآمد و هزینه"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-black">روند درآمد و هزینه</h2>
+              <p id="chartRange" class="mt-2 text-xs text-mirage/45"></p>
+            </div>
+            <div
+              id="chartPeriods"
+              class="flex flex-wrap gap-2"
+              aria-label="بازه نمودار"
+            >
+              <button
+                type="button"
+                data-period="day"
+                class="finance-button"
+                aria-pressed="false"
+              >
+                روز
+              </button>
+              <button
+                type="button"
+                data-period="yesterday"
+                aria-pressed="false"
+                class="finance-button border border-french-gray/40"
+              >
+                دیروز
+              </button>
+              <button
+                type="button"
+                data-period="week"
+                class="finance-button"
+                aria-pressed="false"
+              >
+                هفته
+              </button>
+              <button
+                type="button"
+                data-period="month"
+                class="finance-button"
+                aria-pressed="true"
+              >
+                ماه
+              </button>
+              <button
+                type="button"
+                data-period="quarter"
+                class="finance-button"
+                aria-pressed="false"
+              >
+                سه ماه
+              </button>
+              <button
+                type="button"
+                data-period="year"
+                class="finance-button"
+                aria-pressed="false"
+              >
+                سال
+              </button>
+            </div>
+          </div>
+          <p
+            id="chartStatus"
+            class="mt-4 text-sm text-mirage/50"
+            role="status"
+          ></p>
+          <p
+            id="chartError"
+            class="mt-4 hidden rounded-xl bg-alizarin-crimson/10 p-3 text-sm text-alizarin-crimson"
+            role="alert"
+          ></p>
+          <button
+            id="retryChart"
+            type="button"
+            class="finance-button mt-3 hidden border border-french-gray/40"
+          >
+            تلاش مجدد
+          </button>
+          <div
+            id="chartSummary"
+            class="mt-5 flex flex-wrap gap-6 text-sm"
+          ></div>
+          <div id="bankChart" class="mt-4 overflow-x-auto"></div>
+        </section>
+        <section
+          class="mt-7 rounded-2xl border border-french-gray/30 bg-white p-5 sm:p-6"
+          aria-label="فهرست تراکنش‌ها"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-lg font-black">تمام تراکنش‌های حساب</h2>
+            <p id="ledgerCount" class="text-xs text-mirage/45"></p>
+          </div>
+          <div class="ledger-search-wrap mt-5">
+            <label for="ledgerSearch">جستجوی تراکنش</label>
+            <div class="ledger-search-input">
+              <span aria-hidden="true">⌕</span
+              ><input
+                id="ledgerSearch"
+                type="search"
+                class="finance-field"
+                placeholder="شماره تراکنش، پیگیری یا شرح…"
+                maxlength="200"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+          <form id="ledgerFilters" class="ledger-filter-panel mt-5" novalidate>
+            <div class="ledger-filter-heading">
+              <span>تاریخ شمسی</span
+              ><span class="text-xs text-mirage/45"
+                >محدوده نمایش تراکنش‌ها</span
+              >
+            </div>
+            <div
+              class="ledger-date-tabs"
+              role="group"
+              aria-label="نوع فیلتر تاریخ"
+            >
+              <button type="button" data-ledger-mode="all" aria-pressed="true">
+                همه تاریخ‌ها
+              </button>
+              <button
+                type="button"
+                data-ledger-mode="range"
+                aria-pressed="false"
+              >
+                بازه دلخواه
+              </button>
+              <button type="button" data-ledger-mode="day" aria-pressed="false">
+                روز
+              </button>
+              <button
+                type="button"
+                data-ledger-mode="month"
+                aria-pressed="false"
+              >
+                ماه
+              </button>
+              <button
+                type="button"
+                data-ledger-mode="year"
+                aria-pressed="false"
+              >
+                سال
+              </button>
+            </div>
+            <select
+              id="ledgerDateMode"
+              class="hidden"
+              aria-label="نوع فیلتر تاریخ"
+              tabindex="-1"
+            >
+              <option value="all">همه تاریخ‌ها</option>
+              <option value="range">بازه</option>
+              <option value="day">روز</option>
+              <option value="month">ماه</option>
+              <option value="year">سال</option>
+            </select>
+            <div class="ledger-filter-fields">
+              <label for="ledgerStart" data-date-mode="range" class="hidden"
+                >از تاریخ<input
+                  id="ledgerStart"
+                  class="finance-field"
+                  dir="ltr"
+                  placeholder="۱۴۰۵/۰۷/۰۱"
+                  maxlength="10"
+                  inputmode="text"
+              /></label>
+              <label for="ledgerEnd" data-date-mode="range" class="hidden"
+                >تا تاریخ<input
+                  id="ledgerEnd"
+                  class="finance-field"
+                  dir="ltr"
+                  placeholder="۱۴۰۵/۰۷/۳۰"
+                  maxlength="10"
+                  inputmode="text"
+              /></label>
+              <label for="ledgerDay" data-date-mode="day" class="hidden"
+                >روز شمسی<input
+                  id="ledgerDay"
+                  class="finance-field"
+                  dir="ltr"
+                  placeholder="۱۴۰۵/۰۷/۱۴"
+                  maxlength="10"
+                  inputmode="text"
+              /></label>
+              <label for="ledgerMonth" data-date-mode="month" class="hidden"
+                >ماه شمسی<input
+                  id="ledgerMonth"
+                  class="finance-field"
+                  dir="ltr"
+                  placeholder="۱۴۰۵/۰۷"
+                  maxlength="7"
+                  inputmode="text"
+              /></label>
+              <label for="ledgerYear" data-date-mode="year" class="hidden"
+                >سال شمسی<input
+                  id="ledgerYear"
+                  class="finance-field"
+                  dir="ltr"
+                  placeholder="۱۴۰۵"
+                  maxlength="4"
+                  inputmode="numeric"
+              /></label>
+              <label for="ledgerMin"
+                >حداقل مبلغ (تومان)<input
+                  id="ledgerMin"
+                  class="finance-field"
+                  dir="ltr"
+                  inputmode="numeric"
+                  maxlength="21"
+                  placeholder="بدون محدودیت"
+              /></label>
+              <label for="ledgerMax"
+                >حداکثر مبلغ (تومان)<input
+                  id="ledgerMax"
+                  class="finance-field"
+                  dir="ltr"
+                  inputmode="numeric"
+                  maxlength="21"
+                  placeholder="بدون محدودیت"
+              /></label>
+            </div>
+            <div class="mt-4 flex gap-3">
+              <button
+                type="submit"
+                class="finance-button bg-persian-blue text-white"
+              >
+                اعمال فیلتر</button
+              ><button
+                id="resetLedger"
+                type="button"
+                class="finance-button border border-french-gray/40"
+              >
+                پاک کردن فیلترها
+              </button>
+            </div>
+          </form>
+          <p class="mt-4 text-xs text-mirage/45">
+            تراکنش‌ها از جدید به قدیم نمایش داده می‌شوند.
+          </p>
+          <p
+            id="ledgerError"
+            class="mt-4 hidden rounded-xl bg-alizarin-crimson/10 p-3 text-sm text-alizarin-crimson"
+            role="alert"
+          ></p>
+          <p
+            id="ledgerStatus"
+            class="mt-5 text-sm text-mirage/50"
+            role="status"
+          ></p>
+          <div class="mt-5 overflow-x-auto">
+            <table
+              id="ledgerTable"
+              class="hidden w-full min-w-[760px] text-right text-sm"
+            >
+              <thead class="bg-alabaster text-xs text-mirage/55">
+                <tr>
+                  <th class="p-4">شماره تراکنش</th>
+                  <th class="p-4">نوع</th>
+                  <th class="p-4">عنوان و شرح</th>
+                  <th class="p-4">تاریخ و ساعت</th>
+                  <th class="p-4">مبلغ</th>
+                  <th class="p-4">شماره پیگیری</th>
+                  <th class="p-4">تنظیمات</th>
+                </tr>
+              </thead>
+              <tbody id="ledgerRows"></tbody>
+            </table>
+          </div>
+          <div class="mt-5 flex justify-center gap-3">
+            <button
+              id="retryLedger"
+              type="button"
+              class="finance-button hidden border border-french-gray/40"
+            >
+              تلاش مجدد</button
+            ><button
+              id="moreLedger"
+              type="button"
+              class="finance-button hidden border border-french-gray/40"
+            >
+              نمایش بیشتر
+            </button>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="../src/js/page/bank-transactions.js"></script>
+  </body>
+</html>

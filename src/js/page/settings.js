@@ -1,4 +1,6 @@
 import { initializeNavbar } from "../components/navbar.js";
+import { initializeExpenseSettings } from "../finance/expense-settings.js";
+import { initializeBankAccounts } from "../finance/bank-accounts.js";
 
 initializeNavbar();
 
@@ -27,6 +29,8 @@ const SETTINGS_SECTIONS =
   new Set([
     "general",
     "members",
+    "expenses",
+    "banks",
     "appearance",
     "security",
     "backup",
@@ -342,6 +346,12 @@ async function showSettingsSection(
     !membersLoading
   ) {
     await loadMembers();
+  }
+  if (section === "expenses") {
+    await initializeExpenseSettings();
+  }
+  if (section === "banks") {
+    await initializeBankAccounts();
   }
 }
 

@@ -1,3 +1,4 @@
+import { onExternalDataChange } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
 import { createSpinner } from "../components/loader.js";
 import { getCustomers, getCustomer, deleteCustomer } from "./customer-api.js";
@@ -497,5 +498,20 @@ export async function initializeCustomers() {
       deleteDialog.close();
     }
   });
+  async function refreshCodes() {
+    await loadCustomers({ visibleCount: Math.max(PAGE_SIZE, loadedCustomers.length) });
+    if (selectedCustomer && !deleteInFlight && !deletingCustomer) {
+      const id = selectedCustomer.id, current = detailsRequest;
+      try {
+        const customer = await getCustomer(id);
+        if (current === detailsRequest && selectedCustomer?.id === id) {
+          selectedCustomer = customer;
+          renderDetails(customer);
+        }
+      } catch { /* The details dialog retains its own retry flow. */ }
+    }
+  }
+  onExternalDataChange(refreshCodes);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshCodes(); });
   await loadCustomers();
 }

@@ -1,6 +1,8 @@
 from sqlalchemy import String, cast, exists, func, or_, select, text
 
-from models.customer import Customer
+from models.customer import Customer, utc_now
+from models.finance import FinancialTransaction
+from services.reference_codes import compact_customer_codes
 from schemas.customer_schema import CustomerSummary, normalize_text
 
 
@@ -11,6 +13,11 @@ class DuplicateCustomers(Exception):
 
 class CustomerNotFound(Exception):
     pass
+
+
+class CustomerHasTransactions(Exception):
+    def __init__(self, count):
+        self.count = count
 
 
 def get_summary(customer_id):
@@ -38,7 +45,7 @@ def serialize_customer(customer):
 
 def get_customer(db, customer_id):
     customer = db.get(Customer, customer_id)
-    if customer is None:
+    if customer is None or customer.deleted_at is not None:
         raise CustomerNotFound()
     return customer
 
@@ -48,7 +55,7 @@ def phone_values():
 
 
 def list_customers(db, search="", skip=0, limit=50):
-    query = db.query(Customer)
+    query = db.query(Customer).filter(Customer.deleted_at.is_(None))
     search = normalize_text(search).lower()
     if search:
         # Escape LIKE wildcards so searches are literal and parameterized.
@@ -70,9 +77,7 @@ def list_customers(db, search="", skip=0, limit=50):
 
 
 def next_code(db):
-    highest = db.query(func.max(Customer.customer_code)).scalar() or 1000
-    sequence = db.execute(text("SELECT seq FROM sqlite_sequence WHERE name = :name"), {"name": "customers"}).scalar() or 0
-    return max(1001, highest + 1, sequence + 1001)
+    return 1001 + db.query(Customer).filter(Customer.deleted_at.is_(None)).count()
 
 
 def find_duplicates(db, data, exclude_id=None):
@@ -81,7 +86,7 @@ def find_duplicates(db, data, exclude_id=None):
     if data.phone_numbers:
         phones = phone_values()
         filters.append(exists(select(1).select_from(phones).where(phones.c.value.in_(data.phone_numbers))))
-    query = db.query(Customer).filter(or_(*filters))
+    query = db.query(Customer).filter(Customer.deleted_at.is_(None), or_(*filters))
     if exclude_id is not None:
         query = query.filter(Customer.id != exclude_id)
     matches = []
@@ -124,9 +129,24 @@ def save_customer(db, data, customer_id=None):
 
 
 def delete_customer(db, customer_id):
+    db.rollback()
     try:
+        db.execute(text("BEGIN IMMEDIATE"))
         customer = get_customer(db, customer_id)
-        db.delete(customer)
+        linked = db.query(FinancialTransaction).filter(FinancialTransaction.customer_id == customer_id)
+        remaining = linked.filter(FinancialTransaction.deleted_at.is_(None)).count()
+        if remaining:
+            raise CustomerHasTransactions(remaining)
+        if linked.first():
+            # Retain the foreign key and retry UUIDs of deleted financial rows.
+            customer.deleted_at = utc_now()
+            customer.updated_at = customer.deleted_at
+            customer.customer_code = -customer.id
+        else:
+            db.delete(customer)
+        db.flush()
+        compact_customer_codes(db)
+        db.expire_all()
         db.commit()
     except Exception:
         db.rollback()

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Karbon | مالی</title>
+    <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/finance.css" />
+  </head>
+  <body class="finance-surface min-h-screen bg-alabaster text-mirage">
+    <div id="navbarHost"></div>
+    <main class="min-h-screen overflow-x-hidden pt-16 lg:mr-72 lg:pt-0">
+      <div class="mx-auto w-full max-w-[1700px] px-4 py-7 sm:px-7 xl:px-9">
+        <header
+          class="flex flex-wrap items-center justify-between gap-5 border-b border-french-gray/30 pb-6"
+        >
+          <div class="flex items-center gap-4">
+            <span
+              class="flex h-12 w-12 items-center justify-center rounded-2xl bg-persian-blue text-2xl text-white"
+              aria-hidden="true"
+              >↗</span
+            >
+            <div>
+              <p class="mb-1 text-xs text-mirage/40">مدیریت درآمد و هزینه</p>
+              <h1 class="text-2xl font-black">مالی</h1>
+            </div>
+          </div>
+          <div
+            class="rounded-2xl border border-french-gray/30 bg-white px-4 py-3 text-sm"
+          >
+            <span id="financeToday">—</span
+            ><span
+              id="financeClock"
+              class="mr-4 font-bold text-persian-blue"
+              dir="ltr"
+              >—</span
+            >
+          </div>
+          <div class="flex gap-2">
+            <button
+              id="recordIncome"
+              type="button"
+              class="finance-button bg-eucalyptus text-white"
+            >
+              + ثبت درآمد
+            </button>
+            <button
+              id="recordExpense"
+              type="button"
+              class="finance-button bg-alizarin-crimson text-white"
+            >
+              − ثبت هزینه
+            </button>
+          </div>
+        </header>
+        <div
+          id="financeNotice"
+          class="mt-4 hidden rounded-xl bg-eucalyptus/10 p-4 text-sm text-eucalyptus"
+          role="status"
+        ></div>
+        <div
+          id="financeError"
+          class="mt-4 hidden rounded-xl bg-alizarin-crimson/10 p-4 text-sm text-alizarin-crimson"
+          role="alert"
+        >
+          <span id="financeErrorText"></span
+          ><button
+            id="retryFinance"
+            type="button"
+            class="finance-button mr-2 border border-alizarin-crimson/30"
+          >
+            تلاش مجدد
+          </button>
+        </div>
+        <div class="mt-7 flex flex-wrap items-center justify-between gap-3">
+          <h2 class="font-bold">
+            خلاصه مالی <span id="selectedDateLabel">—</span>
+          </h2>
+          <button
+            id="selectToday"
+            type="button"
+            class="finance-button border border-french-gray/40 bg-white"
+          >
+            امروز
+          </button>
+        </div>
+        <section
+          id="financeSummary"
+          class="mt-4 grid gap-4 sm:grid-cols-3"
+          aria-label="خلاصه مالی روز انتخاب‌شده"
+        >
+          <article
+            class="rounded-2xl border border-eucalyptus/20 bg-eucalyptus/10 p-5"
+          >
+            <p class="text-sm font-bold text-eucalyptus">جمع درآمد</p>
+            <p id="totalIncome" class="mt-3 text-xl font-black text-eucalyptus">
+              —
+            </p>
+          </article>
+          <article
+            class="rounded-2xl border border-alizarin-crimson/20 bg-alizarin-crimson/10 p-5"
+          >
+            <p class="text-sm font-bold text-alizarin-crimson">جمع هزینه</p>
+            <p
+              id="totalExpense"
+              class="mt-3 text-xl font-black text-alizarin-crimson"
+            >
+              —
+            </p>
+          </article>
+          <article
+            class="rounded-2xl border border-california/20 bg-california/10 p-5"
+          >
+            <p class="text-sm font-bold text-california">مانده روز</p>
+            <p
+              id="totalBalance"
+              class="mt-3 text-xl font-black text-california"
+            >
+              —
+            </p>
+          </article>
+        </section>
+        <section
+          class="mt-7 rounded-2xl border border-french-gray/30 bg-white p-4 sm:p-5"
+          aria-label="تقویم مالی"
+        >
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 class="font-bold">
+              تقویم مالی
+              <span class="text-xs font-normal text-mirage/45">· تومان</span>
+            </h2>
+            <div class="flex gap-2">
+              <button
+                id="previousDays"
+                type="button"
+                class="finance-button border border-french-gray/30"
+              >
+                روزهای قبل</button
+              ><button
+                id="nextDays"
+                type="button"
+                class="finance-button border border-french-gray/30"
+              >
+                روزهای بعد
+              </button>
+            </div>
+          </div>
+          <div
+            id="financeCalendar"
+            class="flex gap-3 overflow-x-auto pb-3"
+            aria-label="انتخاب روز"
+          ></div>
+        </section>
+        <div id="financeDayContent" class="mt-7 space-y-6" aria-busy="true">
+          <section
+            class="rounded-2xl border border-french-gray/30 bg-white p-4 sm:p-6"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <h2 class="font-bold">روند مالی روز</h2>
+              <div class="flex gap-4 text-xs font-bold">
+                <span class="text-eucalyptus">درآمد</span
+                ><span class="text-alizarin-crimson">هزینه</span
+                ><span class="text-california">مانده</span>
+              </div>
+            </div>
+            <p class="mt-2 text-xs text-mirage/45">
+              مبالغ تجمعی در طول روز · تومان
+            </p>
+            <div id="financeChart" class="mt-4 overflow-x-auto"></div>
+            <p
+              id="financeChartEmpty"
+              class="mt-3 hidden text-center text-sm text-mirage/45"
+            >
+              برای این روز تراکنشی ثبت نشده است.
+            </p>
+          </section>
+          <section
+            class="overflow-hidden rounded-2xl border border-french-gray/30 bg-white"
+          >
+            <div
+              class="flex items-center justify-between gap-3 border-b border-french-gray/30 p-5"
+            >
+              <h2 class="font-bold">تراکنش‌های روز</h2>
+              <span id="transactionCount" class="text-xs text-mirage/45"
+                >—</span
+              >
+            </div>
+            <p
+              id="transactionsStatus"
+              class="p-8 text-center text-sm text-mirage/45"
+              role="status"
+            >
+              در حال دریافت اطلاعات...
+            </p>
+            <div id="transactionsTable" class="hidden overflow-x-auto">
+              <table class="w-full min-w-[760px] text-right text-sm">
+                <thead class="bg-alabaster text-xs text-mirage/50">
+                  <tr>
+                    <th class="p-4">نوع</th>
+                    <th class="p-4">عنوان و توضیحات تراکنش</th>
+                    <th class="p-4">بانک</th>
+                    <th class="p-4">تاریخ با ساعت</th>
+                    <th class="p-4">مبلغ</th>
+                    <th class="p-4">تنظیمات</th>
+                  </tr>
+                </thead>
+                <tbody id="transactionRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+    <div
+      id="transactionModal"
+      class="fixed inset-0 z-[90] hidden items-center justify-center overflow-y-auto bg-mirage/50 p-4 finance-surface"
+      aria-hidden="true"
+    >
+      <button
+        type="button"
+        data-dialog-close
+        class="absolute inset-0"
+        aria-label="بستن فرم"
+      ></button>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="transactionModalTitle"
+        class="relative max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl transition-all duration-200 scale-95 opacity-0 sm:p-7"
+      >
+        <div class="flex items-center justify-between">
+          <h2 id="transactionModalTitle" class="text-xl font-black">
+            ثبت درآمد
+          </h2>
+          <button
+            type="button"
+            data-dialog-close
+            aria-label="بستن"
+            class="finance-button"
+          >
+            ×
+          </button>
+        </div>
+        <p
+          id="transactionOptionsStatus"
+          class="mt-4 text-sm text-mirage/50"
+          role="status"
+        ></p>
+        <div
+          id="transactionFormError"
+          class="mt-4 hidden rounded-xl bg-alizarin-crimson/10 p-3 text-sm text-alizarin-crimson"
+          role="alert"
+        ></div>
+        <button
+          id="retryTransactionOptions"
+          type="button"
+          class="finance-button mt-2 hidden border border-french-gray/40"
+        >
+          دریافت مجدد اطلاعات
+        </button>
+        <form id="transactionForm" class="mt-5">
+          <fieldset id="transactionFields" class="grid gap-4 sm:grid-cols-2">
+            <label class="sm:col-span-2"
+              >عنوان
+              <select id="transactionSource" class="finance-field" required>
+                <option value="">انتخاب کنید</option>
+              </select></label
+            >
+            <label
+              >کد حساب
+              <input
+                id="transactionAccountCode"
+                class="finance-field bg-alabaster"
+                readonly
+                dir="ltr"
+            /></label>
+            <label
+              >مبلغ (تومان)
+              <input
+                id="transactionAmount"
+                class="finance-field"
+                inputmode="numeric"
+                dir="ltr"
+                maxlength="20"
+                required
+                autocomplete="off"
+            /></label>
+            <label class="sm:col-span-2"
+              >بانک
+              <select id="transactionBank" class="finance-field" required>
+                <option value="">انتخاب بانک</option>
+              </select></label
+            >
+            <label id="trackingField" class="sm:col-span-2"
+              >شماره پیگیری تراکنش (اختیاری)
+              <input
+                id="transactionTracking"
+                class="finance-field"
+                inputmode="numeric"
+                dir="ltr"
+                maxlength="100"
+                autocomplete="off"
+            /></label>
+            <label class="sm:col-span-2"
+              >شرح (اختیاری)
+              <textarea
+                id="transactionDescription"
+                class="finance-field"
+                rows="2"
+                maxlength="5000"
+              ></textarea>
+            </label>
+            <label
+              >تاریخ شمسی
+              <input
+                id="transactionDate"
+                class="finance-field"
+                inputmode="numeric"
+                dir="ltr"
+                placeholder="۱۴۰۵/۰۷/۱۴"
+                required
+            /></label>
+            <label
+              >ساعت
+              <select id="transactionTimeMode" class="finance-field">
+                <option value="auto">اتومات</option>
+                <option value="manual">دستی</option>
+              </select></label
+            >
+            <div id="manualTimeFields" class="hidden gap-4 sm:col-span-2">
+              <label class="flex-1"
+                >ساعت
+                <input
+                  id="transactionHour"
+                  class="finance-field"
+                  inputmode="numeric"
+                  maxlength="2"
+                  dir="ltr" /></label
+              ><label class="flex-1"
+                >دقیقه
+                <input
+                  id="transactionMinute"
+                  class="finance-field"
+                  inputmode="numeric"
+                  maxlength="2"
+                  dir="ltr"
+              /></label>
+            </div>
+            <p id="autoTimeHint" class="text-xs text-mirage/45 sm:col-span-2">
+              ساعت هنگام ثبت، به وقت تهران از سیستم خوانده می‌شود.
+            </p>
+          </fieldset>
+          <div class="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              data-dialog-close
+              class="finance-button border border-french-gray/40"
+            >
+              انصراف</button
+            ><button
+              id="submitTransaction"
+              type="submit"
+              class="finance-button bg-eucalyptus text-white"
+            >
+              ثبت درآمد
+            </button>
+          </div>
+        </form>
+        <p class="mt-4 text-xs text-mirage/45">
+          بانک‌ها از
+          <a href="/page/banks-page.html" class="text-persian-blue underline"
+            >بخش بانک</a
+          >
+          و عناوین هزینه از
+          <a
+            href="/page/settings-page.html#expenses"
+            class="text-persian-blue underline"
+            >تنظیمات</a
+          >
+          دریافت می‌شوند.
+        </p>
+      </section>
+    </div>
+    <script type="module" src="../src/js/page/finance.js"></script>
+  </body>
+</html>

@@ -1,3 +1,4 @@
+import { publishDataChange } from "../components/data-events.js";
 import { getToken, logout } from "../auth/auth-storage.js";
 
 const API_URL = "http://127.0.0.1:8000/api/customers";
@@ -50,14 +51,16 @@ async function request(path = "", { method = "GET", body, signal } = {}) {
       window.location.replace("/page/login-page.html");
     }
     const message =
-      response.status === 422
-        ? "اطلاعات واردشده معتبر نیست. فیلدهای فرم را بررسی کنید."
-        : response.status === 404
-          ? "مشتری موردنظر پیدا نشد."
-          : response.status === 409 &&
-              data?.detail?.code === "DUPLICATE_CUSTOMER"
-            ? data.detail.message
-            : "خطایی در دریافت یا ذخیره اطلاعات مشتریان رخ داد. دوباره تلاش کنید.";
+      typeof data?.detail === "string"
+        ? data.detail
+        : response.status === 422
+          ? "اطلاعات واردشده معتبر نیست. فیلدهای فرم را بررسی کنید."
+          : response.status === 404
+            ? "مشتری موردنظر پیدا نشد."
+            : response.status === 409 &&
+                data?.detail?.code === "DUPLICATE_CUSTOMER"
+              ? data.detail.message
+              : "خطایی در دریافت یا ذخیره اطلاعات مشتریان رخ داد. دوباره تلاش کنید.";
     if (response.status === 409 || response.status === 422) {
       console.warn("Customers API validation", response.status, data);
     } else {
@@ -65,6 +68,7 @@ async function request(path = "", { method = "GET", body, signal } = {}) {
     }
     throw new CustomerApiError(message, response.status, data?.detail);
   }
+  if (method !== "GET") publishDataChange();
   return data;
 }
 

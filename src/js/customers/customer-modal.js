@@ -1,9 +1,11 @@
+import { onExternalDataChange } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
 import { createSpinner } from "../components/loader.js";
 import {
   createCustomer,
   updateCustomer,
   getNextCustomerCode,
+  getCustomer,
 } from "./customer-api.js";
 import {
   element,
@@ -299,6 +301,17 @@ export function openEditCustomerModal(customer) {
 
 export function initializeCustomerModal({ onSaved: callback }) {
   onSaved = callback;
+  onExternalDataChange(async () => {
+    if (submitting || get("customerFormModal").getAttribute("aria-hidden") !== "false") return;
+    const current = generation;
+    try {
+      const data = editingCustomer ? await getCustomer(editingCustomer.id) : await getNextCustomerCode();
+      if (current === generation) {
+        get("customerCode").value = data.customer_code;
+        if (editingCustomer) editingCustomer.customer_code = data.customer_code;
+      }
+    } catch { /* Submission always gets its code from the server. */ }
+  });
   formDialog = new Dialog("customerFormModal", {
     canClose: () => !submitting,
     onCancel: () => {

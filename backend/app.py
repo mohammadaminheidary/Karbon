@@ -23,6 +23,8 @@ from routes.attendance import (
     router as attendance_router,
 )
 from routes.customers import router as customers_router
+from routes.finance import router as finance_router
+from services.finance_service import initialize_bank_storage
 
 
 # ======================================================
@@ -45,6 +47,7 @@ app = FastAPI(
 Base.metadata.create_all(
     bind=engine
 )
+initialize_bank_storage(engine)
 
 
 # ======================================================
@@ -93,6 +96,7 @@ app.include_router(
     attendance_router
 )
 app.include_router(customers_router)
+app.include_router(finance_router)
 
 
 # ======================================================

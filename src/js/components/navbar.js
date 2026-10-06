@@ -89,7 +89,7 @@ const template = `
 
         <!-- Finance -->
         <a
-          href="#"
+          href="/page/finance-page.html"
           class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
         >
           <svg
@@ -214,7 +214,7 @@ const template = `
 
         <!-- Banks -->
         <a
-          href="#"
+          href="/page/banks-page.html"
           class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
         >
           <svg

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Karbon | بانک‌ها</title>
+    <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/finance.css" />
+  </head>
+  <body class="finance-surface min-h-screen bg-alabaster text-mirage">
+    <div id="navbarHost"></div>
+    <main class="min-h-screen overflow-x-hidden pt-16 lg:mr-72 lg:pt-0">
+      <div class="mx-auto w-full max-w-[1700px] px-4 py-7 sm:px-7 xl:px-9">
+        <header
+          class="flex flex-wrap items-center justify-between gap-5 border-b border-french-gray/30 pb-6"
+        >
+          <div>
+            <p class="mb-1 text-xs text-mirage/40">حساب‌های بانکی</p>
+            <h1 class="text-2xl font-black">بانک‌ها</h1>
+            <p class="mt-2 text-sm text-mirage/50">
+              حساب‌های ثبت‌شده در تنظیمات اینجا نمایش داده می‌شوند و مانده آن‌ها
+              از تراکنش‌ها محاسبه می‌شود.
+            </p>
+          </div>
+          <div
+            class="rounded-2xl border border-french-gray/30 bg-white px-4 py-3 text-sm"
+            aria-label="تاریخ و ساعت تهران"
+          >
+            <span id="banksToday">—</span
+            ><span
+              id="banksClock"
+              class="mr-4 font-bold text-persian-blue"
+              dir="ltr"
+              >—</span
+            >
+          </div>
+        </header>
+        <section class="mt-7" aria-label="موجودی حساب‌ها">
+          <h2 class="mb-4 text-lg font-black">موجودی حساب‌ها</h2>
+          <div
+            id="bankBalances"
+            class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+          ></div>
+        </section>
+        <section class="mt-7" aria-label="حساب‌های بانکی">
+          <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-black">
+                حساب‌های شما
+                <span id="bankAccountCount" class="mr-2 text-sm text-mirage/40"
+                  >—</span
+                >
+              </h2>
+              <p class="mt-1 text-xs text-mirage/45">
+                برای مشاهده تراکنش‌ها، حساب را انتخاب کنید
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <button
+                id="refreshBanks"
+                type="button"
+                class="finance-button border border-french-gray/40 bg-white"
+              >
+                بروزرسانی
+              </button>
+            </div>
+          </div>
+          <p
+            id="bankNotice"
+            class="mb-4 hidden rounded-xl bg-eucalyptus/10 p-4 text-sm text-eucalyptus"
+            role="status"
+          ></p>
+          <p
+            id="banksError"
+            class="mb-4 hidden rounded-xl bg-alizarin-crimson/10 p-4 text-sm text-alizarin-crimson"
+            role="alert"
+          ></p>
+          <p
+            id="banksStatus"
+            class="rounded-2xl border border-french-gray/30 bg-white p-8 text-center text-sm text-mirage/50"
+            role="status"
+          >
+            در حال دریافت حساب‌ها...
+          </p>
+          <div
+            id="bankCards"
+            class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+          ></div>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="../src/js/page/banks.js"></script>
+  </body>
+</html>
