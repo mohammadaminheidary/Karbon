@@ -1,23 +1,15 @@
 const template = `
-    <aside
-      id="mainNavbar"
-      class="fixed top-0 right-0 z-50 flex h-screen w-72 overflow-y-auto transition-transform duration-200 translate-x-full lg:translate-x-0 shrink-0 flex-col border-l border-french-gray/40 bg-white px-5 py-6"
-    >
-      <!-- Logo -->
-      <div class="mb-6 flex items-center justify-center gap-3 px-3">
-        <!-- Brand Name -->
-        <h1 class="text-2xl font-bold tracking-[0.7rem] text-mirage">Karbon</h1>
-      </div>
-
-      <!-- Navigation -->
-      <nav class="flex flex-1 flex-col gap-2">
-        <!-- Dashboard -->
-        <a
-          href="/index.html"
-          class="flex items-center gap-3 rounded-xl bg-persian-blue/10 px-4 py-3 text-sm font-semibold text-persian-blue transition-colors duration-300"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+  <div class="navbar-dock">
+  <section class="navbar-info navbar-title-island" aria-label="صفحه فعلی">
+    <span class="navbar-glass" aria-hidden="true"></span>
+    <span class="navbar-page-title" aria-live="polite"></span>
+  </section>
+  <nav id="mainNavbar" class="glass-navbar" aria-label="ناوبری اصلی">
+    <span class="navbar-glass" aria-hidden="true"></span>
+    <div class="navbar-items">
+    <a href="/index.html" class="navbar-item" aria-label="داشبورد">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -28,17 +20,11 @@ const template = `
             <rect x="3" y="14" width="7" height="7" rx="1" />
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-
-          <span>داشبورد</span>
-        </a>
-
-        <!-- Customers -->
-        <a
-          href="/page/customers-page.html"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+      <span class="navbar-tooltip" aria-hidden="true">داشبورد</span>
+    </a>
+    <a href="/page/customers-page.html" class="navbar-item" aria-label="مشتریان">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -56,17 +42,11 @@ const template = `
               d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
             />
           </svg>
-
-          <span>مشتریان</span>
-        </a>
-
-        <!-- Orders -->
-        <a
-          href="#"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+      <span class="navbar-tooltip" aria-hidden="true">مشتریان</span>
+    </a>
+    <a href="#" class="navbar-item" aria-label="سفارشات">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -83,17 +63,11 @@ const template = `
               d="M4 6h16M9 10h6"
             />
           </svg>
-
-          <span>سفارشات</span>
-        </a>
-
-        <!-- Finance -->
-        <a
-          href="/page/finance-page.html"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+      <span class="navbar-tooltip" aria-hidden="true">سفارشات</span>
+    </a>
+    <a href="/page/finance-page.html" class="navbar-item" aria-label="مالی">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -102,18 +76,11 @@ const template = `
             <rect x="3" y="5" width="18" height="14" rx="2" />
             <path stroke-linecap="round" d="M3 10h18M7 15h3" />
           </svg>
-
-          <span>مالی</span>
-        </a>
-
-        <!-- Member Entry -->
-        <!-- Member Entry -->
-        <a
-          href="/page/attendance-page.html"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+      <span class="navbar-tooltip" aria-hidden="true">مالی</span>
+    </a>
+    <a href="/page/attendance-page.html" class="navbar-item" aria-label="ورودی اعضا">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -130,17 +97,11 @@ const template = `
               d="m10 17 5-5-5-5M15 12H3"
             />
           </svg>
-
-          <span>ورودی اعضا</span>
-        </a>
-
-        <!-- Daily Tasks -->
-        <a
-          href="#"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+      <span class="navbar-tooltip" aria-hidden="true">ورودی اعضا</span>
+    </a>
+    <a href="#" class="navbar-item" aria-label="کارهای روزانه">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -154,17 +115,11 @@ const template = `
               d="m8 15 2 2 5-5"
             />
           </svg>
-
-          <span>کارهای روزانه</span>
-        </a>
-
-        <!-- Documents -->
-        <a
-          href="#"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+      <span class="navbar-tooltip" aria-hidden="true">کارهای روزانه</span>
+    </a>
+    <a href="#" class="navbar-item" aria-label="ثبت سند">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -181,17 +136,11 @@ const template = `
               d="M14 2v6h6M8 13h8M8 17h5"
             />
           </svg>
-
-          <span>ثبت سند</span>
-        </a>
-
-        <!-- Reports -->
-        <a
-          href="#"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+      <span class="navbar-tooltip" aria-hidden="true">ثبت سند</span>
+    </a>
+    <a href="#" class="navbar-item" aria-label="گزارشات">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -208,17 +157,11 @@ const template = `
               d="m7 15 4-5 3 3 5-7"
             />
           </svg>
-
-          <span>گزارشات</span>
-        </a>
-
-        <!-- Banks -->
-        <a
-          href="/page/banks-page.html"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+      <span class="navbar-tooltip" aria-hidden="true">گزارشات</span>
+    </a>
+    <a href="/page/banks-page.html" class="navbar-item" aria-label="بانک ها">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -235,17 +178,11 @@ const template = `
               d="M5 10h14M5 21h14M7 10v8M12 10v8M17 10v8M3 21h18"
             />
           </svg>
-
-          <span>بانک ها</span>
-        </a>
-
-        <!-- Settings -->
-        <a
-          href="/page/settings-page.html"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-        >
-          <svg
-            class="h-5 w-5 shrink-0"
+      <span class="navbar-tooltip" aria-hidden="true">بانک ها</span>
+    </a>
+    <a href="/page/settings-page.html" class="navbar-item" aria-label="تنظیمات">
+      <svg
+            class="navbar-icon" aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="1.8"
@@ -262,38 +199,11 @@ const template = `
               d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.9 1.9-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-2.7v-.1a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.9-1.9.06-.06A1.7 1.7 0 0 0 7.76 15a1.7 1.7 0 0 0-1.56-1.03H6v-2.7h.2a1.7 1.7 0 0 0 1.56-1.03 1.7 1.7 0 0 0-.34-1.88l-.06-.06 1.9-1.9.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 12.23 5.2V5h2.7v.2a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.9 1.9-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 11H21v2.7h-.2A1.7 1.7 0 0 0 19.4 15Z"
             />
           </svg>
-
-          <span>تنظیمات</span>
-        </a>
-      </nav>
-
-      <!-- User Profile -->
-      <div class="mt-5 border-t border-french-gray/40 pt-4">
-        <div
-          class="flex flex-col items-center gap-3 rounded-2xl bg-alabaster px-4 py-3"
-        >
-          <!-- User Image Placeholder -->
-          <div
-            class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-french-gray/40 text-2xl font-bold text-mirage"
-          >
-            <span>م</span>
-          </div>
-
-          <!-- User Information -->
-          <div class="text-center">
-            <h2 class="text-sm font-bold text-mirage">حساب کاربری</h2>
-
-            <p class="mt-1 text-xs text-mirage/50">Karbon</p>
-          </div>
-
-          <!-- User Action -->
-          <button
-            type="button"
-            id="logoutButton"
-            class="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-french-gray/50 bg-white px-3 py-2 text-xs font-medium text-mirage/70 transition-colors duration-300 hover:bg-persian-blue/10 hover:text-persian-blue"
-          >
-            <svg
-              class="h-4 w-4"
+      <span class="navbar-tooltip" aria-hidden="true">تنظیمات</span>
+    </a>
+    <button type="button" id="logoutButton" class="navbar-item navbar-logout" aria-label="خروج از حساب">
+      <svg
+              class="navbar-icon" aria-hidden="true"
               fill="none"
               stroke="currentColor"
               stroke-width="1.8"
@@ -310,55 +220,179 @@ const template = `
                 d="m10 17 5-5-5-5M15 12H3"
               />
             </svg>
-
-            <span>خروج از حساب</span>
-          </button>
-        </div>
-      </div>
-    </aside>
+      <span class="navbar-tooltip" aria-hidden="true">خروج از حساب</span>
+    </button>
+    </div>
+  </nav>
+  <section class="navbar-info navbar-clock-island" aria-label="تاریخ و ساعت">
+    <span class="navbar-glass" aria-hidden="true"></span>
+    <time class="navbar-clock" dir="ltr" aria-live="off" aria-label="تاریخ و ساعت تهران"></time>
+  </section>
+  </div>
 `;
+
+let cleanupNavbar;
 
 export function initializeNavbar() {
   const host = document.getElementById("navbarHost");
-  if (!host || host.children.length) return;
-  host.innerHTML =
-    template +
-    `
-    <button id="navbarBackdrop" class="fixed inset-0 z-40 hidden bg-mirage/50 lg:hidden" aria-label="بستن فهرست"></button>
-    <button id="navbarToggle" type="button" class="fixed right-4 top-4 z-40 rounded-xl bg-mirage px-4 py-2 text-white lg:hidden" aria-label="باز کردن فهرست" aria-controls="mainNavbar" aria-expanded="false">☰</button>`;
-  const sidebar = host.querySelector("aside");
-  const toggle = host.querySelector("#navbarToggle");
-  const backdrop = host.querySelector("#navbarBackdrop");
-  const mobile = window.matchMedia("(max-width: 1023px)");
-  function setOpen(open) {
-    sidebar.classList.toggle("translate-x-full", !open);
-    backdrop.classList.toggle("hidden", !open || !mobile.matches);
-    toggle.setAttribute("aria-expanded", String(open));
-    sidebar.inert = mobile.matches && !open;
-    if (open) sidebar.querySelector("a")?.focus();
+  if (!host) return;
+  if (host.querySelector("#mainNavbar")) return cleanupNavbar;
+  cleanupNavbar?.();
+  if (host.children.length) return;
+  host.innerHTML = template;
+  const dock = host.querySelector(".navbar-dock");
+  const navbar = host.querySelector("nav");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let pulse;
+  const glass = navbar.querySelector(".navbar-glass");
+  const controller = new AbortController();
+  const { signal } = controller;
+  const links = [...navbar.querySelectorAll("a")];
+  const title = host.querySelector(".navbar-page-title");
+  const clock = host.querySelector(".navbar-clock");
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    calendar: "persian",
+    numberingSystem: "latn",
+    timeZone: "Asia/Tehran",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  let timer;
+  let currentPath;
+
+  function updateRoute() {
+    const path = window.location.pathname;
+    if (path === currentPath) return;
+    currentPath = path;
+    const activePath =
+      path === "/"
+        ? "/index.html"
+        : path === "/page/bank-transactions-page.html"
+          ? "/page/banks-page.html"
+          : path;
+    let activeLink;
+    links.forEach((link) => {
+      if (link.getAttribute("href") === activePath) {
+        link.setAttribute("aria-current", "page");
+        activeLink = link;
+      } else link.removeAttribute("aria-current");
+    });
+    const label =
+      path === "/page/bank-transactions-page.html"
+        ? "تراکنش‌های حساب"
+        : activeLink?.getAttribute("aria-label") ||
+          document.title.split("|").pop().trim();
+    title.textContent = label;
+    title.title = label;
   }
-  host.querySelectorAll("nav a").forEach((link) => {
-    const active = link.getAttribute("href") === window.location.pathname;
-    link.className = active
-      ? "flex items-center gap-3 rounded-xl bg-persian-blue/10 px-4 py-3 text-sm font-semibold text-persian-blue transition-colors"
-      : "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-mirage/70 transition-colors hover:bg-persian-blue/10 hover:text-persian-blue";
-    if (active) link.setAttribute("aria-current", "page");
-  });
-  toggle.addEventListener("click", () => setOpen(true));
-  backdrop.addEventListener("click", () => {
-    setOpen(false);
-    toggle.focus();
-  });
-  document.addEventListener("keydown", (event) => {
-    if (
-      event.key === "Escape" &&
-      mobile.matches &&
-      toggle.getAttribute("aria-expanded") === "true"
-    ) {
-      setOpen(false);
-      toggle.focus();
+
+  function updateClock() {
+    if (!navbar.isConnected) {
+      cleanup();
+      return;
     }
+    const now = new Date();
+    const parts = Object.fromEntries(
+      formatter.formatToParts(now).map(({ type, value }) => [type, value]),
+    );
+    const value = `${parts.year.padStart(4, "0")}/${parts.month}/${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+    if (clock.textContent !== value) {
+      clock.textContent = value;
+      clock.dateTime = now.toISOString();
+      clock.setAttribute("aria-label", `تاریخ و ساعت تهران: ${value}`);
+    }
+  }
+
+  function stopClock() {
+    if (timer !== undefined) window.clearInterval(timer);
+    timer = undefined;
+  }
+
+  function startClock() {
+    updateRoute();
+    updateClock();
+    if (!document.hidden && timer === undefined)
+      timer = window.setInterval(updateClock, 1000);
+  }
+
+  function cleanup() {
+    stopClock();
+    pulse?.cancel();
+    controller.abort();
+    dock.remove();
+    if (cleanupNavbar === cleanup) cleanupNavbar = undefined;
+  }
+  cleanupNavbar = cleanup;
+
+  window.addEventListener("popstate", updateRoute, { signal });
+  window.addEventListener("pagehide", stopClock, { signal });
+  window.addEventListener("pageshow", startClock, { signal });
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (document.hidden) stopClock();
+      else startClock();
+    },
+    { signal },
+  );
+  startClock();
+
+  function animateGlass(event) {
+    if (
+      reducedMotion.matches ||
+      !glass.animate ||
+      !event.target.closest(".navbar-item") ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    // Let an existing spring settle rather than snapping it back on rapid clicks.
+    if (pulse?.playState === "running") return;
+    pulse = glass.animate(
+      [
+        // Quick expansion, then a damped return with no oscillation past rest.
+        {
+          transform: "scaleX(1)",
+          offset: 0,
+          easing: "cubic-bezier(.2,.75,.25,1)",
+        },
+        {
+          transform: "scaleX(1.022)",
+          offset: 0.24,
+          easing: "cubic-bezier(.25,0,.2,1)",
+        },
+        { transform: "scaleX(1)", offset: 1 },
+      ],
+      { duration: 300, easing: "linear" },
+    );
+  }
+
+  // Feedback starts on press. Native links and logout handlers run immediately.
+  navbar.addEventListener("pointerdown", animateGlass, {
+    passive: true,
+    signal,
   });
-  mobile.addEventListener("change", () => setOpen(false));
-  setOpen(false);
+  navbar.addEventListener(
+    "click",
+    (event) => {
+      if (event.detail === 0) animateGlass(event); // Keyboard activation.
+    },
+    { passive: true, signal },
+  );
+  reducedMotion.addEventListener(
+    "change",
+    () => {
+      if (reducedMotion.matches) pulse?.cancel();
+    },
+    { signal },
+  );
+  return cleanup;
 }

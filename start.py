@@ -3,6 +3,7 @@ import sys
 import time
 import webbrowser
 import socket
+import shutil
 from pathlib import Path
 
 
@@ -25,6 +26,18 @@ LOGIN_URL = (
     f"http://{FRONTEND_HOST}:{FRONTEND_PORT}"
     "/page/login-page.html"
 )
+
+
+def build_frontend():
+    npm = shutil.which("npm")
+    if not npm:
+        raise RuntimeError("Node.js/npm is required to build styles. Install Node.js and run npm install.")
+    print("Building frontend styles...")
+    subprocess.run(
+        [npm, "exec", "--", "tailwindcss", "-i", "./src/input.css", "-o", "./src/output.css"],
+        cwd=BASE_DIR,
+        check=True,
+    )
 
 
 
@@ -88,11 +101,7 @@ def start_frontend():
 
         [
             sys.executable,
-            "-m",
-            "http.server",
-            str(FRONTEND_PORT),
-            "--bind",
-            FRONTEND_HOST
+            str(BASE_DIR / "serve_frontend.py")
         ],
 
         cwd=BASE_DIR
@@ -145,6 +154,7 @@ def main():
 
     try:
 
+        build_frontend()
 
         # Backend
         if is_port_available(
