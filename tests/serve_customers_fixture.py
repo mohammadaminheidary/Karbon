@@ -13,6 +13,8 @@ import tempfile
 import threading
 import time
 from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -20,6 +22,7 @@ parser.add_argument("--backend-port", type=int, default=8000)
 parser.add_argument("--frontend-port", type=int, default=5501)
 parser.add_argument("--customers", type=int, default=0)
 parser.add_argument("--finance", action="store_true", help="Create finance references in the disposable database")
+parser.add_argument("--orders", action="store_true", help="Seed products only in the disposable database")
 parser.add_argument("--bank-ledger", type=int, default=0, help="Seed account ledger rows only in the disposable database")
 args = parser.parse_args()
 if not 0 <= args.customers <= 200:
@@ -32,7 +35,40 @@ class FixtureHandler(SimpleHTTPRequestHandler):
     def __init__(self, *handler_args, **kwargs):
         super().__init__(*handler_args, directory=str(ROOT), **kwargs)
 
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+    def proxy_api(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0))) or None
+        request = Request(f"http://127.0.0.1:{args.backend_port}{self.path}", data=body,
+                          headers={key: self.headers[key] for key in ("Authorization", "Content-Type") if key in self.headers}, method=self.command)
+        try:
+            response = urlopen(request, timeout=20)
+        except HTTPError as error:
+            response = error
+        with response:
+            content = response.read()
+            self.send_response(response.status)
+            self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(content)
+
+    def do_POST(self):
+        if self.path.startswith("/api/"):
+            self.proxy_api()
+        else:
+            self.send_error(404)
+
+    do_PUT = do_POST
+    do_DELETE = do_POST
+
     def do_GET(self):
+        if self.path.startswith("/api/"):
+            self.proxy_api()
+            return
         # Only the fixture server rewrites the API origin, so a separate test
         # environment can run beside the user's normal app without logging out
         # their session or changing any production JavaScript configuration.
@@ -40,7 +76,7 @@ class FixtureHandler(SimpleHTTPRequestHandler):
         if path in ["/src/js/auth/auth-api.js", "/src/js/customers/customer-api.js", "/src/js/finance/finance-api.js", "/src/js/members/members-api.js", "/src/js/attendance/attendance-api.js"]:
             content = (ROOT / path.lstrip("/")).read_text().replace(
                 "http://127.0.0.1:8000/api",
-                f"http://127.0.0.1:{args.backend_port}/api",
+                f"http://127.0.0.1:{args.frontend_port}/api",
             ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/javascript; charset=utf-8")
@@ -48,6 +84,8 @@ class FixtureHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content)
             return
+        if "If-Modified-Since" in self.headers:
+            del self.headers["If-Modified-Since"]
         super().do_GET()
 
 
@@ -58,6 +96,7 @@ import app
 from database import SessionLocal
 from models.user import User
 from models.customer import Customer
+from models.order import Product
 from models.finance import BankAccount, ExpenseCategory, FinancialTransaction
 from datetime import datetime, timedelta
 from config import APP_TIMEZONE
@@ -70,6 +109,8 @@ with SessionLocal() as db:
     db.add(User(username="customers-test", password_hash=hash_password("test-password")))
     for index in range({args.customers}):
         db.add(Customer(customer_code=1001 + index, first_name=f"مشتری {{index + 1}}", last_name="آزمایشی", gender="male" if index % 2 else "female", phone_numbers=[f"0912{{index + 1:07d}}"], address="آدرس محیط آزمایشی"))
+    if {args.orders!r}:
+        db.add_all([Product(product_code="P-000001", name="چاپ کارت", unit="بسته", price=100000, stock=20), Product(product_code="P-000002", name="طراحی", unit="ساعت", price=50000, stock=None)])
     if {args.finance!r} and not {args.bank_ledger}:
         db.add(BankAccount(name="بانک محیط آزمایش", account_number="123456789", opening_balance=1000000))
         db.add(ExpenseCategory(title="مواد اولیه آزمایشی"))

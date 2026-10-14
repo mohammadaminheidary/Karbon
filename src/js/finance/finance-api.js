@@ -43,7 +43,7 @@ export async function financeRequest(
         window.location.replace("/page/login-page.html");
       }
       const detail = data?.detail;
-      throw new Error(
+      const error = new Error(
         typeof detail === "string"
           ? detail
           : Array.isArray(detail)
@@ -52,6 +52,8 @@ export async function financeRequest(
                 .join(" — ")
             : "خطایی در دریافت یا ذخیره اطلاعات رخ داد.",
       );
+      error.status = response.status;
+      throw error;
     }
     if (method !== "GET") publishDataChange();
     return data;

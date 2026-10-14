@@ -113,7 +113,7 @@ function renderAccount(bank, onEdit, mode, onDelete) {
         "p",
         "font-bold",
         [bank.first_name, bank.last_name].filter(Boolean).join(" ") ||
-          "صاحب حساب ثبت نشده",
+          (bank.is_cash ? "دریافت و پرداخت نقدی" : "صاحب حساب ثبت نشده"),
       ),
       node(
         "p",
@@ -127,13 +127,15 @@ function renderAccount(bank, onEdit, mode, onDelete) {
       "bank-number",
       bank.card_number
         ? formatCardNumber(bank.card_number)
-        : "شماره کارت ثبت نشده",
+        : bank.is_cash
+          ? "صندوق نقدی"
+          : "شماره کارت ثبت نشده",
     );
     card.dir = bank.card_number ? "ltr" : "rtl";
     const sheba = node(
       "p",
       "mt-2 break-all text-xs text-mirage/45",
-      bank.sheba_number || "شبا ثبت نشده",
+      bank.sheba_number || (bank.is_cash ? "" : "شبا ثبت نشده"),
     );
     sheba.dir = bank.sheba_number ? "ltr" : "rtl";
     numbers.append(card, sheba);
@@ -143,6 +145,7 @@ function renderAccount(bank, onEdit, mode, onDelete) {
       "ویرایش",
     );
     edit.type = "button";
+    edit.disabled = bank.can_edit === false;
     edit.addEventListener("click", () => onEdit(bank));
     const actions = node("div", "flex gap-2");
     const remove = node(
@@ -191,7 +194,9 @@ function renderAccount(bank, onEdit, mode, onDelete) {
     "bank-card-number",
     bank.card_number
       ? formatCardNumber(bank.card_number)
-      : "شماره کارت ثبت نشده",
+      : bank.is_cash
+        ? "صندوق نقدی"
+        : "شماره کارت ثبت نشده",
   );
   number.dir = bank.card_number ? "ltr" : "rtl";
   number.setAttribute(
@@ -203,7 +208,7 @@ function renderAccount(bank, onEdit, mode, onDelete) {
   const sheba = node(
     "p",
     "bank-sheba",
-    bank.sheba_number || "شماره شبا ثبت نشده",
+    bank.sheba_number || (bank.is_cash ? "" : "شماره شبا ثبت نشده"),
   );
   sheba.dir = bank.sheba_number ? "ltr" : "rtl";
   sheba.setAttribute(
@@ -214,7 +219,11 @@ function renderAccount(bank, onEdit, mode, onDelete) {
   face.append(
     number,
     sheba,
-    node("p", "relative mt-5 text-sm font-bold", owner || "صاحب حساب ثبت نشده"),
+    node(
+      "p",
+      "relative mt-5 text-sm font-bold",
+      owner || (bank.is_cash ? "دریافت و پرداخت نقدی" : "صاحب حساب ثبت نشده"),
+    ),
   );
   article.append(face);
   return article;
@@ -303,9 +312,11 @@ export async function initializeBankAccounts() {
               node(
                 "p",
                 "mt-1 text-xs text-mirage/45",
-                account.card_number
-                  ? `کارت …${account.card_number.slice(-4)}`
-                  : account.account_number,
+                account.is_cash
+                  ? "نقدی"
+                  : account.card_number
+                    ? `کارت …${account.card_number.slice(-4)}`
+                    : account.account_number,
               ),
             );
             identity.append(bankLogo(account), label);

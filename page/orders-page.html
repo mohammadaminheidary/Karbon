@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Karbon | سفارشات</title>
+    <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/orders.css" />
+  </head>
+  <body class="min-h-screen bg-alabaster text-mirage">
+    <div id="navbarHost"></div>
+    <main class="min-h-screen navigation-content bg-alabaster">
+      <div class="mx-auto w-full max-w-[1700px] px-7 py-7 xl:px-9">
+        <h1 class="sr-only">سفارشات</h1>
+        <section class="orders-summary" aria-label="خلاصه سفارشات">
+          <dl class="orders-stat">
+            <dt>کل سفارشات</dt>
+            <dd aria-label="هنوز در دسترس نیست">—</dd>
+          </dl>
+          <dl class="orders-stat">
+            <dt>سفارشات فعال</dt>
+            <dd aria-label="هنوز در دسترس نیست">—</dd>
+          </dl>
+          <button
+            type="button"
+            class="orders-create"
+            aria-label="ایجاد سفارش"
+            title="ایجاد سفارش"
+            disabled
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+            </svg>
+            <span>ایجاد سفارش</span>
+          </button>
+        </section>
+        <p id="ordersNotice" role="status" class="orders-success" hidden></p>
+        <section class="orders-workspace" aria-label="وضعیت سفارشات">
+          <div class="orders-tabs" role="tablist" aria-label="سفارشات">
+            <button
+              type="button"
+              id="activeOrdersTab"
+              class="orders-tab"
+              role="tab"
+              aria-selected="true"
+              aria-controls="activeOrdersPanel"
+              tabindex="0"
+            >
+              سفارشات فعال
+            </button>
+            <button
+              type="button"
+              id="completedOrdersTab"
+              class="orders-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="completedOrdersPanel"
+              tabindex="-1"
+            >
+              سفارشات تکمیل‌شده
+            </button>
+          </div>
+          <div
+            id="activeOrdersPanel"
+            class="orders-panel"
+            role="tabpanel"
+            aria-labelledby="activeOrdersTab"
+            tabindex="0"
+          ></div>
+          <div
+            id="completedOrdersPanel"
+            class="orders-panel"
+            role="tabpanel"
+            aria-labelledby="completedOrdersTab"
+            tabindex="0"
+            hidden
+          ></div>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="../src/js/page/orders.js"></script>
+  </body>
+</html>

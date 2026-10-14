@@ -1,7 +1,9 @@
 from sqlalchemy import String, cast, exists, func, or_, select, text
+from sqlalchemy.orm import object_session
 
 from models.customer import Customer, utc_now
 from models.finance import FinancialTransaction
+from models.order import Order, OrderPayment
 from services.reference_codes import compact_customer_codes
 from schemas.customer_schema import CustomerSummary, normalize_text
 
@@ -20,18 +22,23 @@ class CustomerHasTransactions(Exception):
         self.count = count
 
 
-def get_summary(customer_id):
-    """Aggregation boundary for future orders/payment services.
+class CustomerHasOrders(Exception):
+    pass
 
-    Those tables do not exist yet. Zero totals represent no recorded activity,
-    and `available=False` lets the UI explain that financial data is unavailable.
-    Never persist financial totals or status in customers.
-    """
+
+def get_summary(db, customer_id):
+    """Compute invoice totals and receipts from their authoritative records."""
     summary = CustomerSummary()
+    count, total = db.query(func.count(Order.id), func.coalesce(func.sum(Order.subtotal - Order.discount), 0)).filter(Order.customer_id == customer_id).one()
+    summary.order_count = count
+    summary.total_orders = int(total)
+    summary.paid = int(db.query(func.coalesce(func.sum(FinancialTransaction.amount), 0)).join(
+        OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id).join(Order, Order.id == OrderPayment.order_id).filter(Order.customer_id == customer_id).scalar())
+    summary.available = True
     summary.debt = summary.total_orders - summary.paid
     summary.status = (
         "debtor" if summary.debt > 0 else
-        "settled" if summary.paid > 0 else "no_payment"
+        "settled" if summary.order_count > 0 else "no_payment"
     )
     return summary
 
@@ -39,7 +46,7 @@ def get_summary(customer_id):
 def serialize_customer(customer):
     return {
         **{column.name: getattr(customer, column.name) for column in Customer.__table__.columns},
-        "summary": get_summary(customer.id),
+        "summary": get_summary(object_session(customer), customer.id),
     }
 
 
@@ -133,6 +140,8 @@ def delete_customer(db, customer_id):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         customer = get_customer(db, customer_id)
+        if db.query(Order.id).filter(Order.customer_id == customer_id).first():
+            raise CustomerHasOrders()
         linked = db.query(FinancialTransaction).filter(FinancialTransaction.customer_id == customer_id)
         remaining = linked.filter(FinancialTransaction.deleted_at.is_(None)).count()
         if remaining:

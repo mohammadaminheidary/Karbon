@@ -24,7 +24,9 @@ from routes.attendance import (
 )
 from routes.customers import router as customers_router
 from routes.finance import router as finance_router
+from routes.orders import router as orders_router
 from services.finance_service import initialize_bank_storage
+from services.order_service import initialize_order_storage
 
 
 # ======================================================
@@ -48,6 +50,7 @@ Base.metadata.create_all(
     bind=engine
 )
 initialize_bank_storage(engine)
+initialize_order_storage(engine)
 
 
 # ======================================================
@@ -97,6 +100,7 @@ app.include_router(
 )
 app.include_router(customers_router)
 app.include_router(finance_router)
+app.include_router(orders_router)
 
 
 # ======================================================

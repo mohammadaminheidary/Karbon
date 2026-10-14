@@ -71,3 +71,19 @@ export function node(tag, classes = "", text = "") {
   element.textContent = text;
   return element;
 }
+
+export function bindStrictAmount(input, changed) {
+  let raw;
+  input.addEventListener(
+    "input",
+    () => {
+      raw = input.value;
+    },
+    true,
+  );
+  bindAmount(input);
+  input.addEventListener("input", () => {
+    if (!/^[0-9,٬\s]*$/.test(normalizeDigits(raw))) input.value = raw;
+    changed?.();
+  });
+}

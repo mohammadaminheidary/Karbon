@@ -231,7 +231,11 @@ function renderTransactions(items) {
       );
       bank.append(
         bankIdentity,
-        node("p", "mt-1 text-xs text-mirage/45", item.bank.account_number),
+        node(
+          "p",
+          "mt-1 text-xs text-mirage/45",
+          item.bank.is_cash ? "دریافت نقدی" : item.bank.account_number,
+        ),
       );
       const date = node(
         "td",
@@ -429,9 +433,11 @@ async function loadOptions() {
     const activeBanks = banks.filter((item) => item.active);
     setOptions($("transactionBank"), activeBanks, "انتخاب بانک", (item) => {
       const owner = [item.first_name, item.last_name].filter(Boolean).join(" ");
-      const identifier = item.card_number
-        ? `کارت …${item.card_number.slice(-4)}`
-        : item.account_number;
+      const identifier = item.is_cash
+        ? "نقدی"
+        : item.card_number
+          ? `کارت …${item.card_number.slice(-4)}`
+          : item.account_number;
       return [item.name, owner, identifier].filter(Boolean).join(" · ");
     });
     setOptions(

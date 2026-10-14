@@ -7,10 +7,12 @@ from pathlib import Path
 import jdatetime
 from sqlalchemy import case, func, text, or_, and_, cast, String
 from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.orm import object_session
 
 from config import APP_TIMEZONE
 from models.customer import Customer
 from models.finance import BankAccount, BankDirectory, ExpenseCategory, FinancialTransaction as Transaction
+from models.order import Order, OrderPayment, CASH_ACCOUNT_NUMBER
 from schemas.finance_schema import parse_jalali
 from schemas.customer_schema import normalize_text, DIGITS
 from security.password import verify_password
@@ -92,7 +94,9 @@ def bank_list(db):
         "logo_url": directory.logo_url if directory else None,
         "profile_complete": all((bank.first_name, bank.last_name, bank.bank, bank.card_number)),
         "opening_balance": bank.opening_balance, "active": bank.active,
-        "can_delete": not db.query(Transaction.id).filter(Transaction.bank_id == bank.id, Transaction.deleted_at.is_(None)).first(),
+        "is_cash": bank.account_number == CASH_ACCOUNT_NUMBER,
+        "can_edit": bank.account_number != CASH_ACCOUNT_NUMBER,
+        "can_delete": bank.account_number != CASH_ACCOUNT_NUMBER and not db.query(Transaction.id).filter(Transaction.bank_id == bank.id, Transaction.deleted_at.is_(None)).first(),
         **values.get(bank.id, totals(0, 0)),
         "balance": bank.opening_balance + values.get(bank.id, totals(0, 0))["balance"],
     } for bank, directory in db.query(BankAccount, BankDirectory).outerjoin(
@@ -130,6 +134,8 @@ def save_reference(db, model, data, record_id=None):
 
 
 def save_bank(db, data, record_id=None):
+    if data.account_number == CASH_ACCOUNT_NUMBER or record_id is not None and require(db, BankAccount, record_id, "حساب").account_number == CASH_ACCOUNT_NUMBER:
+        raise FinanceError("صندوق نقدی از فرم حساب بانکی قابل تغییر نیست.", 409)
     directory = require(db, BankDirectory, data.bank, "بانک")
     bank = require(db, BankAccount, record_id, "حساب بانکی") if record_id is not None else db.query(BankAccount).filter(
         BankAccount.card_number == data.card_number, BankAccount.deleted_at.is_not(None)).first() or BankAccount()
@@ -151,10 +157,21 @@ def save_bank(db, data, record_id=None):
 
 
 def serialize(item, bank, directory=None):
+    db = object_session(item)
+    linked = db.query(OrderPayment, Order).join(Order, OrderPayment.order_id == Order.id).filter(OrderPayment.transaction_id == item.id).first()
+    invoice = None
+    if linked:
+        payment, order = linked
+        paid = int(db.query(func.coalesce(func.sum(Transaction.amount), 0)).join(OrderPayment, OrderPayment.transaction_id == Transaction.id).filter(OrderPayment.order_id == order.id).scalar())
+        invoice = {"order_id": order.id, "invoice_code": order.invoice_code, "method": payment.method,
+                   "subtotal": order.subtotal, "discount": order.discount, "total": order.subtotal - order.discount,
+                   "paid": paid, "remaining": order.subtotal - order.discount - paid}
     return {
+        "invoice": invoice,
         **{column.name: getattr(item, column.name) for column in Transaction.__table__.columns},
         "jalali_date": jdatetime.date.fromgregorian(date=item.transaction_date).strftime("%Y/%m/%d"),
         "bank": {"id": bank.id, "name": directory.name if directory else bank.name,
+                 "is_cash": bank.account_number == CASH_ACCOUNT_NUMBER,
                  "account_number": bank.account_number, "logo_url": directory.logo_url if directory else None},
     }
 
@@ -363,6 +380,8 @@ def edit_transaction(db, transaction_id, data):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         item = require(db, Transaction, transaction_id, "تراکنش")
+        if db.query(OrderPayment.id).filter(OrderPayment.transaction_id == item.id).first():
+            raise FinanceError("پرداخت متصل به فاکتور نهایی‌شده از دفتر مالی قابل ویرایش نیست.", 409)
         bank = require(db, BankAccount, data.bank_id, "بانک", active=data.bank_id != item.bank_id)
         source_id = data.customer_id if data.kind == "income" else data.expense_category_id
         unchanged_source = data.kind == item.kind and source_id == (item.customer_id if item.kind == "income" else item.expense_category_id)
@@ -394,6 +413,10 @@ def delete_finance_record(db, model, record_id, data, user):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         item = require(db, model, record_id, "اطلاعات", include_deleted=True)
+        if model is Transaction and db.query(OrderPayment.id).filter(OrderPayment.transaction_id == item.id).first():
+            raise FinanceError("پرداخت متصل به فاکتور نهایی‌شده قابل حذف نیست.", 409)
+        if model is BankAccount and item.account_number == CASH_ACCOUNT_NUMBER:
+            raise FinanceError("صندوق نقدی قابل حذف نیست.", 409)
         if item.deleted_at is None:
             if model is BankAccount and db.query(Transaction.id).filter(
                     Transaction.bank_id == record_id, Transaction.deleted_at.is_(None)).first():

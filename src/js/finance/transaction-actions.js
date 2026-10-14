@@ -28,6 +28,11 @@ const $ = (id) => root.querySelector(`#edit${id}`);
 
 export function transactionActions(record, changed) {
   const cell = node("td", "p-4");
+  if (record.invoice) {
+    cell.append(node("span", "text-xs text-mirage/60", "پرداخت فاکتور"));
+    cell.title = `${record.invoice.invoice_code} · مانده: ${money(record.invoice.remaining)}`;
+    return cell;
+  }
   const menu = node("details", "transaction-menu");
   const summary = node(
     "summary",

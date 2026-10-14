@@ -1,6 +1,7 @@
 import { initializeNavbar } from "../components/navbar.js";
 import { initializeExpenseSettings } from "../finance/expense-settings.js";
 import { initializeBankAccounts } from "../finance/bank-accounts.js";
+import { initializeProductSettings } from "../orders/product-settings.js";
 
 initializeNavbar();
 
@@ -31,6 +32,7 @@ const SETTINGS_SECTIONS =
     "members",
     "expenses",
     "banks",
+    "products",
     "appearance",
     "security",
     "backup",
@@ -352,6 +354,9 @@ async function showSettingsSection(
   }
   if (section === "banks") {
     await initializeBankAccounts();
+  }
+  if (section === "products") {
+    await initializeProductSettings();
   }
 }
 

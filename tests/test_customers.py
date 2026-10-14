@@ -106,7 +106,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(customer["last_name"], "رضایی")
         self.assertEqual(customer["phone_numbers"], [])
         self.assertEqual(customer["summary"]["status"], "no_payment")
-        self.assertFalse(customer["summary"]["available"])
+        self.assertTrue(customer["summary"]["available"])
         with closing(sqlite3.connect(self.database)) as db, db:
             row = db.execute("SELECT phone_numbers, notes FROM customers WHERE id=?", (customer["id"],)).fetchone()
             self.assertEqual(json.loads(row[0]), [])

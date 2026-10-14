@@ -161,9 +161,11 @@ async function loadChart() {
     const card = node(
       "p",
       "mt-1 text-xs text-mirage/45",
-      data.bank.card_number
-        ? formatCardNumber(data.bank.card_number)
-        : data.bank.account_number,
+      data.bank.is_cash
+        ? "دریافت و پرداخت نقدی"
+        : data.bank.card_number
+          ? formatCardNumber(data.bank.card_number)
+          : data.bank.account_number,
     );
     card.dir = "ltr";
     info.append(card);

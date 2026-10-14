@@ -44,7 +44,7 @@ const template = `
           </svg>
       <span class="navbar-tooltip" aria-hidden="true">مشتریان</span>
     </a>
-    <a href="#" class="navbar-item" aria-label="سفارشات">
+    <a href="/page/orders-page.html" class="navbar-item" aria-label="سفارشات">
       <svg
             class="navbar-icon" aria-hidden="true"
             fill="none"
