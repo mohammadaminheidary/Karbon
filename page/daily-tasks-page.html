@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Karbon | کارهای روزانه</title>
+    <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/orders.css" />
+    <link rel="stylesheet" href="../src/finance.css" />
+    <link rel="stylesheet" href="../src/daily-tasks.css" />
+  </head>
+  <body
+    class="tasks-surface finance-surface min-h-screen bg-alabaster text-mirage"
+  >
+    <div id="navbarHost"></div>
+    <main class="navigation-content">
+      <div class="tasks-container">
+        <h1 class="sr-only">کارهای روزانه</h1>
+        <section
+          class="tasks-summary"
+          aria-label="خلاصه کارها"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <div class="tasks-stat">
+            <h2>همه کارها</h2>
+            <p id="totalTasks">—</p>
+          </div>
+          <div class="tasks-stat tasks-stat-progress">
+            <h2>در حال انجام</h2>
+            <p id="inProgressTasks">—</p>
+          </div>
+          <div class="tasks-stat tasks-stat-completed">
+            <h2>انجام شده</h2>
+            <p id="completedTasks">—</p>
+          </div>
+        </section>
+        <div class="tasks-heading">
+          <h2>تابلوی کارها</h2>
+          <button
+            id="refreshTasks"
+            type="button"
+            class="finance-button border border-french-gray/40 bg-white"
+          >
+            بروزرسانی
+          </button>
+        </div>
+        <p id="tasksError" role="alert" hidden></p>
+        <p id="tasksStatus" role="status">در حال دریافت کارها...</p>
+        <section
+          id="taskBoard"
+          class="tasks-board"
+          aria-label="تابلوی کارهای روزانه"
+          aria-busy="true"
+        >
+          <section
+            class="tasks-column"
+            data-status="todo"
+            aria-labelledby="todoHeading"
+          >
+            <header>
+              <h3 id="todoHeading">برای انجام</h3>
+              <span id="todoCount">—</span>
+            </header>
+            <div id="todoTasks" class="tasks-list"></div>
+          </section>
+          <section
+            class="tasks-column"
+            data-status="in_progress"
+            aria-labelledby="progressHeading"
+          >
+            <header>
+              <h3 id="progressHeading">در حال انجام</h3>
+              <span id="in_progressCount">—</span>
+            </header>
+            <div id="in_progressTasks" class="tasks-list"></div>
+          </section>
+          <section
+            class="tasks-column"
+            data-status="completed"
+            aria-labelledby="completedHeading"
+          >
+            <header>
+              <h3 id="completedHeading">انجام شده</h3>
+              <span id="completedCount">—</span>
+            </header>
+            <div id="completedTasksList" class="tasks-list"></div>
+          </section>
+        </section>
+      </div>
+    </main>
+    <button
+      id="addTask"
+      type="button"
+      class="orders-create"
+      aria-label="افزودن کار"
+      aria-haspopup="dialog"
+      aria-controls="taskCurtain"
+      disabled
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        aria-hidden="true"
+      >
+        <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+      </svg>
+      <span>افزودن کار</span>
+    </button>
+    <dialog
+      id="taskCurtain"
+      class="task-curtain"
+      aria-labelledby="taskFormHeading"
+    >
+      <form id="taskForm">
+        <h2 id="taskFormHeading">افزودن کار</h2>
+        <div class="task-form-fields">
+          <label for="taskDate"
+            >تاریخ (شمسی)<input
+              id="taskDate"
+              name="date"
+              type="text"
+              placeholder="مثلاً ۱۴۰۵/۰۷/۲۴"
+              inputmode="numeric"
+              maxlength="10"
+              class="finance-field"
+              required
+              dir="ltr"
+          /></label>
+          <label for="taskTitle"
+            >عنوان<input
+              id="taskTitle"
+              name="title"
+              type="text"
+              placeholder="عنوان کار را وارد کنید"
+              class="finance-field"
+              required
+              maxlength="200"
+          /></label>
+          <label for="taskDescription"
+            >توضیحات<textarea
+              id="taskDescription"
+              name="description"
+              placeholder="جزئیات و توضیحات کار را بنویسید"
+              class="finance-field"
+              rows="4"
+              maxlength="5000"
+            ></textarea>
+          </label>
+          <p id="taskFormError" role="alert" hidden></p>
+        </div>
+        <footer>
+          <button
+            id="submitTask"
+            type="submit"
+            class="finance-button bg-persian-blue text-white"
+          >
+            ثبت
+          </button>
+          <button
+            id="cancelTask"
+            type="button"
+            class="finance-button border border-french-gray/40 bg-white"
+          >
+            انصراف
+          </button>
+        </footer>
+      </form>
+    </dialog>
+    <dialog
+      id="taskDetails"
+      class="task-details"
+      aria-labelledby="taskDetailsTitle"
+    >
+      <header>
+        <h2 id="taskDetailsTitle"></h2>
+        <button
+          id="closeTaskDetails"
+          type="button"
+          class="finance-button"
+          aria-label="بستن جزئیات کار"
+        >
+          ×
+        </button>
+      </header>
+      <dl class="task-details-meta">
+        <div>
+          <dt>شماره کار</dt>
+          <dd id="taskDetailsId"></dd>
+        </div>
+        <div>
+          <dt>تاریخ (شمسی)</dt>
+          <dd id="taskDetailsDate"></dd>
+        </div>
+        <div>
+          <dt>وضعیت</dt>
+          <dd id="taskDetailsStatus"></dd>
+        </div>
+        <div>
+          <dt>زمان ایجاد</dt>
+          <dd id="taskDetailsCreated"></dd>
+        </div>
+      </dl>
+      <h3>توضیحات کامل</h3>
+      <p id="taskDetailsDescription" class="task-full-description"></p>
+      <p id="taskDetailsError" role="alert" hidden></p>
+      <div id="taskDeleteConfirmation" class="task-delete-confirmation" hidden>
+        <p>این کار حذف شود؟</p>
+        <button
+          id="confirmDeleteTask"
+          type="button"
+          class="finance-button bg-alizarin-crimson text-white"
+        >
+          بله، حذف شود
+        </button>
+        <button
+          id="cancelDeleteTask"
+          type="button"
+          class="finance-button border border-french-gray/40 bg-white"
+        >
+          انصراف
+        </button>
+      </div>
+      <footer>
+        <button
+          id="editTask"
+          type="button"
+          class="finance-button bg-persian-blue text-white"
+        >
+          ویرایش
+        </button>
+        <button
+          id="deleteTask"
+          type="button"
+          class="finance-button bg-alizarin-crimson/10 text-alizarin-crimson"
+        >
+          حذف
+        </button>
+      </footer>
+    </dialog>
+    <script type="module" src="../src/js/page/daily-tasks.js"></script>
+  </body>
+</html>

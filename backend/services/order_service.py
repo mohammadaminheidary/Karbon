@@ -1,16 +1,19 @@
 import hashlib
 import json
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid5
 import jdatetime
-from sqlalchemy import func, text
+from sqlalchemy import String, cast, func, or_, text
 from sqlalchemy.orm import Session
 from config import APP_TIMEZONE
 from models.customer import Customer
 from models.finance import BankAccount, FinancialTransaction
 from models.order import CASH_ACCOUNT_NUMBER, Product, Order, OrderItem, OrderPayment
 from services.finance_service import FinanceError, require
+from services.reference_codes import compact_transaction_numbers
+from schemas.customer_schema import normalize_text
+from security.password import verify_password
 
 
 def initialize_order_storage(engine):
@@ -18,8 +21,8 @@ def initialize_order_storage(engine):
     with engine.begin() as connection:
         connection.exec_driver_sql("BEGIN IMMEDIATE")
         for table, additions in {
-            "products": {"product_code": "VARCHAR(32)", "revision": "INTEGER NOT NULL DEFAULT 1"},
-            "orders": {"invoice_snapshot": "JSON"},
+            "products": {"product_code": "VARCHAR(32)", "revision": "INTEGER NOT NULL DEFAULT 1", "deleted_at": "DATETIME"},
+            "orders": {"invoice_snapshot": "JSON", "deleted_at": "DATETIME"},
         }.items():
             columns = {row[1] for row in connection.exec_driver_sql(f"PRAGMA table_info({table})")}
             for column, sql_type in additions.items():
@@ -42,10 +45,12 @@ def initialize_order_storage(engine):
 
 
 def products(db, include_inactive=False):
-    query = db.query(Product)
+    query = db.query(Product).filter(Product.deleted_at.is_(None))
     if not include_inactive:
         query = query.filter(Product.active.is_(True))
-    return [{column.name: getattr(item, column.name) for column in Product.__table__.columns}
+    referenced = {product_id for (product_id,) in db.query(OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Order.deleted_at.is_(None)).distinct().all()}
+    return [{**{column.name: getattr(item, column.name) for column in Product.__table__.columns},
+             "can_delete": item.id not in referenced}
             for item in query.order_by(Product.id).all()]
 
 
@@ -78,6 +83,35 @@ def save_product(db, data, product_id=None):
         raise
 
 
+def delete_product(db, product_id, data, user):
+    if not verify_password(data.password, user.password_hash):
+        raise FinanceError("رمز حساب کاربری صحیح نیست.", 403)
+    db.rollback()
+    try:
+        # Serialize with order creation so a product cannot acquire an order
+        # reference between the dependency check and deletion.
+        db.execute(text("BEGIN IMMEDIATE"))
+        product = require(db, Product, product_id, "کالا", include_deleted=True)
+        if product.deleted_at is not None:
+            db.commit()
+            return {"id": product_id, "deleted": True}
+        if db.query(OrderItem.id).join(Order, Order.id == OrderItem.order_id).filter(
+                OrderItem.product_id == product.id, Order.deleted_at.is_(None)).first():
+            raise FinanceError("این کالا در سفارش ثبت‌شده استفاده شده و قابل حذف نیست. می‌توانید آن را غیرفعال کنید.", 409)
+        if db.query(OrderItem.id).filter(OrderItem.product_id == product.id).first():
+            # Deleted invoices retain immutable history and foreign keys.
+            product.deleted_at = datetime.now(timezone.utc)
+            product.active = False
+            product.revision += 1
+        else:
+            db.delete(product)
+        db.commit()
+        return {"id": product_id, "deleted": True}
+    except Exception:
+        db.rollback()
+        raise
+
+
 def next_number(db):
     number = (db.query(func.max(Order.id)).scalar() or 0) + 1001
     while db.query(Order.id).filter(Order.order_number == str(number)).first():
@@ -92,7 +126,7 @@ def serialize(db, order):
     paid = sum(transaction.amount for _, transaction in payments)
     total = order.subtotal - order.discount
     return {
-        **{column.name: getattr(order, column.name) for column in Order.__table__.columns if column.name not in {"request_fingerprint", "invoice_snapshot"}},
+        **{column.name: getattr(order, column.name) for column in Order.__table__.columns if column.name not in {"request_fingerprint", "invoice_snapshot", "deleted_at"}},
         "jalali_date": jdatetime.date.fromgregorian(date=order.invoice_date).strftime("%Y/%m/%d"),
         "jalali_payment_date": jdatetime.date.fromgregorian(date=order.payment_date).strftime("%Y/%m/%d"),
         "customer_name": order.invoice_snapshot["customer"]["name"] if order.invoice_snapshot else f"{customer.first_name} {customer.last_name}",
@@ -163,10 +197,67 @@ def base36(value):
 
 
 def list_orders(db, status, skip, limit):
-    query = db.query(Order)
+    query = db.query(Order).filter(Order.deleted_at.is_(None))
     return {"total_orders": query.count(), "active_orders": query.filter(Order.status == "active").count(),
             "total": query.filter(Order.status == status).count(),
             "items": [serialize(db, order) for order in query.filter(Order.status == status).order_by(Order.id.desc()).offset(skip).limit(limit).all()]}
+
+
+def list_invoices(db, search, skip, limit):
+    query = db.query(Order).join(Customer, Customer.id == Order.customer_id).filter(Order.deleted_at.is_(None))
+    search = normalize_text(search)
+    if search:
+        pattern = "%" + search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        query = query.filter(or_(
+            (Customer.first_name + " " + Customer.last_name).like(pattern, escape="\\"),
+            cast(Customer.customer_code, String).like(pattern, escape="\\"),
+            Order.invoice_code.like(pattern, escape="\\"),
+            Order.order_number.like(pattern, escape="\\"),
+        ))
+    total = query.count()
+    items = []
+    for order in query.order_by(Order.id.desc()).offset(skip).limit(limit).all():
+        customer = db.get(Customer, order.customer_id)
+        items.append({**serialize(db, order), "customer": {
+            "id": customer.id, "code": customer.customer_code,
+            "name": f"{customer.first_name} {customer.last_name}",
+        }})
+    return {"items": items, "total": total}
+
+
+def delete_invoice(db, order_id, data, user):
+    if not verify_password(data.password, user.password_hash):
+        raise FinanceError("رمز حساب کاربری صحیح نیست.", 403)
+    db.rollback()
+    try:
+        db.execute(text("BEGIN IMMEDIATE"))
+        order = require(db, Order, order_id, "فاکتور", include_deleted=True)
+        if order.deleted_at is None:
+            deleted_at = datetime.now(timezone.utc)
+            # Keep immutable invoice history and retry IDs, while removing every
+            # linked receipt from the live ledger in the same transaction.
+            for receipt in db.query(FinancialTransaction).join(
+                    OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id,
+            ).filter(OrderPayment.order_id == order.id).all():
+                receipt.deleted_at = deleted_at
+                receipt.updated_at = deleted_at
+            quantities = Counter()
+            for item in db.query(OrderItem).filter(OrderItem.order_id == order.id).all():
+                quantities[item.product_id] += item.quantity
+            for product_id, quantity in quantities.items():
+                product = require(db, Product, product_id, "کالا")
+                if product.stock is not None:
+                    product.stock += quantity
+                    product.revision += 1
+            order.deleted_at = deleted_at
+            db.flush()
+            compact_transaction_numbers(db)
+            db.expire_all()
+        db.commit()
+        return {"id": order_id, "deleted": True}
+    except Exception:
+        db.rollback()
+        raise
 
 
 def cash_account(db):
@@ -188,6 +279,8 @@ def save_order(db, data):
         db.execute(text("BEGIN IMMEDIATE"))
         prior = db.query(Order).filter(Order.request_id == str(data.request_id)).first()
         if prior:
+            if prior.deleted_at is not None:
+                raise FinanceError("این فاکتور حذف شده است؛ برای سفارش جدید شناسه درخواست تازه ایجاد کنید.", 409)
             if prior.request_fingerprint != fingerprint:
                 raise FinanceError("شناسه درخواست قبلاً برای فاکتور دیگری استفاده شده است.", 409)
             result = serialize(db, prior)

@@ -109,3 +109,6 @@ class CustomerList(BaseModel):
     total: int
     skip: int
     limit: int
+    total_customers: int
+    unsettled_customers: int
+    settled_customers: int

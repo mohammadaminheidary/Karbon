@@ -6,7 +6,11 @@ export function publishDataChange() {
     /* Reload on visibility remains available. */
   }
 }
+export function publishLocalDataChange() {
+  window.dispatchEvent(new Event(key));
+}
 export function onExternalDataChange(callback) {
+  window.addEventListener(key, callback);
   window.addEventListener("storage", (event) => {
     if (event.key === key) callback();
   });

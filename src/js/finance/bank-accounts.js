@@ -164,16 +164,16 @@ function renderAccount(bank, onEdit, mode, onDelete) {
     row.append(identity, owner, numbers, actions);
     return row;
   }
-  const article = node(
-    "a",
-    "bank-account rounded-2xl border border-french-gray/30 bg-white shadow-sm",
-  );
+  const article = node("a", "bank-account rounded-2xl");
   article.dataset.bankId = bank.id;
   article.href = `/page/bank-transactions-page.html?bank=${bank.id}`;
   article.setAttribute(
     "aria-label",
     `تراکنش‌های ${bank.name}، ${[bank.first_name, bank.last_name].filter(Boolean).join(" ")}`,
   );
+  const glass = node("span", "navbar-glass");
+  glass.setAttribute("aria-hidden", "true");
+  article.append(glass);
   const face = node("div", "bank-card-face");
   const top = node("div", "relative flex items-center justify-between gap-3");
   const identity = node("div", "min-w-0");
@@ -181,7 +181,7 @@ function renderAccount(bank, onEdit, mode, onDelete) {
     node("h3", "text-base font-black", bank.name),
     node(
       "p",
-      "mt-1 text-xs text-white/65",
+      "mt-1 text-xs text-mirage/50",
       bank.active ? "حساب فعال" : "حساب غیرفعال",
     ),
   );
@@ -221,10 +221,23 @@ function renderAccount(bank, onEdit, mode, onDelete) {
     sheba,
     node(
       "p",
-      "relative mt-5 text-sm font-bold",
+      "relative mt-3 mb-3 text-sm font-bold",
       owner || (bank.is_cash ? "دریافت و پرداخت نقدی" : "صاحب حساب ثبت نشده"),
     ),
   );
+  const balance = node(
+    "div",
+    "relative mt-auto border-t border-french-gray/25 pt-3",
+  );
+  balance.append(
+    node("p", "text-xs text-mirage/50", "موجودی حساب"),
+    node(
+      "p",
+      "mt-1 break-words text-xl font-black text-persian-blue",
+      money(bank.balance),
+    ),
+  );
+  face.append(balance);
   article.append(face);
   return article;
 }
@@ -278,6 +291,7 @@ export async function initializeBankAccounts() {
     $("banksStatus").classList.remove("hidden");
     $("banksError").classList.add("hidden");
     $("bankCards").setAttribute("aria-busy", "true");
+    $("bankTotalBalance")?.setAttribute("aria-busy", "true");
     $("refreshBanks").disabled = true;
     try {
       const accounts = await getBanks();
@@ -297,41 +311,12 @@ export async function initializeBankAccounts() {
           ),
         ),
       );
-      if ($("bankBalances")) {
-        $("bankBalances").replaceChildren(
-          ...accounts.map((account) => {
-            const summary = node(
-              "a",
-              "bank-balance-summary rounded-2xl border border-french-gray/30 bg-white p-4",
-            );
-            summary.href = `/page/bank-transactions-page.html?bank=${account.id}`;
-            const identity = node("div", "flex items-center gap-3");
-            const label = node("div", "min-w-0");
-            label.append(
-              node("p", "font-bold", account.name),
-              node(
-                "p",
-                "mt-1 text-xs text-mirage/45",
-                account.is_cash
-                  ? "نقدی"
-                  : account.card_number
-                    ? `کارت …${account.card_number.slice(-4)}`
-                    : account.account_number,
-              ),
-            );
-            identity.append(bankLogo(account), label);
-            summary.append(
-              identity,
-              node("p", "mt-4 text-xs text-mirage/45", "موجودی حساب"),
-              node(
-                "p",
-                "mt-1 break-words text-lg font-black text-persian-blue",
-                money(account.balance),
-              ),
-            );
-            return summary;
-          }),
+      if ($("bankTotalBalance")) {
+        const totalBalance = accounts.reduce(
+          (total, account) => total + account.balance,
+          0,
         );
+        $("bankTotalBalance").textContent = money(totalBalance);
       }
       $("bankAccountCount").textContent = new Intl.NumberFormat("fa-IR").format(
         accounts.length,
@@ -339,7 +324,7 @@ export async function initializeBankAccounts() {
     } catch (error) {
       if (version !== listVersion) return;
       $("bankCards").replaceChildren();
-      $("bankBalances")?.replaceChildren();
+      if ($("bankTotalBalance")) $("bankTotalBalance").textContent = "—";
       $("bankAccountCount").textContent = "—";
       $("banksStatus").classList.add("hidden");
       $("banksError").textContent = error.message;
@@ -347,6 +332,7 @@ export async function initializeBankAccounts() {
     } finally {
       if (version === listVersion) {
         $("bankCards").setAttribute("aria-busy", "false");
+        $("bankTotalBalance")?.setAttribute("aria-busy", "false");
         $("refreshBanks").disabled = false;
       }
     }

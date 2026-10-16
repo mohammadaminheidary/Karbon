@@ -1,4 +1,5 @@
 import { Dialog } from "../components/dialog.js";
+import { onExternalDataChange } from "../components/data-events.js";
 import { financeRequest, getBanks } from "../finance/finance-api.js";
 import { getCustomers, getCustomer } from "../customers/customer-api.js";
 import {
@@ -651,6 +652,13 @@ export function initializeOrderDialogs(onSaved) {
     }
   }
   $("orderRetryLoad").addEventListener("click", loadReferences);
+  const refreshReferences = () => {
+    if (!saving && !document.hidden && [create, payment].some(
+      (root) => root.getAttribute("aria-hidden") === "false",
+    )) loadReferences();
+  };
+  onExternalDataChange(refreshReferences);
+  document.addEventListener("visibilitychange", refreshReferences);
   return async function openCreateOrder() {
     if (saving) return;
     if (submitted) {

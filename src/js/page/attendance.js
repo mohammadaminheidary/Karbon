@@ -1,6 +1,17 @@
+import { createNavbarNotification } from "../components/navbar-notification.js";
+import {
+  fullDate,
+  todayKey,
+  shiftDay,
+  node,
+} from "../finance/finance-utils.js";
 import { initializeNavbar } from "../components/navbar.js";
 
 initializeNavbar();
+
+const notifyAttendance = createNavbarNotification(
+  document.querySelector(".navbar-title-island"),
+);
 
 import { protectPage } from "../guards/auth-guard.js";
 
@@ -24,81 +35,21 @@ import {
   setDayDetailsLoading,
 } from "../attendance/day-details-modal.js";
 
-const CALENDAR_DAYS_BEFORE = 6;
-
-const CALENDAR_DAYS_AFTER = 6;
-
-const persianFullDateFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
-  weekday: "long",
-
-  year: "numeric",
-
-  month: "long",
-
-  day: "numeric",
-});
-
-const persianDayFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
-  day: "numeric",
-});
-
 const calendarWeekdayFormatter = new Intl.DateTimeFormat("fa-IR", {
-  weekday: "short",
-});
-
-const calendarDayFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
-  day: "numeric",
-});
-
-const calendarMonthFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
-  month: "short",
-});
-
-const clockFormatter = new Intl.DateTimeFormat("fa-IR", {
-  hour: "2-digit",
-
-  minute: "2-digit",
-
-  second: "2-digit",
-
-  hour12: false,
+  weekday: "long",
+  timeZone: "Asia/Tehran",
 });
 
 let calendarDates = [];
-
-let clockIntervalId = null;
+let selectedDay = todayKey();
+let calendarCenter = selectedDay;
+let calendarVersion = 0;
 
 let syncIntervalId = null;
 
 let currentDayKey = null;
 
 let backgroundRefreshRunning = false;
-
-/* ======================================================
-   Date Helpers
-====================================================== */
-
-function pad2(value) {
-  return String(value).padStart(2, "0");
-}
-
-function dateToLocalKey(date) {
-  return [
-    date.getFullYear(),
-    pad2(date.getMonth() + 1),
-    pad2(date.getDate()),
-  ].join("-");
-}
-
-function parseLocalDateKey(value) {
-  const [year, month, day] = value.split("-").map(Number);
-
-  return new Date(year, month - 1, day);
-}
-
-function getTodayKey() {
-  return dateToLocalKey(new Date());
-}
 
 /* ======================================================
    Auth
@@ -127,186 +78,64 @@ function handleUnauthorized(error) {
 }
 
 /* ======================================================
-   Header Date / Clock
+   Calendar
 ====================================================== */
 
-function updateHeaderDate() {
-  const now = new Date();
-
-  const dateElement = document.getElementById("attendancePersianDate");
-
-  const dayElement = document.getElementById("attendanceMonthDay");
-
-  if (dateElement) {
-    dateElement.textContent = persianFullDateFormatter.format(now);
-  }
-
-  if (dayElement) {
-    dayElement.textContent = persianDayFormatter.format(now);
-  }
+function updateCalendarSelection() {
+  document.querySelectorAll("[data-calendar-date]").forEach((button) => {
+    const selected = button.dataset.calendarDate === selectedDay;
+    button.setAttribute("aria-pressed", String(selected));
+    button.classList.toggle("border-persian-blue", selected);
+    button.classList.toggle("bg-persian-blue/5", selected);
+    button.classList.toggle("border-french-gray/30", !selected);
+  });
 }
 
-function updateClock() {
-  const clock = document.getElementById("attendanceClock");
-
-  if (!clock) {
-    return;
-  }
-
-  clock.textContent = clockFormatter.format(new Date());
-}
-
-function initializeClock() {
-  updateClock();
-
-  if (clockIntervalId) {
-    clearInterval(clockIntervalId);
-  }
-
-  clockIntervalId = window.setInterval(updateClock, 1000);
-}
-
-/* ======================================================
-   Calendar Dates
-====================================================== */
-
-function buildCalendarDates() {
-  const today = new Date();
-
-  today.setHours(0, 0, 0, 0);
-
-  const dates = [];
-
-  for (
-    let offset = -CALENDAR_DAYS_BEFORE;
-    offset <= CALENDAR_DAYS_AFTER;
-    offset += 1
-  ) {
-    const date = new Date(today);
-
-    date.setDate(today.getDate() + offset);
-
-    dates.push(date);
-  }
-
-  return dates;
-}
-
-/* ======================================================
-   Calendar Render
-====================================================== */
-
-function createCalendarDay(date) {
-  const todayKey = getTodayKey();
-
-  const dateKey = dateToLocalKey(date);
-
-  const isToday = dateKey === todayKey;
-
-  const button = document.createElement("button");
-
+function createCalendarDay(dateKey) {
+  const button = node(
+    "button",
+    "w-[170px] shrink-0 rounded-2xl border p-3 text-right transition-colors hover:border-persian-blue/40",
+  );
   button.type = "button";
-
   button.dataset.calendarDate = dateKey;
-
-  button.className = [
-    "relative",
-    "w-[92px]",
-    "shrink-0",
-    "rounded-2xl",
-    "border",
-    "px-3",
-    "py-3",
-    "text-center",
-    "transition-all",
-    "duration-200",
-
-    isToday
-      ? "border-persian-blue bg-persian-blue text-white shadow-md"
-      : "border-french-gray/30 bg-white text-mirage hover:border-persian-blue/30 hover:shadow-sm",
-  ].join(" ");
-
-  const weekday = document.createElement("p");
-
-  weekday.className = isToday
-    ? "text-[10px] font-bold text-white/65"
-    : "text-[10px] font-bold text-mirage/35";
-
-  weekday.textContent = calendarWeekdayFormatter.format(date);
-
-  const day = document.createElement("p");
-
-  day.className = "mt-1 text-xl font-black";
-
-  day.textContent = calendarDayFormatter.format(date);
-
-  const month = document.createElement("p");
-
-  month.className = isToday
-    ? "mt-0.5 text-[10px] text-white/65"
-    : "mt-0.5 text-[10px] text-mirage/35";
-
-  month.textContent = calendarMonthFormatter.format(date);
-
-  const counts = document.createElement("div");
-
-  counts.className = "mt-2 flex items-center justify-center gap-2";
-
-  const present = document.createElement("span");
-
-  present.dataset.calendarPresent = "true";
-
-  present.className = isToday
-    ? "text-[9px] font-black text-white/80"
-    : "text-[9px] font-black text-eucalyptus";
-
-  present.textContent = "ح ۰";
-
-  const absent = document.createElement("span");
-
-  absent.dataset.calendarAbsent = "true";
-
-  absent.className = isToday
-    ? "text-[9px] font-black text-white/80"
-    : "text-[9px] font-black text-alizarin-crimson";
-
-  absent.textContent = "غ ۰";
-
-  counts.append(present, absent);
-
-  button.append(weekday, day, month, counts);
-
+  const date = new Date(`${dateKey}T12:00:00+03:30`);
+  button.append(
+    node(
+      "p",
+      "text-xs text-mirage/45",
+      calendarWeekdayFormatter.format(date) +
+        (dateKey === todayKey() ? " · امروز" : ""),
+    ),
+    node("p", "mt-2 font-black", fullDate(dateKey)),
+  );
+  for (const [status, label, color] of [
+    ["Present", "حاضر", "text-eucalyptus"],
+    ["Absent", "غایب", "text-alizarin-crimson"],
+  ]) {
+    const count = node(
+      "p",
+      `mt-2 text-[11px] font-bold ${color}`,
+      `${label}: —`,
+    );
+    count.dataset[`calendar${status}`] = "true";
+    button.append(count);
+  }
   return button;
 }
 
-function renderCalendar() {
+function renderCalendar({ scroll = false } = {}) {
   const track = document.getElementById("attendanceCalendarTrack");
-
-  if (!track) {
-    return;
+  if (!track) return;
+  calendarDates = Array.from({ length: 14 }, (_, index) =>
+    shiftDay(calendarCenter, index - 7),
+  );
+  track.replaceChildren(...calendarDates.map(createCalendarDay));
+  updateCalendarSelection();
+  if (scroll) {
+    track
+      .querySelector(`[data-calendar-date="${selectedDay}"]`)
+      ?.scrollIntoView({ block: "nearest", inline: "center" });
   }
-
-  calendarDates = buildCalendarDates();
-
-  track.innerHTML = "";
-
-  calendarDates.forEach((date) => {
-    track.appendChild(createCalendarDay(date));
-  });
-
-  window.requestAnimationFrame(() => {
-    const today = track.querySelector(
-      `[data-calendar-date="${getTodayKey()}"]`,
-    );
-
-    today?.scrollIntoView({
-      behavior: "smooth",
-
-      inline: "center",
-
-      block: "nearest",
-    });
-  });
 }
 
 /* ======================================================
@@ -328,13 +157,13 @@ function updateCalendarStatistics(statistics) {
     const absent = button.querySelector("[data-calendar-absent]");
 
     if (present) {
-      present.textContent = `ح ${new Intl.NumberFormat("fa-IR").format(
+      present.textContent = `حاضر: ${new Intl.NumberFormat("fa-IR").format(
         day.present_count || 0,
       )}`;
     }
 
     if (absent) {
-      absent.textContent = `غ ${new Intl.NumberFormat("fa-IR").format(
+      absent.textContent = `غایب: ${new Intl.NumberFormat("fa-IR").format(
         day.absent_count || 0,
       )}`;
     }
@@ -346,20 +175,28 @@ async function refreshCalendarStatistics() {
     return;
   }
 
-  const startDate = dateToLocalKey(calendarDates[0]);
+  const version = ++calendarVersion;
+  const track = document.getElementById("attendanceCalendarTrack");
+  track.setAttribute("aria-busy", "true");
+  const startDate = calendarDates[0];
 
-  const endDate = dateToLocalKey(calendarDates[calendarDates.length - 1]);
+  const endDate = calendarDates[calendarDates.length - 1];
 
   try {
     const statistics = await getAttendanceCalendar(startDate, endDate);
 
+    if (version !== calendarVersion) return;
     updateCalendarStatistics(statistics);
   } catch (error) {
     if (handleUnauthorized(error)) {
       return;
     }
 
+    if (version !== calendarVersion) return;
     console.error("Calendar statistics error:", error);
+    notifyAttendance("دریافت تقویم انجام نشد. دوباره تلاش کنید.");
+  } finally {
+    if (version === calendarVersion) track.setAttribute("aria-busy", "false");
   }
 }
 
@@ -392,6 +229,7 @@ async function openDayDetails(dateKey) {
     console.error("Day details error:", error);
 
     setDayDetailsError(dateKey);
+    notifyAttendance("دریافت اطلاعات روز انجام نشد. دوباره تلاش کنید.");
   }
 }
 
@@ -413,8 +251,29 @@ function setupCalendarInteractions() {
       return;
     }
 
-    openDayDetails(button.dataset.calendarDate);
+    selectedDay = button.dataset.calendarDate;
+    updateCalendarSelection();
+    openDayDetails(selectedDay);
   });
+
+  document
+    .getElementById("attendanceSelectToday")
+    .addEventListener("click", () => {
+      calendarCenter = selectedDay = todayKey();
+      renderCalendar({ scroll: true });
+      refreshCalendarStatistics();
+      openDayDetails(selectedDay);
+    });
+  for (const [id, offset] of [
+    ["attendancePreviousDays", -14],
+    ["attendanceNextDays", 14],
+  ]) {
+    document.getElementById(id).addEventListener("click", () => {
+      calendarCenter = shiftDay(calendarCenter, offset);
+      renderCalendar();
+      refreshCalendarStatistics();
+    });
+  }
 
   /*
    * بعد از ثبت حاضر/غایب
@@ -430,7 +289,7 @@ function setupCalendarInteractions() {
 ====================================================== */
 
 async function initializeMembersSection() {
-  await initializeAttendanceMembers();
+  await initializeAttendanceMembers({ onNotification: notifyAttendance });
 }
 
 /* ======================================================
@@ -446,9 +305,8 @@ async function refreshAttendanceData({ rebuildCalendar = false } = {}) {
 
   try {
     if (rebuildCalendar) {
-      updateHeaderDate();
-
-      renderCalendar();
+      calendarCenter = selectedDay = todayKey();
+      renderCalendar({ scroll: true });
     }
 
     await Promise.all([
@@ -468,24 +326,23 @@ async function refreshAttendanceData({ rebuildCalendar = false } = {}) {
 ====================================================== */
 
 async function checkForDayChange() {
-  const todayKey = getTodayKey();
+  const today = todayKey();
 
   if (currentDayKey === null) {
-    currentDayKey = todayKey;
+    currentDayKey = today;
 
     return;
   }
 
-  if (todayKey === currentDayKey) {
+  if (today === currentDayKey) {
     return;
   }
 
-  currentDayKey = todayKey;
+  currentDayKey = today;
 
   /*
    * روز جدید شروع شده:
    *
-   * Header
    * Calendar
    * Member Status
    * Statistics
@@ -506,14 +363,14 @@ async function handleVisibilityChange() {
     return;
   }
 
-  const todayKey = getTodayKey();
+  const today = todayKey();
 
   /*
    * اگر هنگام مخفی بودن Tab
    * روز عوض شده باشد.
    */
-  if (todayKey !== currentDayKey) {
-    currentDayKey = todayKey;
+  if (today !== currentDayKey) {
+    currentDayKey = today;
 
     await refreshAttendanceData({
       rebuildCalendar: true,
@@ -535,7 +392,7 @@ async function handleVisibilityChange() {
 ====================================================== */
 
 function setupAutomaticSynchronization() {
-  currentDayKey = getTodayKey();
+  currentDayKey = todayKey();
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
@@ -567,11 +424,7 @@ async function initializeAttendancePage() {
 
   setupLogout();
 
-  updateHeaderDate();
-
-  initializeClock();
-
-  renderCalendar();
+  renderCalendar({ scroll: true });
 
   setupCalendarInteractions();
 

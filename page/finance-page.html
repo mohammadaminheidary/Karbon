@@ -5,74 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Karbon | مالی</title>
     <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/orders.css" />
     <link rel="stylesheet" href="../src/finance.css" />
   </head>
   <body class="finance-surface min-h-screen bg-alabaster text-mirage">
     <div id="navbarHost"></div>
     <main class="min-h-screen overflow-x-hidden navigation-content">
       <div class="mx-auto w-full max-w-[1700px] px-4 py-7 sm:px-7 xl:px-9">
-        <header
-          class="flex flex-wrap items-center justify-between gap-5 border-b border-french-gray/30 pb-6"
+        <h1 class="sr-only">مالی</h1>
+        <button
+          id="recordIncome"
+          type="button"
+          class="orders-create"
+          aria-label="ثبت درآمد"
+          title="ثبت درآمد"
+          disabled
         >
-          <div class="flex items-center gap-4">
-            <span
-              class="flex h-12 w-12 items-center justify-center rounded-2xl bg-persian-blue text-2xl text-white"
-              aria-hidden="true"
-              >↗</span
-            >
-            <div>
-              <p class="mb-1 text-xs text-mirage/40">مدیریت درآمد و هزینه</p>
-              <h1 class="text-2xl font-black">مالی</h1>
-            </div>
-          </div>
-          <div
-            class="rounded-2xl border border-french-gray/30 bg-white px-4 py-3 text-sm"
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
           >
-            <span id="financeToday">—</span
-            ><span
-              id="financeClock"
-              class="mr-4 font-bold text-persian-blue"
-              dir="ltr"
-              >—</span
-            >
-          </div>
-          <div class="flex gap-2">
-            <button
-              id="recordIncome"
-              type="button"
-              class="finance-button bg-eucalyptus text-white"
-            >
-              + ثبت درآمد
-            </button>
-            <button
-              id="recordExpense"
-              type="button"
-              class="finance-button bg-alizarin-crimson text-white"
-            >
-              − ثبت هزینه
-            </button>
-          </div>
-        </header>
-        <div
-          id="financeNotice"
-          class="mt-4 hidden rounded-xl bg-eucalyptus/10 p-4 text-sm text-eucalyptus"
-          role="status"
-        ></div>
-        <div
-          id="financeError"
-          class="mt-4 hidden rounded-xl bg-alizarin-crimson/10 p-4 text-sm text-alizarin-crimson"
-          role="alert"
+            <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+          </svg>
+          <span>درآمد</span>
+        </button>
+        <button
+          id="recordExpense"
+          type="button"
+          class="orders-create"
+          aria-label="ثبت هزینه"
+          title="ثبت هزینه"
+          disabled
         >
-          <span id="financeErrorText"></span
-          ><button
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" d="M5 12h14" />
+          </svg>
+          <span>هزینه</span>
+        </button>
+        <div id="financeError" class="hidden">
+          <button
             id="retryFinance"
             type="button"
-            class="finance-button mr-2 border border-alizarin-crimson/30"
+            class="finance-button border border-alizarin-crimson/30"
           >
             تلاش مجدد
           </button>
         </div>
-        <div class="mt-7 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <h2 class="font-bold">
             خلاصه مالی <span id="selectedDateLabel">—</span>
           </h2>

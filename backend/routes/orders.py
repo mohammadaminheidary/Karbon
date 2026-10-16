@@ -5,9 +5,22 @@ from database import get_database
 from security.auth import get_current_user
 from routes.finance import finance_errors
 from schemas.order_schema import OrderWrite, ProductWrite, ProductEdit
+from schemas.finance_schema import FinanceDelete
 from services import order_service as service
 
 router = APIRouter(prefix="/api", tags=["Orders"], dependencies=[Depends(get_current_user)])
+
+
+@router.get("/settings/invoices")
+def invoices(search: str = Query("", max_length=200), skip: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100), db: Session = Depends(get_database)):
+    with finance_errors():
+        return service.list_invoices(db, search, skip, limit)
+
+
+@router.delete("/orders/{order_id}/invoice")
+def delete_invoice(data: FinanceDelete, order_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database), user=Depends(get_current_user)):
+    with finance_errors():
+        return service.delete_invoice(db, order_id, data, user)
 
 
 @router.get("/products")
@@ -20,6 +33,12 @@ def products(include_inactive: bool = False, db: Session = Depends(get_database)
 def edit_product(data: ProductEdit, product_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database)):
     with finance_errors():
         return service.save_product(db, data, product_id)
+
+
+@router.delete("/products/{product_id}")
+def delete_product(data: FinanceDelete, product_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database), user=Depends(get_current_user)):
+    with finance_errors():
+        return service.delete_product(db, product_id, data, user)
 
 
 @router.get("/orders/{order_id}/invoice")

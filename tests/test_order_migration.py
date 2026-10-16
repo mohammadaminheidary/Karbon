@@ -40,6 +40,7 @@ DROP TRIGGER permanent_invoice_code;
 DROP TRIGGER permanent_invoice_snapshot;
 UPDATE orders SET invoice_code='INV-legacy-code';
 ALTER TABLE orders DROP COLUMN invoice_snapshot;
+ALTER TABLE orders DROP COLUMN deleted_at;
 CREATE TABLE products_old (id INTEGER PRIMARY KEY AUTOINCREMENT,name VARCHAR(150) NOT NULL UNIQUE,unit VARCHAR(30) NOT NULL,price BIGINT NOT NULL,stock INTEGER,active BOOLEAN NOT NULL);
 INSERT INTO products_old SELECT id,name,unit,price,stock,active FROM products;
 DROP TABLE products;
@@ -62,3 +63,4 @@ initialize_order_storage(engine)
                 self.assertEqual(final["items"][0]["product_code"],"P-000003")
                 self.assertEqual(db.execute("SELECT product_code,revision,stock FROM products").fetchone(),("P-000003",1,8))
                 self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(),[])
+                self.assertIsNone(db.execute("SELECT deleted_at FROM orders").fetchone()[0])

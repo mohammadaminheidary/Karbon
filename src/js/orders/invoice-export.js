@@ -2,6 +2,7 @@ import { Dialog } from "../components/dialog.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
+import { onExternalDataChange } from "../components/data-events.js";
 
 const WIDTH = 794,
   HEIGHT = 1123,
@@ -379,6 +380,7 @@ function download(blob, name) {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
+let currentInvoiceId;
 let root,
   dialog,
   pages = [],
@@ -400,6 +402,13 @@ function setup() {
       version++;
     },
   });
+  const refresh = () => {
+    if (!document.hidden && root.getAttribute("aria-hidden") === "false")
+      showFinalInvoice(currentInvoiceId);
+  };
+  onExternalDataChange(refresh);
+  document.addEventListener("visibilitychange", refresh);
+  window.addEventListener("pageshow", (event) => { if (event.persisted) refresh(); });
   const print = node("div");
   print.id = "invoicePrintPages";
   document.body.append(print);
@@ -409,42 +418,44 @@ function setup() {
   for (const [id, callback] of [
     [
       "pdfFinalInvoice",
-      async () => {
-        download(
-          await invoicePdf(pages),
-          `invoice-${invoice.invoice_code}.pdf`,
-        );
+      async (current) => {
+        const name = `invoice-${invoice.invoice_code}.pdf`;
+        const blob = await invoicePdf(pages);
+        if (current === version) download(blob, name);
       },
     ],
     [
       "imageFinalInvoice",
-      async () => {
+      async (current) => {
+        const code = invoice.invoice_code;
         const image = await invoiceImages(
           pages,
-          `invoice-${invoice.invoice_code}`,
+          `invoice-${code}`,
         );
-        download(
+        if (current === version) download(
           image.blob,
-          `invoice-${invoice.invoice_code}.${image.extension}`,
+          `invoice-${code}.${image.extension}`,
         );
       },
     ],
   ])
     root.querySelector(`#${id}`).addEventListener("click", async () => {
       if (exporting || !pages.length) return;
+      const current = version;
       exporting = true;
       setButtons(true);
       root.querySelector("#finalInvoiceStatus").textContent =
         "در حال تولید خروجی…";
       try {
-        await callback();
-        root.querySelector("#finalInvoiceStatus").textContent =
-          "خروجی آماده شد.";
+        await callback(current);
+        if (current === version)
+          root.querySelector("#finalInvoiceStatus").textContent = "خروجی آماده شد.";
       } catch (error) {
-        root.querySelector("#finalInvoiceStatus").textContent = error.message;
+        if (current === version)
+          root.querySelector("#finalInvoiceStatus").textContent = error.message;
       } finally {
         exporting = false;
-        setButtons(false);
+        setButtons(!pages.length);
       }
     });
 }
@@ -461,12 +472,14 @@ function setButtons(disabled) {
 }
 export async function showFinalInvoice(orderId) {
   setup();
+  currentInvoiceId = orderId;
   const current = ++version;
   pages = [];
   setButtons(true);
   urls.forEach(URL.revokeObjectURL);
   urls = [];
   root.querySelector("#finalInvoicePages").replaceChildren();
+  root.querySelector("#finalInvoiceAccessible").textContent = "";
   document.getElementById("invoicePrintPages").replaceChildren();
   root.querySelector("#finalInvoiceStatus").textContent =
     "در حال دریافت فاکتور ذخیره‌شده…";

@@ -1,4 +1,4 @@
-from sqlalchemy import String, cast, exists, func, or_, select, text
+from sqlalchemy import String, case, cast, exists, func, or_, select, text
 from sqlalchemy.orm import object_session
 
 from models.customer import Customer, utc_now
@@ -29,11 +29,11 @@ class CustomerHasOrders(Exception):
 def get_summary(db, customer_id):
     """Compute invoice totals and receipts from their authoritative records."""
     summary = CustomerSummary()
-    count, total = db.query(func.count(Order.id), func.coalesce(func.sum(Order.subtotal - Order.discount), 0)).filter(Order.customer_id == customer_id).one()
+    count, total = db.query(func.count(Order.id), func.coalesce(func.sum(Order.subtotal - Order.discount), 0)).filter(Order.customer_id == customer_id, Order.deleted_at.is_(None)).one()
     summary.order_count = count
     summary.total_orders = int(total)
     summary.paid = int(db.query(func.coalesce(func.sum(FinancialTransaction.amount), 0)).join(
-        OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id).join(Order, Order.id == OrderPayment.order_id).filter(Order.customer_id == customer_id).scalar())
+        OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id).join(Order, Order.id == OrderPayment.order_id).filter(Order.customer_id == customer_id, Order.deleted_at.is_(None)).scalar())
     summary.available = True
     summary.debt = summary.total_orders - summary.paid
     summary.status = (
@@ -63,6 +63,28 @@ def phone_values():
 
 def list_customers(db, search="", skip=0, limit=50):
     query = db.query(Customer).filter(Customer.deleted_at.is_(None))
+    # Match get_summary's debt/status rules across all customers, independently
+    # of the visible search results and pagination. Aggregate payments separately
+    # so multiple receipts cannot multiply an order's invoice total.
+    orders = db.query(
+        Order.customer_id.label("customer_id"),
+        func.count(Order.id).label("order_count"),
+        func.sum(Order.subtotal - Order.discount).label("total"),
+    ).filter(Order.deleted_at.is_(None)).group_by(Order.customer_id).subquery()
+    payments = db.query(
+        Order.customer_id.label("customer_id"),
+        func.sum(FinancialTransaction.amount).label("paid"),
+    ).select_from(FinancialTransaction).join(
+        OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id,
+    ).join(Order, Order.id == OrderPayment.order_id).filter(Order.deleted_at.is_(None)).group_by(Order.customer_id).subquery()
+    debt = func.coalesce(orders.c.total, 0) - func.coalesce(payments.c.paid, 0)
+    counts = query.outerjoin(orders, orders.c.customer_id == Customer.id).outerjoin(
+        payments, payments.c.customer_id == Customer.id,
+    ).with_entities(
+        func.count(Customer.id),
+        func.coalesce(func.sum(case((debt > 0, 1), else_=0)), 0),
+        func.coalesce(func.sum(case(((debt <= 0) & (orders.c.order_count > 0), 1), else_=0)), 0),
+    ).one()
     search = normalize_text(search).lower()
     if search:
         # Escape LIKE wildcards so searches are literal and parameterized.
@@ -80,7 +102,8 @@ def list_customers(db, search="", skip=0, limit=50):
         ))
     total = query.count()
     items = query.order_by(Customer.id.desc()).offset(skip).limit(limit).all()
-    return {"items": [serialize_customer(item) for item in items], "total": total, "skip": skip, "limit": limit}
+    return {"items": [serialize_customer(item) for item in items], "total": total, "skip": skip, "limit": limit,
+            "total_customers": counts[0], "unsettled_customers": counts[1], "settled_customers": counts[2]}
 
 
 def next_code(db):
@@ -140,14 +163,14 @@ def delete_customer(db, customer_id):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         customer = get_customer(db, customer_id)
-        if db.query(Order.id).filter(Order.customer_id == customer_id).first():
+        if db.query(Order.id).filter(Order.customer_id == customer_id, Order.deleted_at.is_(None)).first():
             raise CustomerHasOrders()
         linked = db.query(FinancialTransaction).filter(FinancialTransaction.customer_id == customer_id)
         remaining = linked.filter(FinancialTransaction.deleted_at.is_(None)).count()
         if remaining:
             raise CustomerHasTransactions(remaining)
-        if linked.first():
-            # Retain the foreign key and retry UUIDs of deleted financial rows.
+        if linked.first() or db.query(Order.id).filter(Order.customer_id == customer_id).first():
+            # Retain foreign keys and retry IDs of deleted receipts/invoices.
             customer.deleted_at = utc_now()
             customer.updated_at = customer.deleted_at
             customer.customer_code = -customer.id

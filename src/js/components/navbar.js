@@ -99,7 +99,7 @@ const template = `
           </svg>
       <span class="navbar-tooltip" aria-hidden="true">ورودی اعضا</span>
     </a>
-    <a href="#" class="navbar-item" aria-label="کارهای روزانه">
+    <a href="/page/daily-tasks-page.html" class="navbar-item" aria-label="کارهای روزانه">
       <svg
             class="navbar-icon" aria-hidden="true"
             fill="none"

@@ -31,17 +31,22 @@
   font-weight: 600;
 }
 .bank-account {
+  /* Keep the current card width and content scale at every breakpoint. */
+  --bank-card-scale: 0.9;
+  width: calc(100% * var(--bank-card-scale));
+  zoom: var(--bank-card-scale);
+  justify-self: center;
+  position: relative;
+  isolation: isolate;
   display: block;
   min-width: 0;
-  overflow: hidden;
   border-radius: 16px;
   transition: transform 0.15s ease;
 }
 .bank-account:hover {
   transform: translateY(-3px);
 }
-.bank-account:focus-visible,
-.bank-balance-summary:focus-visible {
+.bank-account:focus-visible {
   outline: 2px solid #1e40af;
   outline-offset: 4px;
 }
@@ -82,9 +87,12 @@
 .bank-card-face {
   position: relative;
   overflow: hidden;
-  padding: 24px;
-  color: white;
-  background: linear-gradient(125deg, #0f172a 0%, #1e40af 100%);
+  border-radius: inherit;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px;
+  height: 100%;
+  color: var(--color-mirage);
 }
 .bank-card-face::before,
 .bank-card-face::after {
@@ -92,7 +100,7 @@
   position: absolute;
   width: 240px;
   height: 240px;
-  border: 1px solid #ffffff15;
+  border: 1px solid rgb(30 64 175 / 8%);
   border-radius: 50%;
   left: -110px;
   top: 40px;
@@ -127,7 +135,7 @@
   display: block;
   width: 38px;
   height: 29px;
-  margin: 20px 0 16px auto;
+  margin: 8px 0 8px auto;
   border-radius: 7px;
   border: 1px solid #f59e0b66;
   background:
@@ -165,10 +173,10 @@
 }
 .bank-sheba {
   position: relative;
-  margin-top: 12px;
+  margin-top: 8px;
   font-size: 12px;
   letter-spacing: 0.01em;
-  color: #ffffffbb;
+  color: rgb(15 23 42 / 55%);
   text-align: left;
   overflow-wrap: anywhere;
 }

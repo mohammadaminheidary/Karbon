@@ -17,174 +17,45 @@
     <!-- ==================== Main Content ==================== -->
     <!-- ==================== Main Content ==================== -->
     <main class="min-h-screen navigation-content bg-alabaster">
-      <div class="mx-auto w-full max-w-[1700px] px-7 py-7 xl:px-9">
-        <!-- ==================== Top Header ==================== -->
-        <header
-          class="flex flex-col gap-6 border-b border-french-gray/30 pb-6 xl:flex-row xl:items-center xl:justify-between"
-        >
-          <!-- Page Identity -->
-          <div class="flex items-center gap-4">
-            <div
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-persian-blue text-white shadow-sm"
-            >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
-                />
-
-                <circle cx="9" cy="7" r="4" />
-
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M17 11h5M19.5 8.5v5"
-                />
-              </svg>
-            </div>
-
-            <div>
-              <div
-                class="mb-1 flex items-center gap-2 text-xs font-medium text-mirage/40"
-              >
-                <span>اعضا</span>
-                <span>/</span>
-                <span class="text-persian-blue"> حضور و غیاب </span>
-              </div>
-
-              <h1 class="text-2xl font-black tracking-tight text-mirage">
-                ورودی اعضا
-              </h1>
-
-              <p class="mt-1.5 text-sm text-mirage/50">
-                مدیریت وضعیت روزانه حضور و غیبت اعضا
-              </p>
-            </div>
-          </div>
-
-          <!-- Date / Time -->
-          <div class="flex flex-wrap items-stretch gap-2">
-            <!-- Persian Date -->
-            <div
-              class="flex min-w-44 flex-col justify-center rounded-xl border border-french-gray/30 bg-white px-4 py-3"
-            >
-              <span class="text-[11px] font-medium text-mirage/40">
-                امروز
-              </span>
-
-              <span
-                id="attendancePersianDate"
-                class="mt-1 text-sm font-bold text-mirage"
-              >
-                --
-              </span>
-            </div>
-
-            <!-- Day Number -->
-            <div
-              class="flex min-w-28 flex-col justify-center rounded-xl border border-french-gray/30 bg-white px-4 py-3"
-            >
-              <span class="text-[11px] font-medium text-mirage/40">
-                روز ماه
-              </span>
-
-              <span
-                id="attendanceMonthDay"
-                class="mt-1 text-sm font-bold text-mirage"
-              >
-                --
-              </span>
-            </div>
-
-            <!-- Clock -->
-            <div
-              class="flex min-w-36 flex-col justify-center rounded-xl bg-mirage px-4 py-3 text-white"
-            >
-              <span class="text-[11px] font-medium text-white/50"> ساعت </span>
-
-              <span
-                id="attendanceClock"
-                dir="ltr"
-                class="mt-1 text-lg font-black tracking-wider"
-              >
-                --:--:--
-              </span>
-            </div>
-          </div>
-        </header>
-
+      <div class="mx-auto w-full max-w-[1700px] px-4 py-7 sm:px-7 xl:px-9">
+        <h1 class="sr-only">ورودی اعضا</h1>
         <!-- ==================== Calendar ==================== -->
         <section
           id="attendanceCalendarSection"
-          class="mt-6 overflow-hidden rounded-2xl border border-french-gray/30 bg-white shadow-sm"
+          class="rounded-2xl border border-french-gray/30 bg-white p-4 sm:p-5"
+          aria-label="تقویم حضور و غیاب"
         >
-          <!-- Calendar Header -->
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 class="font-bold">تقویم حضور و غیاب</h2>
+            <div class="flex flex-wrap gap-2">
+              <button
+                id="attendanceSelectToday"
+                type="button"
+                class="min-h-11 rounded-xl border border-french-gray/30 px-[18px] py-2.5 text-sm font-bold cursor-pointer"
+              >
+                امروز
+              </button>
+              <button
+                id="attendancePreviousDays"
+                type="button"
+                class="min-h-11 rounded-xl border border-french-gray/30 px-[18px] py-2.5 text-sm font-bold cursor-pointer"
+              >
+                روزهای قبل
+              </button>
+              <button
+                id="attendanceNextDays"
+                type="button"
+                class="min-h-11 rounded-xl border border-french-gray/30 px-[18px] py-2.5 text-sm font-bold cursor-pointer"
+              >
+                روزهای بعد
+              </button>
+            </div>
+          </div>
           <div
-            class="flex items-center justify-between border-b border-french-gray/25 px-5 py-4"
-          >
-            <div class="flex items-center gap-3">
-              <div
-                class="flex h-9 w-9 items-center justify-center rounded-xl bg-persian-blue/10 text-persian-blue"
-              >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  viewBox="0 0 24 24"
-                >
-                  <rect x="3" y="4" width="18" height="17" rx="2" />
-
-                  <path stroke-linecap="round" d="M8 2v4M16 2v4M3 9h18" />
-                </svg>
-              </div>
-
-              <div>
-                <h2 class="text-sm font-black text-mirage">
-                  تقویم حضور و غیاب
-                </h2>
-
-                <p class="mt-0.5 text-xs text-mirage/40">وضعیت روزهای اخیر</p>
-              </div>
-            </div>
-
-            <div
-              class="hidden items-center gap-4 text-[11px] font-medium text-mirage/45 sm:flex"
-            >
-              <div class="flex items-center gap-1.5">
-                <span class="h-2 w-2 rounded-full bg-eucalyptus"></span>
-
-                <span> حاضر </span>
-              </div>
-
-              <div class="flex items-center gap-1.5">
-                <span class="h-2 w-2 rounded-full bg-alizarin-crimson"></span>
-
-                <span> غایب </span>
-              </div>
-            </div>
-          </div>
-          <!-- Calendar Content -->
-          <div class="p-4">
-            <div
-              id="attendanceCalendar"
-              class="overflow-x-auto scroll-smooth pb-2"
-            >
-              <div
-                id="attendanceCalendarTrack"
-                class="flex w-max min-w-full gap-3"
-              >
-                <!-- Days render with JavaScript -->
-              </div>
-            </div>
-          </div>
+            id="attendanceCalendarTrack"
+            class="flex gap-3 overflow-x-auto pb-3"
+            aria-label="انتخاب روز"
+          ></div>
         </section>
 
         <!-- ==================== Members ==================== -->

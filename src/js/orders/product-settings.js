@@ -1,3 +1,4 @@
+import { confirmFinanceDelete } from "../finance/delete-dialog.js";
 import { financeRequest } from "../finance/finance-api.js";
 import {
   node,
@@ -26,6 +27,8 @@ function reset() {
 function message(text, failed = false) {
   $("settingsProductMessage").textContent = text;
   $("settingsProductMessage").hidden = !text;
+  $("settingsProductMessage").dataset.failed = String(failed);
+  $("settingsProductMessage").setAttribute("role", failed ? "alert" : "status");
   $("settingsProductMessage").style.color = failed
     ? "var(--color-alizarin-crimson)"
     : "var(--color-eucalyptus)";
@@ -41,12 +44,15 @@ async function load() {
     $("settingsProductsStatus").textContent = products.length
       ? `${formatNumber(products.length)} کالا`
       : "هنوز کالایی ثبت نشده است.";
+    if (editing && !products.some((product) => product.id === editing.id))
+      reset();
     $("settingsProductsList").replaceChildren(
       ...products.map((product) => {
         const card = node(
           "article",
           "flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-french-gray/30 bg-white p-5",
         );
+        card.dataset.productId = product.id;
         const identity = node("div", "min-w-0");
         identity.append(
           node(
@@ -80,13 +86,61 @@ async function load() {
           message("");
           $("settingsProductName").focus();
         });
-        card.append(identity, edit);
+        const remove = node(
+          "button",
+          "finance-button text-alizarin-crimson",
+          "حذف کالا",
+        );
+        remove.type = "button";
+        remove.setAttribute("aria-label", `حذف کالا ${product.name}`);
+        remove.disabled = product.can_delete === false;
+        remove.classList.toggle("finance-delete-blocked", remove.disabled);
+        remove.title = remove.disabled
+          ? "کالای استفاده‌شده در سفارش حذف‌نشده قابل حذف نیست؛ می‌توانید آن را غیرفعال کنید."
+          : "حذف کالا بدون سابقه سفارش";
+        remove.addEventListener("click", () => {
+          if (saving || remove.disabled) return;
+          confirmFinanceDelete({
+            path: `/products/${product.id}`,
+            description: `کالا «${product.product_code} · ${product.name}» حذف شود؟ این عملیات قابل بازگشت نیست. کالاهای استفاده‌شده در سفارش حذف‌نشده قابل حذف نیستند.`,
+            onDeleted: async () => {
+              if (editing?.id === product.id) reset();
+              document
+                .querySelector(`[data-product-id="${product.id}"]`)
+                ?.remove();
+              message("کالا با موفقیت حذف شد.");
+              if ((await load()) === false) {
+                message(
+                  "کالا حذف شد، اما دریافت فهرست انجام نشد. برای تلاش مجدد «بروزرسانی» را انتخاب کنید.",
+                  true,
+                );
+              }
+            },
+          });
+        });
+        if (remove.disabled) {
+          identity.append(
+            node(
+              "p",
+              "mt-2 text-xs text-mirage/60",
+              "این کالا در سفارش حذف‌نشده استفاده شده؛ برای خارج کردن از فهرست سفارش، آن را غیرفعال کنید.",
+            ),
+          );
+        }
+        const actions = node("div", "flex flex-wrap gap-2");
+        actions.append(edit, remove);
+        card.append(identity, actions);
         return card;
       }),
     );
+    if ($("settingsProductMessage").dataset.failed === "true") message("");
+    return true;
   } catch (error) {
-    if (current === version)
+    if (current === version) {
       $("settingsProductsStatus").textContent = error.message;
+      message(error.message, true);
+    }
+    return false;
   } finally {
     if (current === version) {
       $("refreshProducts").disabled = false;

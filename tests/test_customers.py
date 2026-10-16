@@ -98,7 +98,9 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(self.request("POST", "/login", {"username": "customers-test", "password": "wrong"}, False)[0], 401)
 
     def test_empty_create_and_persistence(self):
-        self.assertEqual(self.request("GET", "/customers")[1]["total"], 0)
+        empty = self.request("GET", "/customers")[1]
+        self.assertEqual(empty["total"], 0)
+        self.assertEqual((empty["total_customers"], empty["unsettled_customers"], empty["settled_customers"]), (0, 0, 0))
         preview = self.request("GET", "/customers/next-code")[1]["customer_code"]
         customer = self.create(first_name="  علي  ", last_name="  رضايي ", address="  تهران  ", notes="توضیحات", last_contact_date="2026-10-06")
         self.assertEqual(customer["customer_code"], preview)

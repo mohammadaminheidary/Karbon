@@ -18,6 +18,7 @@ class Product(Base):
     # NULL means a service / item whose inventory is not tracked.
     stock = Column(Integer, nullable=True)
     active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Order(Base):
@@ -37,6 +38,7 @@ class Order(Base):
     status = Column(String(12), nullable=False, default="active")
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     invoice_snapshot = Column(JSON, nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class OrderItem(Base):

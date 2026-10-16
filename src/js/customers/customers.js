@@ -2,6 +2,7 @@ import { onExternalDataChange } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
 import { createSpinner } from "../components/loader.js";
 import { getCustomers, getCustomer, deleteCustomer } from "./customer-api.js";
+import { disintegrateCustomerCard } from "./customer-card-animation.js";
 import {
   initializeCustomerModal,
   openCreateCustomerModal,
@@ -19,7 +20,8 @@ import {
 
 const get = (id) => document.getElementById(id);
 const PAGE_SIZE = 12;
-const DELETE_DELAY_MS = 10000;
+const DELETE_DELAY_MS = 4000;
+let onCustomerDeleted;
 let search = "",
   nextOffset = 0,
   total = 0,
@@ -158,6 +160,16 @@ function updateLoadMore() {
     `${formatNumber(total)} مشتری${search ? " در نتایج جستجو" : ""}`;
 }
 
+function updateCustomerSummary(data) {
+  for (const [id, value] of [
+    ["totalCustomersCount", data.total_customers],
+    ["unsettledCustomersCount", data.unsettled_customers],
+    ["settledCustomersCount", data.settled_customers],
+  ]) {
+    get(id).textContent = formatNumber(value);
+  }
+}
+
 async function loadCustomers({ visibleCount = PAGE_SIZE } = {}) {
   const current = ++requestId;
   listAbort?.abort();
@@ -179,6 +191,7 @@ async function loadCustomers({ visibleCount = PAGE_SIZE } = {}) {
       });
       if (current !== requestId) return;
       total = data.total;
+      updateCustomerSummary(data);
       for (const customer of data.items) {
         if (seenIds.has(customer.id)) continue;
         seenIds.add(customer.id);
@@ -216,6 +229,7 @@ async function loadMoreCustomers() {
     });
     if (current !== requestId) return;
     total = data.total;
+    updateCustomerSummary(data);
     nextOffset = data.items.length ? nextOffset + data.items.length : total;
     const existingIds = new Set(loadedCustomers.map((customer) => customer.id));
     const items = data.items.filter(
@@ -338,7 +352,7 @@ function openDelete() {
   if (!selectedCustomer) return;
   deletingCustomer = selectedCustomer;
   get("customerDeleteDescription").textContent =
-    `آیا مطمئن هستید که می‌خواهید «${fullName(deletingCustomer)}» با کد مشتری «${formatNumber(deletingCustomer.customer_code)}» را حذف کنید؟ پس از تأیید، ۱۰ ثانیه برای لغو حذف فرصت دارید.`;
+    `آیا مطمئن هستید که می‌خواهید «${fullName(deletingCustomer)}» با کد مشتری «${formatNumber(deletingCustomer.customer_code)}» را حذف کنید؟ پس از تأیید، ۴ ثانیه برای لغو حذف فرصت دارید.`;
   get("customerDeleteError").classList.add("hidden");
   get("customerDeleteCountdownBox").classList.add("hidden");
   get("confirmDeleteCustomerButton").disabled = false;
@@ -359,13 +373,17 @@ async function finalDelete() {
     document.createTextNode("در حال حذف..."),
   );
   try {
-    await deleteCustomer(deletingCustomer.id);
+    const deletedCustomer = deletingCustomer;
+    await deleteCustomer(deletedCustomer.id);
     deletingCustomer = null;
     selectedCustomer = null;
     deleteDialog.close();
     detailsDialog.close();
     detailsRequest++;
-    toast("مشتری با موفقیت حذف شد.");
+    onCustomerDeleted?.(deletedCustomer);
+    await disintegrateCustomerCard(
+      get("customersList").querySelector(`[data-customer-id="${deletedCustomer.id}"]`),
+    );
     await loadCustomers({
       visibleCount: Math.max(PAGE_SIZE, loadedCustomers.length),
     });
@@ -373,7 +391,7 @@ async function finalDelete() {
     get("customerDeleteError").textContent = error.message;
     get("customerDeleteError").classList.remove("hidden");
     get("customerDeleteCountdownBox").classList.add("hidden");
-    button.textContent = "تلاش مجدد با مهلت ۱۰ ثانیه";
+    button.textContent = "تلاش مجدد با مهلت ۴ ثانیه";
     button.disabled = false;
   } finally {
     deleteInFlight = false;
@@ -385,7 +403,7 @@ async function finalDelete() {
 function countdownTick() {
   if (!deleteDeadline || !deletingCustomer) return;
   // Use elapsed time instead of interval counts. Background tab throttling can
-  // delay deletion, but must never cause DELETE before the full ten seconds.
+  // delay deletion, but must never cause DELETE before the full four seconds.
   const remaining = Math.max(
     0,
     Math.ceil((deleteDeadline - performance.now()) / 1000),
@@ -412,7 +430,8 @@ function startDelete() {
   countdownTick();
 }
 
-export async function initializeCustomers() {
+export async function initializeCustomers({ onCreated, onDeleted } = {}) {
+  onCustomerDeleted = onDeleted;
   detailsDialog = new Dialog("customerDetailsModal", {
     onCancel: () => {
       detailsRequest++;
@@ -425,16 +444,13 @@ export async function initializeCustomers() {
   });
   initializeCustomerModal({
     onSaved: async (customer, edited) => {
-      toast(
-        edited
-          ? "اطلاعات مشتری با موفقیت ویرایش شد."
-          : "مشتری با موفقیت ثبت شد.",
-      );
+      if (edited) toast("اطلاعات مشتری با موفقیت ویرایش شد.");
       if (selectedCustomer?.id === customer.id) {
         selectedCustomer = customer;
         renderDetails(customer);
       }
       if (!edited) {
+        onCreated?.(customer);
         get("customerSearchInput").value = "";
         search = "";
         nextOffset = 0;
@@ -476,18 +492,6 @@ export async function initializeCustomers() {
     get("customerSearchInput").focus();
   });
   get("loadMoreCustomersButton").addEventListener("click", loadMoreCustomers);
-  const dateFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Tehran",
-  });
-  const updateDate = () => {
-    get("customersPersianDate").textContent = dateFormatter.format(new Date());
-  };
-  updateDate();
-  setInterval(updateDate, 60000);
   window.addEventListener("pagehide", () => {
     clearTimeout(deleteTimer);
     deleteDeadline = 0;

@@ -3,6 +3,7 @@ import concurrent.futures
 from contextlib import closing
 import sqlite3
 import unittest
+from urllib.parse import quote
 from uuid import uuid4, uuid5
 import test_customers as customer_tests
 from test_finance import bank_payload
@@ -76,6 +77,33 @@ class OrdersIntegrationTests(unittest.TestCase):
         summary = self.request("GET", f'/customers/{self.customer["id"]}')[1]["summary"]
         self.assertEqual((summary["total_orders"],summary["paid"],summary["debt"]),(4000,600,3400))
         self.assertEqual(self.request("GET","/orders?status=completed")[1]["items"],[])
+
+    def test_customer_summary_counts_ignore_search_and_pagination(self):
+        empty = self.request("GET", "/customers")[1]
+        self.assertEqual((empty["total_customers"], empty["unsettled_customers"], empty["settled_customers"]), (1, 0, 0))
+        settled = self.post("/customers", {"first_name": "تسویه", "last_name": "شده"})
+        free = self.post("/customers", {"first_name": "رایگان", "last_name": "شده"})
+        for index in range(12):
+            self.post("/customers", {"first_name": f"بدون سفارش {index}", "last_name": "آزمایشی"})
+        self.post("/orders", self.payload(payments=[{"method": "cash", "amount": 600}]))
+        self.post("/orders", self.payload(customer_id=settled["id"], payments=[
+            {"method": "cash", "amount": 1000},
+            {"method": "pos", "bank_id": self.bank["id"], "amount": 1000},
+        ]))
+        self.post("/orders", self.payload(customer_id=free["id"], discount=2500, payments=[]))
+        counts = self.request("GET", "/customers?limit=1")[1]
+        self.assertEqual((counts["total_customers"], counts["unsettled_customers"], counts["settled_customers"]), (15, 1, 2))
+        # A later unpaid invoice makes an otherwise settled customer indebted.
+        self.post("/orders", self.payload(customer_id=settled["id"], payments=[]))
+        for path in ["/customers?limit=12", "/customers?skip=12&limit=12", "/customers?search=رایگان", "/customers?search=missing"]:
+            result = self.request("GET", quote(path, safe="/?=&"))[1]
+            self.assertEqual((result["total_customers"], result["unsettled_customers"], result["settled_customers"]), (15, 2, 1))
+        customers = self.request("GET", "/customers?limit=100")[1]["items"]
+        self.assertEqual(sum(row["summary"]["status"] == "debtor" for row in customers), 2)
+        self.assertEqual(sum(row["summary"]["status"] == "settled" for row in customers), 1)
+        removed = customers[0]
+        self.assertEqual(self.request("DELETE", f'/customers/{removed["id"]}')[0], 204)
+        self.assertEqual(self.request("GET", "/customers")[1]["total_customers"], 14)
 
     def test_strict_validation_and_no_partial_writes(self):
         invalid = [

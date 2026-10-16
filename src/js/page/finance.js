@@ -1,6 +1,7 @@
 import { transactionActions } from "../finance/transaction-actions.js";
 import { onExternalDataChange } from "../components/data-events.js";
 import { initializeNavbar } from "../components/navbar.js";
+import { createNavbarNotification } from "../components/navbar-notification.js";
 import { bankLogo } from "../finance/bank-accounts.js";
 import { Dialog } from "../components/dialog.js";
 import { protectPage } from "../guards/auth-guard.js";
@@ -28,6 +29,10 @@ import {
 
 initializeNavbar();
 const $ = (id) => document.getElementById(id);
+const titleIsland = document.querySelector(".navbar-title-island");
+titleIsland.classList.add("orders-title-island");
+titleIsland.append($("recordIncome"), $("recordExpense"));
+const notifyFinance = createNavbarNotification(titleIsland);
 let selectedDay = todayKey(),
   calendarCenter = selectedDay;
 let dayController,
@@ -46,7 +51,7 @@ const dialog = new Dialog("transactionModal", {
 });
 
 function showError(error) {
-  $("financeErrorText").textContent = error.message;
+  notifyFinance(error.message);
   $("financeError").classList.remove("hidden");
 }
 
@@ -562,9 +567,7 @@ async function submitTransaction(event) {
   }
   if (!result) return;
   dialog.close();
-  $("financeNotice").textContent =
-    `${kind === "income" ? "درآمد" : "هزینه"} با موفقیت ثبت شد.`;
-  $("financeNotice").classList.remove("hidden");
+  notifyFinance(`${kind === "income" ? "درآمد" : "هزینه"} با موفقیت ثبت شد.`);
   calendarCenter = result.transaction_date;
   await Promise.all([
     selectDay(result.transaction_date),
@@ -582,6 +585,8 @@ async function initialize() {
   $("recordExpense").addEventListener("click", () =>
     openTransaction("expense"),
   );
+  $("recordIncome").disabled = false;
+  $("recordExpense").disabled = false;
   $("transactionSource").addEventListener("change", () => {
     const source = sources.find(
       (item) => item.id === Number($("transactionSource").value),
@@ -613,14 +618,6 @@ async function initialize() {
   let lastToday = todayKey();
   function tick() {
     const today = todayKey();
-    $("financeToday").textContent = fullDate(today);
-    $("financeClock").textContent = new Intl.DateTimeFormat("fa-IR", {
-      timeZone: "Asia/Tehran",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    }).format(new Date());
     if (today !== lastToday) {
       if (selectedDay === lastToday) {
         calendarCenter = today;

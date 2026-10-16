@@ -9,6 +9,7 @@
 
     <link rel="stylesheet" href="../src/output.css" />
     <link rel="stylesheet" href="../src/finance.css" />
+    <link rel="stylesheet" href="../src/orders.css" />
   </head>
 
   <body class="min-h-screen bg-alabaster text-mirage">
@@ -117,6 +118,10 @@
                   <span>کالاها</span>
                 </button>
 
+                <button type="button" data-settings-target="invoices" class="settings-nav-button flex items-center gap-3 rounded-xl px-3.5 py-3 text-right text-sm font-bold transition-all">
+                  <span>فاکتورها</span>
+                </button>
+
                 <button
                   type="button"
                   data-settings-target="security"
@@ -170,6 +175,19 @@
                   </button>
                 </div>
               </div>
+            </section>
+
+            <section data-settings-panel="invoices" class="finance-surface hidden min-w-0 w-full max-w-full">
+              <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <h2 class="text-xl font-black">فاکتورهای مشتریان</h2>
+                <button id="refreshInvoices" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button>
+              </div>
+              <label for="settingsInvoicesSearch" class="sr-only">جستجوی مشتری یا فاکتور</label>
+              <input id="settingsInvoicesSearch" type="search" maxlength="200" autocomplete="off" class="finance-field" placeholder="نام یا کد مشتری، کد فاکتور یا شماره سفارش…" />
+              <p id="settingsInvoicesMessage" class="mt-4 text-sm text-eucalyptus" role="status"></p>
+              <p id="settingsInvoicesStatus" class="mt-4 text-sm text-mirage/60" role="status"></p>
+              <div id="settingsInvoicesList" class="mt-4 space-y-4"></div>
+              <button id="settingsInvoicesMore" type="button" class="finance-button mt-5 border border-french-gray/40" hidden>نمایش بیشتر</button>
             </section>
 
             <section

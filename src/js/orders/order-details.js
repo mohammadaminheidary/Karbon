@@ -3,9 +3,11 @@ import { financeRequest } from "../finance/finance-api.js";
 import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { showFinalInvoice } from "./invoice-export.js";
+import { onExternalDataChange } from "../components/data-events.js";
 
 let root,
   dialog,
+  currentOrderId,
   version = 0;
 const methodNames = {
   pos: "کارت‌خوان",
@@ -31,6 +33,13 @@ function setup() {
       version++;
     },
   });
+  const refresh = () => {
+    if (!document.hidden && root.getAttribute("aria-hidden") === "false")
+      showOrderDetails(currentOrderId);
+  };
+  onExternalDataChange(refresh);
+  document.addEventListener("visibilitychange", refresh);
+  window.addEventListener("pageshow", (event) => { if (event.persisted) refresh(); });
 }
 function section(title) {
   const block = node("section", "orders-detail-section");
@@ -142,6 +151,7 @@ function render(order) {
 }
 export async function showOrderDetails(orderId) {
   setup();
+  currentOrderId = orderId;
   const current = ++version;
   $("orderDetailsTitle").textContent = "جزئیات سفارش";
   $("orderDetailsStatus").textContent = "در حال دریافت جزئیات سفارش…";

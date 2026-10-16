@@ -120,6 +120,39 @@ html {
   color: rgb(15 23 42 / 70%);
 }
 
+.navbar-title-island:has(> .navbar-notification) > .navbar-page-title {
+  transition: opacity 180ms ease-out;
+}
+
+.navbar-title-island:has(> .navbar-notification) > .orders-create {
+  transition: opacity 180ms ease-out, background 160ms, transform 160ms;
+}
+
+.navbar-notification {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 8px;
+  color: var(--color-persian-blue);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.navbar-notifying > .navbar-page-title,
+.navbar-notifying > .orders-create {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.navbar-notifying > .navbar-notification {
+  opacity: 1;
+}
+
 /* The glass can stretch without resizing the icon layout or its hit targets. */
 .navbar-glass {
   position: absolute;
@@ -344,6 +377,10 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .navbar-title-island:has(> .navbar-notification) > .navbar-page-title,
+  .navbar-title-island:has(> .navbar-notification) > .orders-create {
+    transition: none;
+  }
   .navbar-dock {
     animation: none;
   }
