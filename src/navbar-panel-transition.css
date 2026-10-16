@@ -1,0 +1,33 @@
+.navbar-transition-panel[data-morph="preparing"] {
+  visibility: hidden;
+}
+.navbar-transition-panel[data-morph="preparing"]::backdrop,
+.navbar-transition-panel[data-morph="closing"]::backdrop {
+  background: transparent;
+}
+.navbar-transition-panel::backdrop {
+  transition: background 300ms ease;
+}
+.document-dock-morphing .navbar-items {
+  visibility: visible !important;
+}
+.document-dock-morphing {
+  pointer-events: none;
+}
+.document-dock-morphing .navbar-glass {
+  will-change: width, height, left, top;
+}
+.document-dock-morphing #mainNavbar > .navbar-glass {
+  right: auto;
+  bottom: auto;
+}
+.document-dock-open {
+  visibility: hidden;
+}
+
+.bottom-curtain.navbar-registration-panel {
+  inset: auto auto var(--task-curtain-bottom, 18px)
+    var(--task-curtain-left, 16px);
+  width: min(1100px, calc(100vw - 32px));
+  padding: 0;
+}

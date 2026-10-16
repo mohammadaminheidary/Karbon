@@ -5,16 +5,24 @@ function syncBackground() {
   const top = stack.at(-1);
   if (!top) {
     previousInert.forEach((value, element) => {
-      element.inert = value;
+      element.inert =
+        element.tagName === "DIALOG" && element.open ? false : value;
     });
     previousInert.clear();
-    document.body.classList.remove("overflow-hidden");
+    if (!document.querySelector("dialog[open]"))
+      document.body.classList.remove("overflow-hidden");
+    return;
+  }
+  // Native dialogs provide their own top-layer focus and background isolation.
+  if (top.root.tagName === "DIALOG") {
+    document.body.classList.add("overflow-hidden");
     return;
   }
   for (const element of document.body.children) {
     if (element.tagName === "SCRIPT") continue;
     if (!previousInert.has(element)) previousInert.set(element, element.inert);
-    element.inert = element !== top.root;
+    element.inert =
+      element !== top.root && !(element.tagName === "DIALOG" && element.open);
   }
   document.body.classList.add("overflow-hidden");
 }
@@ -80,6 +88,10 @@ export class Dialog {
     this.root.classList.remove("hidden");
     this.root.classList.add("flex");
     this.root.setAttribute("aria-hidden", "false");
+    if (this.root.tagName === "DIALOG") {
+      this.root.inert = false;
+      if (!this.root.open) this.root.showModal();
+    }
     syncBackground();
     requestAnimationFrame(() => {
       this.panel.classList.remove("scale-95", "opacity-0");
@@ -101,6 +113,7 @@ export class Dialog {
     this.panel.classList.remove("scale-100", "opacity-100");
     this.panel.classList.add("scale-95", "opacity-0");
     this.root.setAttribute("aria-hidden", "true");
+    if (this.root.tagName === "DIALOG") this.root.close();
     syncBackground();
     this.root.inert = true;
     if (

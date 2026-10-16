@@ -1,3 +1,4 @@
+import { CurtainDialog } from "../components/curtain-dialog.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { createNavbarNotification } from "../components/navbar-notification.js";
 import { onExternalDataChange } from "../components/data-events.js";
@@ -25,10 +26,19 @@ const titleIsland = document.querySelector(".navbar-title-island");
 titleIsland.classList.add("orders-title-island");
 titleIsland.append($("addTask"));
 const notify = createNavbarNotification(titleIsland);
-const navbar = $("mainNavbar");
 const curtain = $("taskCurtain");
 const details = $("taskDetails");
-navbar.append(curtain);
+const formDialog = new CurtainDialog("taskCurtain", {
+  canClose: () => !saving,
+  onCancel: () => {
+    closing = true;
+  },
+  restoreFocus: () => $(`task-card-${editingId}`) || $("addTask"),
+  onClosed: () => {
+    closing = false;
+    editingId = null;
+  },
+});
 const labels = {
   todo: "برای انجام",
   in_progress: "در حال انجام",
@@ -257,17 +267,6 @@ async function loadTasks() {
   }
 }
 
-function positionCurtain() {
-  const rect = navbar.getBoundingClientRect();
-  curtain.style.setProperty("--task-curtain-left", `${rect.left}px`);
-  curtain.style.setProperty("--task-curtain-width", `${rect.width}px`);
-  curtain.style.setProperty("--task-navbar-height", `${rect.height}px`);
-  curtain.style.setProperty(
-    "--task-curtain-bottom",
-    `${Math.max(12, window.innerHeight - rect.bottom)}px`,
-  );
-}
-
 function openForm(task = null) {
   if (curtain.open || closing) return;
   editingId = task?.id ?? null;
@@ -280,48 +279,17 @@ function openForm(task = null) {
   $("taskFormHeading").textContent = editingId ? "ویرایش کار" : "افزودن کار";
   $("submitTask").textContent = editingId ? "ذخیره تغییرات" : "ثبت";
   showError($("taskFormError"));
-  positionCurtain();
-  document.body.classList.add("task-form-open");
-  curtain.showModal();
-  // Measure the existing form at the navbar width, then reveal it upward from
-  // the navbar's own height without translating anything outside the viewport.
-  updateCurtainHeight();
-  curtain.classList.add("is-expanding");
-  $("taskTitle").focus({ preventScroll: true });
+  formDialog.open($("taskTitle"));
 }
 
 function updateCurtainHeight() {
-  const height = Math.min(
-    $("taskForm").scrollHeight,
-    window.innerHeight -
-      parseFloat(curtain.style.getPropertyValue("--task-curtain-bottom")) -
-      16,
-  );
-  curtain.style.setProperty("--task-form-height", `${height}px`);
+  formDialog.updateHeight();
 }
-
-curtain.addEventListener("animationend", (event) => {
-  if (event.target === curtain) curtain.classList.remove("is-expanding");
-});
 
 function closeForm() {
   if (saving || closing || !curtain.open) return;
   closing = true;
-  curtain.classList.add("is-closing");
-  const finish = () => {
-    clearTimeout(timer);
-    curtain.removeEventListener("animationend", finish);
-    curtain.close();
-    curtain.classList.remove("is-closing");
-    document.body.classList.remove("task-form-open");
-    closing = false;
-    ($(`task-card-${editingId}`) || $("addTask")).focus({
-      preventScroll: true,
-    });
-    editingId = null;
-  };
-  curtain.addEventListener("animationend", finish, { once: true });
-  const timer = setTimeout(finish, 250);
+  formDialog.close();
 }
 
 $("taskTitle").addEventListener("input", () =>
@@ -392,19 +360,9 @@ $("taskForm").addEventListener("submit", async (event) => {
     await loadTasks();
   }
 });
-curtain.addEventListener("cancel", (event) => {
-  event.preventDefault();
-  closeForm();
-});
 $("cancelTask").addEventListener("click", closeForm);
 $("addTask").addEventListener("click", () => openForm());
 $("refreshTasks").addEventListener("click", loadTasks);
-window.addEventListener("resize", () => {
-  if (curtain.open) {
-    positionCurtain();
-    updateCurtainHeight();
-  }
-});
 
 async function initialize() {
   if (!(await protectPage())) return;

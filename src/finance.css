@@ -1,3 +1,5 @@
+@import "./curtain.css";
+
 /* Finance-only components; existing pages keep their current styles. */
 .finance-surface .finance-button {
   min-height: 44px;

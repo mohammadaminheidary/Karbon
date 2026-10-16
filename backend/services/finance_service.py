@@ -11,6 +11,7 @@ from sqlalchemy.orm import object_session
 
 from config import APP_TIMEZONE
 from models.customer import Customer
+from models.document import DocumentAccount
 from models.finance import BankAccount, BankDirectory, ExpenseCategory, FinancialTransaction as Transaction
 from models.order import Order, OrderPayment, CASH_ACCOUNT_NUMBER
 from schemas.finance_schema import parse_jalali
@@ -176,6 +177,37 @@ def serialize(item, bank, directory=None):
     }
 
 
+def apply_transaction_fields(db, item, data, now=None):
+    """Validate references and apply a row without committing its owner's unit of work."""
+    existing = item.id is not None
+    bank = require(db, BankAccount, data.bank_id, "بانک", active=not existing or data.bank_id != item.bank_id)
+    if data.document_account_id is not None:
+        if item.document_id is None:
+            raise FinanceError("حساب مستقل سند فقط در ثبت سند قابل استفاده است.", 422)
+        unchanged = existing and data.document_account_id == item.document_account_id and data.kind == item.kind
+        source = require(db, DocumentAccount, data.document_account_id, "حساب سند", active=not unchanged, include_deleted=unchanged)
+        if source.kind != data.kind:
+            raise FinanceError("نوع ردیف با نوع حساب سند یکسان نیست.", 422)
+        item.title, item.account_code = source.title, source.code
+    else:
+        source_id = data.customer_id if data.kind == "income" else data.expense_category_id
+        unchanged = existing and data.kind == item.kind and source_id == (item.customer_id if item.kind == "income" else item.expense_category_id)
+        source = require(db, Customer if data.kind == "income" else ExpenseCategory, source_id,
+                         "مشتری" if data.kind == "income" else "عنوان هزینه",
+                         active=data.kind == "expense" and not unchanged, include_deleted=unchanged)
+        if not unchanged:
+            item.title = f"{source.first_name} {source.last_name}" if data.kind == "income" else source.title
+            item.account_code = str(source.customer_code) if data.kind == "income" else source.account_code
+    for key, value in data.model_dump(exclude={"request_id", "hour", "minute"}).items():
+        setattr(item, key, value)
+    if data.time_mode == "manual":
+        item.transaction_time = f"{data.hour:02d}:{data.minute:02d}:00"
+    elif not existing:
+        item.transaction_time = (now or datetime.now(APP_TIMEZONE)).strftime("%H:%M:%S")
+    item.updated_at = datetime.now(timezone.utc)
+    return bank
+
+
 def save_transaction(db, data):
     db.rollback()
     try:
@@ -195,19 +227,9 @@ def save_transaction(db, data):
             result = serialize(prior, bank, db.get(BankDirectory, bank.bank) if bank.bank else None)
             db.commit()
             return result
-        bank = require(db, BankAccount, data.bank_id, "بانک", active=True)
-        if data.kind == "income":
-            source = require(db, Customer, data.customer_id, "مشتری")
-            title = f"{source.first_name} {source.last_name}"
-            code = str(source.customer_code)
-        else:
-            source = require(db, ExpenseCategory, data.expense_category_id, "عنوان هزینه", active=True)
-            title, code = source.title, source.account_code
-        now = datetime.now(APP_TIMEZONE)
-        clock = now.strftime("%H:%M:%S") if data.time_mode == "auto" else f"{data.hour:02d}:{data.minute:02d}:00"
-        item = Transaction(**data.model_dump(exclude={"request_id", "hour", "minute"}), request_id=str(data.request_id),
-                           title=title, account_code=code, transaction_time=clock,
+        item = Transaction(request_id=str(data.request_id),
                            transaction_number=db.query(Transaction.id).filter(Transaction.deleted_at.is_(None)).count() + 1)
+        bank = apply_transaction_fields(db, item, data)
         db.add(item)
         db.flush()
         result = serialize(item, bank, db.get(BankDirectory, bank.bank) if bank.bank else None)
@@ -382,21 +404,9 @@ def edit_transaction(db, transaction_id, data):
         item = require(db, Transaction, transaction_id, "تراکنش")
         if db.query(OrderPayment.id).filter(OrderPayment.transaction_id == item.id).first():
             raise FinanceError("پرداخت متصل به فاکتور نهایی‌شده از دفتر مالی قابل ویرایش نیست.", 409)
-        bank = require(db, BankAccount, data.bank_id, "بانک", active=data.bank_id != item.bank_id)
-        source_id = data.customer_id if data.kind == "income" else data.expense_category_id
-        unchanged_source = data.kind == item.kind and source_id == (item.customer_id if item.kind == "income" else item.expense_category_id)
-        model = Customer if data.kind == "income" else ExpenseCategory
-        source = require(db, model, source_id, "مشتری" if data.kind == "income" else "عنوان هزینه",
-                         active=data.kind == "expense" and not unchanged_source, include_deleted=unchanged_source)
-        if not unchanged_source:
-            item.title = f"{source.first_name} {source.last_name}" if data.kind == "income" else source.title
-            item.account_code = str(source.customer_code) if data.kind == "income" else source.account_code
-        for key, value in data.model_dump(exclude={"hour", "minute"}).items():
-            setattr(item, key, value)
-        if data.time_mode == "manual":
-            item.transaction_time = f"{data.hour:02d}:{data.minute:02d}:00"
-        # Automatic time on edit retains the original recorded clock.
-        item.updated_at = datetime.now(timezone.utc)
+        if item.document_id is not None:
+            raise FinanceError("تراکنش متصل به سند را از بخش ثبت سند ویرایش کنید.", 409)
+        bank = apply_transaction_fields(db, item, data)
         db.flush()
         result = serialize(item, bank, db.get(BankDirectory, bank.bank) if bank.bank else None)
         db.commit()
@@ -413,6 +423,8 @@ def delete_finance_record(db, model, record_id, data, user):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         item = require(db, model, record_id, "اطلاعات", include_deleted=True)
+        if model is Transaction and item.document_id is not None:
+            raise FinanceError("تراکنش متصل به سند را با حذف یا ویرایش همان سند تغییر دهید.", 409)
         if model is Transaction and db.query(OrderPayment.id).filter(OrderPayment.transaction_id == item.id).first():
             raise FinanceError("پرداخت متصل به فاکتور نهایی‌شده قابل حذف نیست.", 409)
         if model is BankAccount and item.account_number == CASH_ACCOUNT_NUMBER:

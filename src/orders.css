@@ -1,3 +1,6 @@
+@import "./navbar-panel-transition.css";
+@import "./curtain.css";
+
 .orders-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
@@ -837,4 +840,32 @@
   .orders-record {
     transition: none;
   }
+}
+
+/* Create Order shares the native, navbar-anchored registration surface. */
+.orders-registration-panel > .orders-glass {
+  width: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  transition: none;
+  transform: none;
+  opacity: 1;
+}
+
+/* Keep duplicate confirmation above a native registration panel. */
+dialog.customer-duplicate-dialog {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+dialog.customer-duplicate-dialog::backdrop {
+  background: transparent;
 }

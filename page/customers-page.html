@@ -231,26 +231,14 @@
     </main>
 
     <!-- ==================== Customer Form Modal ==================== -->
-    <div
-      id="customerFormModal"
-      class="fixed inset-0 z-[90] hidden items-center justify-center p-4"
-      aria-hidden="true"
-    >
-      <!-- Overlay -->
-      <button
-        type="button"
-        data-dialog-close
-        class="absolute inset-0 h-full w-full bg-mirage/55 backdrop-blur-sm"
-        aria-label="بستن فرم مشتری"
-      ></button>
-
+    <dialog id="customerFormModal" class="bottom-curtain" aria-hidden="true">
       <!-- Dialog -->
       <div
         id="customerFormDialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="customerFormTitle"
-        class="relative z-10 flex max-h-[92vh] w-full max-w-3xl scale-95 flex-col overflow-hidden rounded-3xl bg-white opacity-0 shadow-2xl transition-all duration-200"
+        class="navbar-panel-content flex w-full flex-col"
       >
         <!-- Modal Header -->
         <header
@@ -531,7 +519,7 @@
           </footer>
         </form>
       </div>
-    </div>
+    </dialog>
     <div
       id="customerDetailsModal"
       class="fixed inset-0 z-[80] hidden items-center justify-center p-4"
@@ -585,9 +573,9 @@
         </footer>
       </section>
     </div>
-    <div
+    <dialog
       id="customerDuplicateModal"
-      class="fixed inset-0 z-[100] hidden items-center justify-center p-4"
+      class="customer-duplicate-dialog fixed inset-0 z-[100] hidden items-center justify-center p-4"
       aria-hidden="true"
     >
       <button
@@ -636,7 +624,7 @@
           </button>
         </div>
       </section>
-    </div>
+    </dialog>
     <div
       id="customerDeleteModal"
       class="fixed inset-0 z-[100] hidden items-center justify-center p-4"

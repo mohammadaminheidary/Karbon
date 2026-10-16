@@ -1,4 +1,5 @@
 import { Dialog } from "../components/dialog.js";
+import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { onExternalDataChange } from "../components/data-events.js";
 import { financeRequest, getBanks } from "../finance/finance-api.js";
 import { getCustomers, getCustomer } from "../customers/customer-api.js";
@@ -28,10 +29,16 @@ const today = () => formatJalaliInput(todayKey());
 const formatted = (value) => new Intl.NumberFormat("en-US").format(value);
 
 function modal(id, title, content, footer) {
-  const root = node("div", "orders-modal hidden");
+  const registration = id === "createOrderModal";
+  const root = node(
+    registration ? "dialog" : "div",
+    registration
+      ? "orders-modal bottom-curtain orders-registration-panel"
+      : "orders-modal hidden",
+  );
   root.id = id;
   root.setAttribute("aria-hidden", "true");
-  root.innerHTML = `<button type="button" class="orders-backdrop" data-dialog-close aria-label="انصراف"></button>
+  root.innerHTML = `${registration ? "" : '<button type="button" class="orders-backdrop" data-dialog-close aria-label="انصراف"></button>'}
     <section role="dialog" aria-modal="true" aria-labelledby="${id}Title" class="orders-glass scale-95 opacity-0">
       <header class="orders-dialog-header"><h2 id="${id}Title">${title}</h2><button type="button" class="orders-icon-button" data-dialog-close aria-label="بستن">×</button></header>
       <form novalidate><div class="orders-dialog-body">${content}<p class="orders-error" role="alert" hidden></p></div><footer class="orders-dialog-footer">${footer}</footer></form>
@@ -123,7 +130,7 @@ export function initializeOrderDialogs(onSaved) {
     });
   const amount = (input, zero = false) =>
     field(input, (value) => amountValue(value, { allowZero: zero }));
-  const createDialog = new Dialog(create.id, {
+  const createDialog = new NavbarPanelDialog(create.id, {
     canClose: () => !saving,
     onCancel: discard,
   });
@@ -547,9 +554,9 @@ export function initializeOrderDialogs(onSaved) {
       description: $("orderDescription").value.trim() || null,
     };
   }
-  create.querySelector("form").addEventListener("submit", (event) => {
+  create.querySelector("form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (loading || saving) return;
+    if (loading || saving || createDialog.closing) return;
     error(create);
     try {
       validateInvoice();
@@ -563,7 +570,7 @@ export function initializeOrderDialogs(onSaved) {
       }
       calculatePayments();
       error(payment);
-      createDialog.close();
+      await createDialog.close();
       openDialog(paymentDialog, $("paymentDate"));
     } catch (err) {
       error(create, err.message);
@@ -653,14 +660,19 @@ export function initializeOrderDialogs(onSaved) {
   }
   $("orderRetryLoad").addEventListener("click", loadReferences);
   const refreshReferences = () => {
-    if (!saving && !document.hidden && [create, payment].some(
-      (root) => root.getAttribute("aria-hidden") === "false",
-    )) loadReferences();
+    if (
+      !saving &&
+      !document.hidden &&
+      [create, payment].some(
+        (root) => root.getAttribute("aria-hidden") === "false",
+      )
+    )
+      loadReferences();
   };
   onExternalDataChange(refreshReferences);
   document.addEventListener("visibilitychange", refreshReferences);
   return async function openCreateOrder() {
-    if (saving) return;
+    if (saving || createDialog.active) return;
     if (submitted) {
       openDialog(paymentDialog);
       return;

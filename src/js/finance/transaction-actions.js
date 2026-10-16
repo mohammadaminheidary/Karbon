@@ -1,4 +1,4 @@
-import { Dialog } from "../components/dialog.js";
+import { CurtainDialog } from "../components/curtain-dialog.js";
 import { getCustomers } from "../customers/customer-api.js";
 import {
   financeRequest,
@@ -28,6 +28,16 @@ const $ = (id) => root.querySelector(`#edit${id}`);
 
 export function transactionActions(record, changed) {
   const cell = node("td", "p-4");
+  if (record.document_id) {
+    const link = node(
+      "a",
+      "text-xs font-bold text-persian-blue underline",
+      "مشاهده سند",
+    );
+    link.href = `/page/documents-page.html?document=${record.document_id}`;
+    cell.append(link);
+    return cell;
+  }
   if (record.invoice) {
     cell.append(node("span", "text-xs text-mirage/60", "پرداخت فاکتور"));
     cell.title = `${record.invoice.invoice_code} · مانده: ${money(record.invoice.remaining)}`;
@@ -70,12 +80,9 @@ export function transactionActions(record, changed) {
 }
 
 function createEditor() {
-  root = node(
-    "div",
-    "finance-surface fixed inset-0 z-[90] hidden items-center justify-center overflow-y-auto bg-mirage/50 p-4",
-  );
+  root = node("dialog", "bottom-curtain finance-surface");
   root.id = "financeEditModal";
-  root.innerHTML = `<section role="dialog" aria-modal="true" aria-labelledby="editTitle" class="my-auto w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl transition duration-200 scale-95 opacity-0">
+  root.innerHTML = `<section role="dialog" aria-modal="true" aria-labelledby="editTitle" class="curtain-content">
     <h2 id="editTitle" class="text-lg font-black">ویرایش تراکنش</h2>
     <form id="editForm" class="mt-5" novalidate>
       <fieldset id="editFields" class="grid gap-4 sm:grid-cols-2">
@@ -94,7 +101,7 @@ function createEditor() {
       <div class="mt-5 flex gap-3"><button id="editSave" type="submit" class="finance-button bg-persian-blue text-white">ذخیره تغییرات</button><button data-dialog-close type="button" class="finance-button border border-french-gray/40">انصراف</button></div>
     </form></section>`;
   document.body.append(root);
-  dialog = new Dialog(root.id, {
+  dialog = new CurtainDialog(root.id, {
     canClose: () => !saving,
     onCancel: () => {
       version++;

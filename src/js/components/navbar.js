@@ -117,7 +117,7 @@ const template = `
           </svg>
       <span class="navbar-tooltip" aria-hidden="true">کارهای روزانه</span>
     </a>
-    <a href="#" class="navbar-item" aria-label="ثبت سند">
+    <a href="/page/documents-page.html" class="navbar-item" aria-label="ثبت سند">
       <svg
             class="navbar-icon" aria-hidden="true"
             fill="none"

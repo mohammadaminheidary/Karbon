@@ -3,7 +3,7 @@ import { onExternalDataChange } from "../components/data-events.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { createNavbarNotification } from "../components/navbar-notification.js";
 import { bankLogo } from "../finance/bank-accounts.js";
-import { Dialog } from "../components/dialog.js";
+import { CurtainDialog } from "../components/curtain-dialog.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { logout } from "../auth/auth-storage.js";
 import { getCustomers } from "../customers/customer-api.js";
@@ -43,7 +43,7 @@ let kind = "income",
   saving = false,
   optionsReady = false;
 let requestId, requestFingerprint;
-const dialog = new Dialog("transactionModal", {
+const dialog = new CurtainDialog("transactionModal", {
   canClose: () => !saving,
   onCancel: () => {
     optionsVersion++;

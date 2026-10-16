@@ -199,22 +199,16 @@
         </div>
       </div>
     </main>
-    <div
+    <dialog
       id="transactionModal"
-      class="fixed inset-0 z-[90] hidden items-center justify-center overflow-y-auto bg-mirage/50 p-4 finance-surface"
+      class="bottom-curtain finance-surface"
       aria-hidden="true"
     >
-      <button
-        type="button"
-        data-dialog-close
-        class="absolute inset-0"
-        aria-label="بستن فرم"
-      ></button>
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="transactionModalTitle"
-        class="relative max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl transition-all duration-200 scale-95 opacity-0 sm:p-7"
+        class="curtain-content"
       >
         <div class="flex items-center justify-between">
           <h2 id="transactionModalTitle" class="text-xl font-black">
@@ -248,6 +242,45 @@
         </button>
         <form id="transactionForm" class="mt-5">
           <fieldset id="transactionFields" class="grid gap-4 sm:grid-cols-2">
+            <label
+              >تاریخ شمسی
+              <input
+                id="transactionDate"
+                class="finance-field"
+                inputmode="numeric"
+                dir="ltr"
+                placeholder="۱۴۰۵/۰۷/۱۴"
+                required
+            /></label>
+            <label
+              >ساعت
+              <select id="transactionTimeMode" class="finance-field">
+                <option value="auto">اتومات</option>
+                <option value="manual">دستی</option>
+              </select></label
+            >
+            <div id="manualTimeFields" class="hidden gap-4 sm:col-span-2">
+              <label class="flex-1"
+                >ساعت
+                <input
+                  id="transactionHour"
+                  class="finance-field"
+                  inputmode="numeric"
+                  maxlength="2"
+                  dir="ltr" /></label
+              ><label class="flex-1"
+                >دقیقه
+                <input
+                  id="transactionMinute"
+                  class="finance-field"
+                  inputmode="numeric"
+                  maxlength="2"
+                  dir="ltr"
+              /></label>
+            </div>
+            <p id="autoTimeHint" class="text-xs text-mirage/45 sm:col-span-2">
+              ساعت هنگام ثبت، به وقت تهران از سیستم خوانده می‌شود.
+            </p>
             <label class="sm:col-span-2"
               >عنوان
               <select id="transactionSource" class="finance-field" required>
@@ -298,45 +331,6 @@
                 maxlength="5000"
               ></textarea>
             </label>
-            <label
-              >تاریخ شمسی
-              <input
-                id="transactionDate"
-                class="finance-field"
-                inputmode="numeric"
-                dir="ltr"
-                placeholder="۱۴۰۵/۰۷/۱۴"
-                required
-            /></label>
-            <label
-              >ساعت
-              <select id="transactionTimeMode" class="finance-field">
-                <option value="auto">اتومات</option>
-                <option value="manual">دستی</option>
-              </select></label
-            >
-            <div id="manualTimeFields" class="hidden gap-4 sm:col-span-2">
-              <label class="flex-1"
-                >ساعت
-                <input
-                  id="transactionHour"
-                  class="finance-field"
-                  inputmode="numeric"
-                  maxlength="2"
-                  dir="ltr" /></label
-              ><label class="flex-1"
-                >دقیقه
-                <input
-                  id="transactionMinute"
-                  class="finance-field"
-                  inputmode="numeric"
-                  maxlength="2"
-                  dir="ltr"
-              /></label>
-            </div>
-            <p id="autoTimeHint" class="text-xs text-mirage/45 sm:col-span-2">
-              ساعت هنگام ثبت، به وقت تهران از سیستم خوانده می‌شود.
-            </p>
           </fieldset>
           <div class="mt-6 flex justify-end gap-3">
             <button
@@ -368,7 +362,7 @@
           دریافت می‌شوند.
         </p>
       </section>
-    </div>
+    </dialog>
     <script type="module" src="../src/js/page/finance.js"></script>
   </body>
 </html>

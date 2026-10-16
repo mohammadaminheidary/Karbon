@@ -101,24 +101,17 @@ class CategoryWrite(BaseModel):
         return normalize_text(value) if isinstance(value, str) else value
 
 
-class TransactionFields(BaseModel):
+class TransactionLine(BaseModel):
+    """Common account, bank and money validation for ledger and document rows."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     kind: Literal["income", "expense"]
     customer_id: int | None = Field(default=None, strict=True, gt=0)
     expense_category_id: int | None = Field(default=None, strict=True, gt=0)
+    document_account_id: int | None = Field(default=None, strict=True, gt=0)
     bank_id: int = Field(strict=True, gt=0)
     amount: int = Field(strict=True, gt=0, le=999999999999)
     tracking_number: str | None = Field(default=None, max_length=100)
     description: str | None = Field(default=None, max_length=5000)
-    transaction_date: date
-    time_mode: Literal["auto", "manual"] = "auto"
-    hour: int | None = Field(default=None, strict=True, ge=0, le=23)
-    minute: int | None = Field(default=None, strict=True, ge=0, le=59)
-
-    @field_validator("transaction_date", mode="before")
-    @classmethod
-    def jalali_date(cls, value):
-        return parse_jalali(value)
 
     @field_validator("description", "tracking_number", mode="before")
     @classmethod
@@ -135,13 +128,32 @@ class TransactionFields(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def source_and_time(self):
-        if self.kind == "income" and (self.customer_id is None or self.expense_category_id is not None):
+    def source(self):
+        if self.document_account_id is not None:
+            if self.customer_id is not None or self.expense_category_id is not None:
+                raise ValueError("حساب سند باید مستقل از مشتری و عنوان هزینه باشد.")
+        elif self.kind == "income" and (self.customer_id is None or self.expense_category_id is not None):
             raise ValueError("برای درآمد فقط مشتری را انتخاب کنید.")
-        if self.kind == "expense" and (self.expense_category_id is None or self.customer_id is not None):
+        elif self.kind == "expense" and (self.expense_category_id is None or self.customer_id is not None):
             raise ValueError("برای هزینه فقط عنوان هزینه را انتخاب کنید.")
         if self.kind == "expense" and self.tracking_number is not None:
             raise ValueError("شماره پیگیری فقط برای درآمد قابل ثبت است.")
+        return self
+
+
+class TransactionFields(TransactionLine):
+    transaction_date: date
+    time_mode: Literal["auto", "manual"] = "auto"
+    hour: int | None = Field(default=None, strict=True, ge=0, le=23)
+    minute: int | None = Field(default=None, strict=True, ge=0, le=59)
+
+    @field_validator("transaction_date", mode="before")
+    @classmethod
+    def jalali_date(cls, value):
+        return parse_jalali(value)
+
+    @model_validator(mode="after")
+    def source_and_time(self):
         if self.time_mode == "manual" and (self.hour is None or self.minute is None):
             raise ValueError("ساعت و دقیقه را وارد کنید.")
         if self.time_mode == "auto" and (self.hour is not None or self.minute is not None):

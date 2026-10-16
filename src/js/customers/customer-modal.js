@@ -1,5 +1,6 @@
 import { onExternalDataChange } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
+import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { createSpinner } from "../components/loader.js";
 import {
   createCustomer,
@@ -210,7 +211,7 @@ function confirmDuplicate(matches) {
 
 async function submit(event) {
   event.preventDefault();
-  if (submitting) return;
+  if (submitting || formDialog.closing) return;
   const data = collectData();
   if (!data) return;
   setBusy(true);
@@ -228,7 +229,7 @@ async function submit(event) {
       data.confirm_duplicate = true;
       result = await save();
     }
-    formDialog.close();
+    await formDialog.close();
   } catch (error) {
     if (error.status === 422 && Array.isArray(error.detail)) {
       for (const issue of error.detail)
@@ -243,12 +244,18 @@ async function submit(event) {
     get("customerFormError").classList.remove("hidden");
   } finally {
     setBusy(false);
+    if (
+      !result &&
+      formDialog.active &&
+      document.activeElement === document.body
+    )
+      get("saveCustomerButton").focus();
   }
   if (result) await onSaved(result, Boolean(editing));
 }
 
 export async function openCreateCustomerModal() {
-  if (submitting) return;
+  if (submitting || formDialog.active) return;
   const current = ++generation;
   editingCustomer = null;
   get("customerForm").reset();
@@ -272,7 +279,7 @@ export async function openCreateCustomerModal() {
 }
 
 export function openEditCustomerModal(customer) {
-  if (submitting) return;
+  if (submitting || formDialog.active) return;
   generation++;
   editingCustomer = customer;
   get("customerForm").reset();
@@ -302,17 +309,25 @@ export function openEditCustomerModal(customer) {
 export function initializeCustomerModal({ onSaved: callback }) {
   onSaved = callback;
   onExternalDataChange(async () => {
-    if (submitting || get("customerFormModal").getAttribute("aria-hidden") !== "false") return;
+    if (
+      submitting ||
+      get("customerFormModal").getAttribute("aria-hidden") !== "false"
+    )
+      return;
     const current = generation;
     try {
-      const data = editingCustomer ? await getCustomer(editingCustomer.id) : await getNextCustomerCode();
+      const data = editingCustomer
+        ? await getCustomer(editingCustomer.id)
+        : await getNextCustomerCode();
       if (current === generation) {
         get("customerCode").value = data.customer_code;
         if (editingCustomer) editingCustomer.customer_code = data.customer_code;
       }
-    } catch { /* Submission always gets its code from the server. */ }
+    } catch {
+      /* Submission always gets its code from the server. */
+    }
   });
-  formDialog = new Dialog("customerFormModal", {
+  formDialog = new NavbarPanelDialog("customerFormModal", {
     canClose: () => !submitting,
     onCancel: () => {
       generation++;

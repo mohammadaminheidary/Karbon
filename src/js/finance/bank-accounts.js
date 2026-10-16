@@ -1,6 +1,6 @@
 import { confirmFinanceDelete } from "./delete-dialog.js";
 import { onExternalDataChange } from "../components/data-events.js";
-import { Dialog } from "../components/dialog.js";
+import { CurtainDialog } from "../components/curtain-dialog.js";
 import { getBanks, getBankCatalog, financeRequest } from "./finance-api.js";
 import {
   money,
@@ -11,8 +11,7 @@ import {
 } from "./finance-utils.js";
 
 const modalTemplate = `
-  <button type="button" data-dialog-close class="absolute inset-0" aria-label="بستن فرم حساب"></button>
-  <section role="dialog" aria-modal="true" aria-labelledby="bankModalTitle" class="relative max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl transition-all duration-200 scale-95 opacity-0 sm:p-7">
+  <section role="dialog" aria-modal="true" aria-labelledby="bankModalTitle" class="curtain-content">
     <div class="flex items-center justify-between gap-3"><div><p class="mb-1 text-xs text-mirage/45">مدیریت حساب‌های بانکی</p><h2 id="bankModalTitle" class="text-xl font-black">افزودن حساب</h2></div><button type="button" data-dialog-close class="finance-button" aria-label="بستن">×</button></div>
     <p id="bankCatalogStatus" class="mt-4 text-sm text-mirage/50" role="status"></p>
     <p id="bankFormError" class="mt-4 hidden rounded-xl bg-alizarin-crimson/10 p-3 text-sm text-alizarin-crimson" role="alert"></p>
@@ -250,10 +249,7 @@ export async function initializeBankAccounts() {
   }
   const $ = (id) => document.getElementById(id);
   const mode = $("bankCards").dataset.display || "cards";
-  const root = node(
-    "div",
-    "finance-surface fixed inset-0 z-[90] hidden items-center justify-center overflow-y-auto bg-mirage/50 p-4",
-  );
+  const root = node("dialog", "bottom-curtain finance-surface");
   root.id = "bankModal";
   root.setAttribute("aria-hidden", "true");
   root.innerHTML = modalTemplate;
@@ -264,7 +260,7 @@ export async function initializeBankAccounts() {
     banks = [],
     catalogVersion = 0,
     listVersion = 0;
-  const dialog = new Dialog("bankModal", {
+  const dialog = new CurtainDialog("bankModal", {
     canClose: () => !saving,
     onCancel: () => {
       catalogVersion++;

@@ -1,0 +1,83 @@
+:is(.bottom-curtain, .task-curtain) {
+  position: fixed;
+  inset: auto auto var(--task-curtain-bottom, 18px)
+    var(--task-curtain-left, 16px);
+  width: var(--task-curtain-width, calc(100vw - 32px));
+  height: var(--task-form-height, auto);
+  max-width: none;
+  max-height: calc(100dvh - var(--task-curtain-bottom, 18px) - 16px);
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgb(182 192 198 / 45%);
+  border-radius: 30px;
+  color: var(--color-mirage);
+  background: rgb(248 250 252 / 98%);
+  box-shadow: 0 -12px 50px rgb(15 23 42 / 12%);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+:is(.bottom-curtain, .task-curtain)[open].is-expanding {
+  animation: task-curtain-up 360ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  overflow: hidden;
+}
+:is(.bottom-curtain, .task-curtain)[open].is-closing {
+  animation: task-curtain-down 200ms ease-in both;
+  pointer-events: none;
+  overflow: hidden;
+}
+:is(.bottom-curtain, .task-curtain)::backdrop {
+  background: rgb(15 23 42 / 15%);
+}
+:is(.bottom-curtain > .curtain-content, .task-curtain > form) {
+  padding: 24px;
+}
+:is(.bottom-curtain, .task-curtain) textarea {
+  resize: vertical;
+  max-height: 30dvh;
+}
+:is(.bottom-curtain, .task-curtain) footer {
+  display: flex;
+  gap: 10px;
+  border-top: 1px solid rgb(182 192 198 / 25%);
+  padding-top: 16px;
+}
+.bottom-curtain > form.curtain-content,
+.task-curtain > form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+@keyframes task-curtain-up {
+  from {
+    height: var(--task-navbar-height);
+  }
+  to {
+    height: var(--task-form-height);
+  }
+}
+@keyframes task-curtain-down {
+  to {
+    height: var(--task-navbar-height);
+  }
+}
+body.bottom-curtain-open {
+  overflow: hidden;
+}
+body.bottom-curtain-open .navbar-items {
+  visibility: hidden;
+}
+.bottom-curtain h2 {
+  font-size: 18px;
+  font-weight: 900;
+}
+@media (max-width: 767px) {
+  :is(.bottom-curtain > .curtain-content, .task-curtain > form) {
+    padding: 20px 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.bottom-curtain, .task-curtain)[open].is-expanding,
+  :is(.bottom-curtain, .task-curtain)[open].is-closing {
+    animation-duration: 1ms;
+  }
+}

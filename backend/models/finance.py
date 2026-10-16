@@ -54,7 +54,7 @@ class FinancialTransaction(Base):
     __tablename__ = "financial_transactions"
     __table_args__ = (
         CheckConstraint("amount > 0 AND amount <= 999999999999", name="positive_financial_amount"),
-        CheckConstraint("(kind = 'income' AND customer_id IS NOT NULL AND expense_category_id IS NULL) OR (kind = 'expense' AND customer_id IS NULL AND expense_category_id IS NOT NULL)", name="financial_source"),
+        CheckConstraint("(document_account_id IS NULL AND ((kind = 'income' AND customer_id IS NOT NULL AND expense_category_id IS NULL) OR (kind = 'expense' AND customer_id IS NULL AND expense_category_id IS NOT NULL))) OR (document_id IS NOT NULL AND document_account_id IS NOT NULL AND customer_id IS NULL AND expense_category_id IS NULL AND kind IN ('income', 'expense'))", name="financial_source"),
         CheckConstraint("time_mode IN ('auto', 'manual')", name="financial_time_mode"),
         Index("ix_finance_date_time", "transaction_date", "transaction_time", "id"),
     )
@@ -65,6 +65,8 @@ class FinancialTransaction(Base):
     customer_id = Column(Integer, ForeignKey("customers.id", ondelete="RESTRICT"), nullable=True, index=True)
     expense_category_id = Column(Integer, ForeignKey("expense_categories.id", ondelete="RESTRICT"), nullable=True)
     bank_id = Column(Integer, ForeignKey("bank_accounts.id", ondelete="RESTRICT"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="RESTRICT"), nullable=True, index=True)
+    document_account_id = Column(Integer, ForeignKey("document_accounts.id", ondelete="RESTRICT"), nullable=True, index=True)
     # Preserve historical titles; display codes follow the current source numbering.
     title = Column(String(201), nullable=False)
     account_code = Column(String(50), nullable=False)

@@ -1,5 +1,6 @@
 from .user import User
 from .task import Task
+from .document import Document, DocumentAccount
 from .member import Member
 from .attendance import Attendance
 from .customer import Customer
@@ -10,6 +11,8 @@ from .order import Product, Order, OrderItem, OrderPayment
 __all__ = [
     "User",
     "Task",
+    "Document",
+    "DocumentAccount",
     "Member",
     "Attendance",
     "Customer",

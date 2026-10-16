@@ -1,4 +1,4 @@
-import { Dialog } from "../components/dialog.js";
+import { CurtainDialog } from "../components/curtain-dialog.js";
 import { financeRequest } from "./finance-api.js";
 import { node } from "./finance-utils.js";
 
@@ -9,12 +9,9 @@ let dialog,
 export function confirmFinanceDelete({ path, description, onDeleted }) {
   if (pending) return;
   if (!root) {
-    root = node(
-      "div",
-      "finance-surface fixed inset-0 z-[100] hidden items-center justify-center bg-mirage/50 p-4",
-    );
+    root = node("dialog", "bottom-curtain finance-surface");
     root.id = "financeDeleteModal";
-    root.innerHTML = `<section role="alertdialog" aria-modal="true" aria-labelledby="deleteTitle" aria-describedby="deleteDescription" class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl transition duration-200 scale-95 opacity-0">
+    root.innerHTML = `<section role="alertdialog" aria-modal="true" aria-labelledby="deleteTitle" aria-describedby="deleteDescription" class="curtain-content">
       <h2 id="deleteTitle" class="text-lg font-black">آیا مطمئن هستید؟</h2>
       <p id="deleteDescription" class="mt-3 text-sm text-mirage/60"></p>
       <form id="financeDeleteForm" class="mt-5">
@@ -23,7 +20,10 @@ export function confirmFinanceDelete({ path, description, onDeleted }) {
         <div class="mt-5 flex gap-3"><button id="financeDeleteSubmit" class="finance-button bg-alizarin-crimson text-white" type="submit">بله، حذف شود</button><button type="button" data-dialog-close class="finance-button border border-french-gray/40">انصراف</button></div>
       </form></section>`;
     document.body.append(root);
-    dialog = new Dialog(root.id, { canClose: () => !pending, onCancel: clear });
+    dialog = new CurtainDialog(root.id, {
+      canClose: () => !pending,
+      onCancel: clear,
+    });
     root.querySelector("form").addEventListener("submit", async (event) => {
       event.preventDefault();
       if (pending) return;

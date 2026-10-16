@@ -32,7 +32,7 @@ export async function financeRequest(
         },
         body: body ? JSON.stringify(body) : undefined,
       });
-      data = await response.json();
+      data = response.status === 204 ? null : await response.json();
     } catch (error) {
       if (signal?.aborted) throw error;
       throw new Error("ارتباط با سرور برقرار نشد. دوباره تلاش کنید.");
