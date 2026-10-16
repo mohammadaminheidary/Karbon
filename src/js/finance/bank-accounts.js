@@ -1,5 +1,6 @@
+import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "./delete-dialog.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { CurtainDialog } from "../components/curtain-dialog.js";
 import { getBanks, getBankCatalog, financeRequest } from "./finance-api.js";
 import {
@@ -258,6 +259,7 @@ export async function initializeBankAccounts() {
     catalogReady = false,
     editing = null,
     banks = [],
+    renderedAccounts,
     catalogVersion = 0,
     listVersion = 0;
   const dialog = new CurtainDialog("bankModal", {
@@ -283,8 +285,10 @@ export async function initializeBankAccounts() {
 
   async function load() {
     const version = ++listVersion;
-    $("banksStatus").textContent = "در حال دریافت حساب‌ها...";
-    $("banksStatus").classList.remove("hidden");
+    if (renderedAccounts === undefined) {
+      $("banksStatus").textContent = "در حال دریافت حساب‌ها...";
+      $("banksStatus").classList.remove("hidden");
+    }
     $("banksError").classList.add("hidden");
     $("bankCards").setAttribute("aria-busy", "true");
     $("bankTotalBalance")?.setAttribute("aria-busy", "true");
@@ -296,7 +300,8 @@ export async function initializeBankAccounts() {
         ? "هنوز حسابی ثبت نشده است. برای شروع «افزودن حساب» را انتخاب کنید."
         : "هنوز حسابی ثبت نشده است. حساب جدید را در «تنظیمات ← بانک» اضافه کنید.";
       $("banksStatus").classList.toggle("hidden", accounts.length > 0);
-      $("bankCards").replaceChildren(
+      const signature = JSON.stringify(accounts);
+      if (signature !== renderedAccounts) $("bankCards").replaceChildren(
         ...accounts.map((account) =>
           renderAccount(account, open, mode, (bank) =>
             confirmFinanceDelete({
@@ -307,6 +312,7 @@ export async function initializeBankAccounts() {
           ),
         ),
       );
+      renderedAccounts = signature;
       if ($("bankTotalBalance")) {
         const totalBalance = accounts.reduce(
           (total, account) => total + account.balance,
@@ -319,9 +325,6 @@ export async function initializeBankAccounts() {
       );
     } catch (error) {
       if (version !== listVersion) return;
-      $("bankCards").replaceChildren();
-      if ($("bankTotalBalance")) $("bankTotalBalance").textContent = "—";
-      $("bankAccountCount").textContent = "—";
       $("banksStatus").classList.add("hidden");
       $("banksError").textContent = error.message;
       $("banksError").classList.remove("hidden");
@@ -497,18 +500,8 @@ export async function initializeBankAccounts() {
   $("bankSelect").addEventListener("change", preview);
   $("retryBankCatalog").addEventListener("click", loadCatalog);
   $("addBankAccount")?.addEventListener("click", () => open());
-  $("refreshBanks").addEventListener("click", load);
-  document.addEventListener("visibilitychange", () => {
-    if (
-      document.visibilityState === "visible" &&
-      $("bankCards").getClientRects().length
-    )
-      load();
-  });
-  window.addEventListener("pageshow", (event) => {
-    if (event.persisted) load();
-  });
-  onExternalDataChange(load);
+  $("refreshBanks").addEventListener("click", refreshData(load));
   currentController = { load };
   await load();
+  onPageRefresh(load, { isVisible: () => $("bankCards").getClientRects().length > 0 });
 }

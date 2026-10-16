@@ -16,6 +16,7 @@ import {
 import { setMembersViewState } from "./view-state.js";
 
 let currentMembers = [];
+let renderedMembers;
 let notifyAttendance = () => {};
 
 /* ======================================================
@@ -145,16 +146,21 @@ async function handleAttendanceAction({ memberId, status, card }) {
 ====================================================== */
 
 export async function reloadAttendanceMembers({ showLoading = false } = {}) {
-  if (showLoading) {
+  const initial = showLoading && renderedMembers === undefined;
+  if (initial) {
     setMembersViewState("loading");
   }
 
   try {
     await refreshMembers();
 
-    renderMembers(currentMembers, {
-      onAttendanceAction: handleAttendanceAction,
-    });
+    const signature = JSON.stringify(currentMembers);
+    if (signature !== renderedMembers) {
+      renderMembers(currentMembers, {
+        onAttendanceAction: handleAttendanceAction,
+      });
+      renderedMembers = signature;
+    }
 
     return true;
   } catch (error) {
@@ -168,7 +174,7 @@ export async function reloadAttendanceMembers({ showLoading = false } = {}) {
      * اگر Refresh پس‌زمینه‌ای شکست خورد،
      * Cardهای فعلی را نابود نمی‌کنیم.
      */
-    if (showLoading) {
+    if (initial) {
       setMembersViewState("error");
     }
 

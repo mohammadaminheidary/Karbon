@@ -1,10 +1,13 @@
+import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "./delete-dialog.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { getExpenseCategories, financeRequest } from "./finance-api.js";
 import { node } from "./finance-utils.js";
 
 const $ = (id) => document.getElementById(id);
 let initialized = false,
+  listLoaded = false,
+  renderedItems,
   editing = null,
   saving = false,
   loading = false;
@@ -21,11 +24,14 @@ function resetForm() {
 async function loadCategories() {
   if (loading) return;
   loading = true;
-  $("expenseCategoriesStatus").textContent = "در حال دریافت عناوین...";
-  $("expenseCategoriesStatus").classList.remove("hidden");
+  if (!listLoaded) {
+    $("expenseCategoriesStatus").textContent = "در حال دریافت عناوین...";
+    $("expenseCategoriesStatus").classList.remove("hidden");
+  }
   $("expenseCategoriesList").setAttribute("aria-busy", "true");
   try {
     const items = await getExpenseCategories();
+    listLoaded = true;
     if (editing) {
       const current = items.find((row) => row.id === editing);
       if (current)
@@ -36,6 +42,8 @@ async function loadCategories() {
     $("expenseCategoriesStatus").classList.toggle("hidden", items.length > 0);
     $("expenseCategoriesStatus").textContent =
       "هنوز عنوان هزینه‌ای تعریف نشده است.";
+    const signature = JSON.stringify(items);
+    if (signature === renderedItems) return;
     $("expenseCategoriesList").replaceChildren(
       ...items.map((item) => {
         const row = node(
@@ -91,8 +99,8 @@ async function loadCategories() {
         return row;
       }),
     );
+    renderedItems = signature;
   } catch (error) {
-    $("expenseCategoriesList").replaceChildren();
     $("expenseCategoriesStatus").textContent = error.message;
     $("expenseCategoriesStatus").classList.remove("hidden");
   } finally {
@@ -104,11 +112,10 @@ async function loadCategories() {
 export async function initializeExpenseSettings() {
   if (!initialized) {
     initialized = true;
-    onExternalDataChange(loadCategories);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") loadCategories();
+    onPageRefresh(loadCategories, {
+      isVisible: () => $("expenseCategoriesList").getClientRects().length > 0,
     });
-    $("reloadExpenseCategories").addEventListener("click", loadCategories);
+    $("reloadExpenseCategories").addEventListener("click", refreshData(loadCategories));
     $("cancelExpenseCategoryEdit").addEventListener("click", resetForm);
     $("expenseCategoryForm").addEventListener("submit", async (event) => {
       event.preventDefault();

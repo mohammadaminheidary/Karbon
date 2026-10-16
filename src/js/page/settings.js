@@ -1,4 +1,6 @@
+import { startPage } from "../components/page-ready.js";
 import { initializeNavbar } from "../components/navbar.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { initializeDocumentAccounts } from "../documents/account-settings.js";
 import { initializeExpenseSettings } from "../finance/expense-settings.js";
 import { initializeBankAccounts } from "../finance/bank-accounts.js";
@@ -114,31 +116,6 @@ function getMemberFullName(
 /* ======================================================
    Authentication
 ====================================================== */
-
-function setupLogout() {
-  const button =
-    getElement(
-      "logoutButton"
-    );
-
-
-  if (!button) {
-    return;
-  }
-
-
-  button.addEventListener(
-    "click",
-    () => {
-      logout();
-
-      window.location.replace(
-        "/page/login-page.html"
-      );
-    }
-  );
-}
-
 
 function handleUnauthorized(
   error
@@ -348,7 +325,6 @@ async function showSettingsSection(
 
   if (
     section === "members" &&
-    !membersLoaded &&
     !membersLoading
   ) {
     await loadMembers();
@@ -775,9 +751,7 @@ async function loadMembers() {
     true;
 
 
-  setMembersState(
-    "loading"
-  );
+  if (!membersLoaded) setMembersState("loading");
 
 
   try {
@@ -785,23 +759,21 @@ async function loadMembers() {
       await getMembers();
 
 
-    members =
+    const nextMembers =
       Array.isArray(data)
         ? data
         : [];
+    const unchanged = membersLoaded && JSON.stringify(members) === JSON.stringify(nextMembers);
+    members = nextMembers;
 
 
     membersLoaded =
       true;
 
 
-    renderMembers();
+    if (!unchanged) renderMembers();
 
   } catch (error) {
-    membersLoaded =
-      false;
-
-
     if (
       handleUnauthorized(
         error
@@ -831,9 +803,8 @@ async function loadMembers() {
     }
 
 
-    setMembersState(
-      "error"
-    );
+    if (membersLoaded) showToast(message?.textContent || "لطفاً دوباره تلاش کنید.", "error");
+    else setMembersState("error");
 
   } finally {
     membersLoading =
@@ -1202,10 +1173,6 @@ async function handleMemberSubmit(
     closeMemberFormModal();
 
 
-    membersLoaded =
-      false;
-
-
     await loadMembers();
 
   } catch (error) {
@@ -1563,10 +1530,6 @@ async function executeDeleteMember() {
     );
 
 
-    membersLoaded =
-      false;
-
-
     await loadMembers();
 
   } catch (error) {
@@ -1795,11 +1758,14 @@ async function initSettingsPage() {
   }
 
 
-  setupLogout();
 
   setupEvents();
 
   setupSettingsNavigation();
+
+  onPageRefresh(loadMembers, {
+    isVisible: () => document.querySelector('[data-settings-panel="members"]').getClientRects().length > 0,
+  });
 
 
   await showSettingsSection(
@@ -1811,15 +1777,4 @@ async function initSettingsPage() {
 }
 
 
-if (
-  document.readyState ===
-  "loading"
-) {
-  document.addEventListener(
-    "DOMContentLoaded",
-    initSettingsPage
-  );
-
-} else {
-  initSettingsPage();
-}
+startPage(initSettingsPage);

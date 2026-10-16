@@ -1,4 +1,6 @@
+import { apiFetch } from "../components/api-cache.js";
 import { getToken } from "../auth/auth-storage.js";
+import { publishDataChange } from "../components/data-events.js";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
@@ -81,7 +83,7 @@ async function request(path, { method = "GET", body } = {}) {
   let response;
 
   try {
-    response = await fetch(`${API_URL}${path}`, {
+    response = await apiFetch(`${API_URL}${path}`, {
       method,
       headers,
 
@@ -103,6 +105,7 @@ async function request(path, { method = "GET", body } = {}) {
     });
   }
 
+  if (method !== "GET") publishDataChange();
   return data;
 }
 

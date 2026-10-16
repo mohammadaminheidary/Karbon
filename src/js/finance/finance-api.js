@@ -1,3 +1,4 @@
+import { apiFetch } from "../components/api-cache.js";
 import { publishDataChange } from "../components/data-events.js";
 import { getToken, logout } from "../auth/auth-storage.js";
 
@@ -22,7 +23,7 @@ export async function financeRequest(
     let response;
     let data;
     try {
-      response = await fetch(`${API_URL}${path}`, {
+      response = await apiFetch(`${API_URL}${path}`, {
         method,
         signal: controller.signal,
         headers: {

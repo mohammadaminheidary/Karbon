@@ -1,4 +1,7 @@
+import { startPage } from "../components/page-ready.js";
 import { createNavbarNotification } from "../components/navbar-notification.js";
+import { onPageRefresh } from "../components/data-events.js";
+import { invalidateApiCache } from "../components/api-cache.js";
 import {
   fullDate,
   todayKey,
@@ -14,8 +17,8 @@ const notifyAttendance = createNavbarNotification(
 );
 
 import { protectPage } from "../guards/auth-guard.js";
-
 import { logout } from "../auth/auth-storage.js";
+
 
 import {
   initializeAttendanceMembers,
@@ -54,16 +57,6 @@ let backgroundRefreshRunning = false;
 /* ======================================================
    Auth
 ====================================================== */
-
-function setupLogout() {
-  const button = document.getElementById("logoutButton");
-
-  button?.addEventListener("click", () => {
-    logout();
-
-    window.location.replace("/page/login-page.html");
-  });
-}
 
 function handleUnauthorized(error) {
   if (error instanceof AttendanceApiError && error.status === 401) {
@@ -305,6 +298,7 @@ async function refreshAttendanceData({ rebuildCalendar = false } = {}) {
 
   try {
     if (rebuildCalendar) {
+      invalidateApiCache();
       calendarCenter = selectedDay = todayKey();
       renderCalendar({ scroll: true });
     }
@@ -394,7 +388,10 @@ async function handleVisibilityChange() {
 function setupAutomaticSynchronization() {
   currentDayKey = todayKey();
 
-  document.addEventListener("visibilitychange", handleVisibilityChange);
+  onPageRefresh(handleVisibilityChange);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void checkForDayChange();
+  });
 
   if (syncIntervalId) {
     clearInterval(syncIntervalId);
@@ -422,7 +419,6 @@ async function initializeAttendancePage() {
     return;
   }
 
-  setupLogout();
 
   renderCalendar({ scroll: true });
 
@@ -433,8 +429,4 @@ async function initializeAttendancePage() {
   await Promise.all([initializeMembersSection(), refreshCalendarStatistics()]);
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initializeAttendancePage);
-} else {
-  initializeAttendancePage();
-}
+startPage(initializeAttendancePage);

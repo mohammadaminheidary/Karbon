@@ -1,11 +1,14 @@
+import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "../finance/delete-dialog.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { node } from "../finance/finance-utils.js";
 
 const $ = (id) => document.getElementById(id);
 const path = "/settings/document-accounts";
 let initialized = false,
+  listLoaded = false,
+  renderedItems,
   editing = null,
   saving = false,
   loading = false;
@@ -18,15 +21,20 @@ function reset() {
 async function load() {
   if (loading) return;
   loading = true;
-  $("documentAccountsStatus").textContent = "در حال دریافت حساب‌ها...";
-  $("documentAccountsStatus").classList.remove("hidden");
+  if (!listLoaded) {
+    $("documentAccountsStatus").textContent = "در حال دریافت حساب‌ها...";
+    $("documentAccountsStatus").classList.remove("hidden");
+  }
   $("documentAccountsList").setAttribute("aria-busy", "true");
   try {
     const items = await financeRequest(path);
+    listLoaded = true;
     if (editing && !items.some((item) => item.id === editing)) reset();
     $("documentAccountsStatus").classList.toggle("hidden", items.length > 0);
     $("documentAccountsStatus").textContent =
       "هنوز حسابی برای اسناد تعریف نشده است.";
+    const signature = JSON.stringify(items);
+    if (signature === renderedItems) return;
     $("documentAccountsList").replaceChildren(
       ...items.map((item) => {
         const row = node(
@@ -86,6 +94,7 @@ async function load() {
         return row;
       }),
     );
+    renderedItems = signature;
   } catch (error) {
     $("documentAccountsStatus").textContent = error.message;
     $("documentAccountsStatus").classList.remove("hidden");
@@ -97,13 +106,10 @@ async function load() {
 export async function initializeDocumentAccounts() {
   if (!initialized) {
     initialized = true;
-    const refreshVisible = () => {
-      if (!document.hidden && $("documentAccountForm").getClientRects().length)
-        void load();
-    };
-    onExternalDataChange(refreshVisible);
-    document.addEventListener("visibilitychange", refreshVisible);
-    $("reloadDocumentAccounts").addEventListener("click", load);
+    onPageRefresh(load, {
+      isVisible: () => $("documentAccountForm").getClientRects().length > 0,
+    });
+    $("reloadDocumentAccounts").addEventListener("click", refreshData(load));
     $("cancelDocumentAccountEdit").addEventListener("click", reset);
     $("documentAccountForm").addEventListener("submit", async (event) => {
       event.preventDefault();

@@ -4,7 +4,8 @@
   "description": "Karban Management System",
   "main": "index.js",
   "scripts": {
-    "dev": "tailwindcss -i ./src/input.css -o ./src/output.css --watch"
+    "build:navigation": "python3 scripts/build_navigation.py",
+    "dev": "npm run build:navigation && tailwindcss -i ./src/input.css -o ./src/output.css --watch"
   },
   "keywords": [
     "tailwindcss",

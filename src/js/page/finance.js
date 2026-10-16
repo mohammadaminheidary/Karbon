@@ -1,11 +1,11 @@
+import { startPage } from "../components/page-ready.js";
 import { transactionActions } from "../finance/transaction-actions.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { createNavbarNotification } from "../components/navbar-notification.js";
 import { bankLogo } from "../finance/bank-accounts.js";
 import { CurtainDialog } from "../components/curtain-dialog.js";
 import { protectPage } from "../guards/auth-guard.js";
-import { logout } from "../auth/auth-storage.js";
 import { getCustomers } from "../customers/customer-api.js";
 import {
   getBanks,
@@ -30,12 +30,12 @@ import {
 initializeNavbar();
 const $ = (id) => document.getElementById(id);
 const titleIsland = document.querySelector(".navbar-title-island");
-titleIsland.classList.add("orders-title-island");
-titleIsland.append($("recordIncome"), $("recordExpense"));
 const notifyFinance = createNavbarNotification(titleIsland);
 let selectedDay = todayKey(),
   calendarCenter = selectedDay;
 let dayController,
+  renderedDay,
+  renderedDayData,
   calendarVersion = 0,
   optionsVersion = 0;
 let kind = "income",
@@ -76,11 +76,18 @@ async function selectDay(day) {
   $("financeDayContent").setAttribute("aria-busy", "true");
   $("financeSummary").setAttribute("aria-busy", "true");
   $("financeError").classList.add("hidden");
-  clearDay();
+  if (renderedDay !== day) {
+    renderedDayData = undefined;
+    clearDay();
+  }
   updateCalendarSelection();
   try {
     const data = await getFinanceDay(day, controller.signal);
     if (controller.signal.aborted || selectedDay !== day) return;
+    const signature = JSON.stringify(data);
+    if (renderedDayData === signature) return;
+    renderedDay = day;
+    renderedDayData = signature;
     $("totalIncome").textContent = money(data.summary.income);
     $("totalExpense").textContent = money(data.summary.expense);
     $("totalBalance").textContent = money(data.summary.balance);
@@ -577,10 +584,6 @@ async function submitTransaction(event) {
 
 async function initialize() {
   if (!(await protectPage())) return;
-  $("logoutButton").addEventListener("click", () => {
-    logout();
-    window.location.replace("/page/login-page.html");
-  });
   $("recordIncome").addEventListener("click", () => openTransaction("income"));
   $("recordExpense").addEventListener("click", () =>
     openTransaction("expense"),
@@ -640,21 +643,14 @@ async function initialize() {
     clearInterval(clock);
     clock = setInterval(tick, 1000);
     tick();
-    selectDay(selectedDay);
-    loadCalendar();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       tick();
-      selectDay(selectedDay);
-      loadCalendar();
     }
   });
-  onExternalDataChange(() => {
-    selectDay(selectedDay);
-    loadCalendar();
-  });
+  onPageRefresh(() => Promise.all([selectDay(selectedDay), loadCalendar()]));
   await Promise.all([selectDay(selectedDay), loadCalendar({ scroll: true })]);
 }
 
-initialize();
+startPage(initialize);

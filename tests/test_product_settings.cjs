@@ -79,7 +79,8 @@ async function scenario(metadata) {
     money: String,
     formatNumber: String,
     bindStrictAmount() {},
-    onExternalDataChange() {},
+    onPageRefresh() {},
+    refreshData: (callback) => callback,
     financeRequest: async () => {
       if (fail) throw new Error("fixture refresh failure");
       return products;

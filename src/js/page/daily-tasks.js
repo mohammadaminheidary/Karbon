@@ -1,9 +1,10 @@
+import { startPage } from "../components/page-ready.js";
+import { refreshData } from "../components/api-cache.js";
 import { CurtainDialog } from "../components/curtain-dialog.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { createNavbarNotification } from "../components/navbar-notification.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { protectPage } from "../guards/auth-guard.js";
-import { logout } from "../auth/auth-storage.js";
 import {
   fullDate,
   todayKey,
@@ -23,8 +24,6 @@ import { initializeTaskDrag } from "../tasks/task-drag.js";
 initializeNavbar();
 const $ = (id) => document.getElementById(id);
 const titleIsland = document.querySelector(".navbar-title-island");
-titleIsland.classList.add("orders-title-island");
-titleIsland.append($("addTask"));
 const notify = createNavbarNotification(titleIsland);
 const curtain = $("taskCurtain");
 const details = $("taskDetails");
@@ -51,6 +50,7 @@ const lists = {
 };
 const number = new Intl.NumberFormat("fa-IR");
 let tasks = [],
+  tasksLoaded = false,
   saving = false,
   loading = false,
   reloadRequested = false,
@@ -66,6 +66,7 @@ function showError(target, message = "") {
 }
 
 function render(focusId) {
+  tasksLoaded = true;
   for (const [status, list] of Object.entries(lists)) {
     const matching = tasks.filter((task) => task.status === status);
     $(status + "Count").textContent = number.format(matching.length);
@@ -252,8 +253,9 @@ async function loadTasks() {
   try {
     const result = await getTasks();
     if (version !== loadVersion) return;
+    const unchanged = tasksLoaded && JSON.stringify(tasks) === JSON.stringify(result);
     tasks = result;
-    render();
+    if (!unchanged) render();
     $("tasksStatus").hidden = true;
   } catch (error) {
     if (version !== loadVersion) return;
@@ -362,19 +364,12 @@ $("taskForm").addEventListener("submit", async (event) => {
 });
 $("cancelTask").addEventListener("click", closeForm);
 $("addTask").addEventListener("click", () => openForm());
-$("refreshTasks").addEventListener("click", loadTasks);
+$("refreshTasks").addEventListener("click", refreshData(loadTasks));
 
 async function initialize() {
   if (!(await protectPage())) return;
-  $("logoutButton").addEventListener("click", () => {
-    logout();
-    window.location.replace("/page/login-page.html");
-  });
   $("addTask").disabled = false;
-  onExternalDataChange(loadTasks);
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) loadTasks();
-  });
   await loadTasks();
+  onPageRefresh(loadTasks);
 }
-initialize();
+startPage(initialize);

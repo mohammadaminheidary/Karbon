@@ -1,3 +1,4 @@
+import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "../finance/delete-dialog.js";
 import { financeRequest } from "../finance/finance-api.js";
 import {
@@ -8,10 +9,12 @@ import {
   bindStrictAmount,
 } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 
 const $ = (id) => document.getElementById(id);
 let initialized = false,
+  listLoaded = false,
+  renderedProducts,
   editing = null,
   saving = false,
   version = 0;
@@ -35,17 +38,21 @@ function message(text, failed = false) {
 }
 async function load() {
   const current = ++version;
-  $("settingsProductsStatus").textContent = "در حال دریافت کالاها…";
+  if (!listLoaded) $("settingsProductsStatus").textContent = "در حال دریافت کالاها…";
   $("settingsProductsList").setAttribute("aria-busy", "true");
   $("refreshProducts").disabled = true;
   try {
     const products = await financeRequest("/products?include_inactive=true");
     if (current !== version) return;
+    listLoaded = true;
     $("settingsProductsStatus").textContent = products.length
       ? `${formatNumber(products.length)} کالا`
       : "هنوز کالایی ثبت نشده است.";
     if (editing && !products.some((product) => product.id === editing.id))
       reset();
+    if ($("settingsProductMessage").dataset.failed === "true") message("");
+    const signature = JSON.stringify(products);
+    if (signature === renderedProducts) return true;
     $("settingsProductsList").replaceChildren(
       ...products.map((product) => {
         const card = node(
@@ -133,7 +140,7 @@ async function load() {
         return card;
       }),
     );
-    if ($("settingsProductMessage").dataset.failed === "true") message("");
+    renderedProducts = signature;
     return true;
   } catch (error) {
     if (current === version) {
@@ -152,17 +159,15 @@ export async function initializeProductSettings() {
   if (!initialized) {
     initialized = true;
     bindStrictAmount($("settingsProductPrice"));
-    $("refreshProducts").addEventListener("click", load);
+    $("refreshProducts").addEventListener("click", refreshData(load));
     $("cancelSettingsProductEdit").addEventListener("click", () => {
       if (!saving) {
         reset();
         message("");
       }
     });
-    onExternalDataChange(load);
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden && $("settingsProductsList").getClientRects().length)
-        load();
+    onPageRefresh(load, {
+      isVisible: () => $("settingsProductsList").getClientRects().length > 0,
     });
     $("settingsProductForm").addEventListener("submit", async (event) => {
       event.preventDefault();

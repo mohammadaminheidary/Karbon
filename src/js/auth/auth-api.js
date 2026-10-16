@@ -1,7 +1,8 @@
+import { apiFetch } from "../components/api-cache.js";
 const API_URL = "http://127.0.0.1:8000/api";
 
 export async function loginUser(username, password) {
-  const response = await fetch(`${API_URL}/login`, {
+  const response = await apiFetch(`${API_URL}/login`, {
     method: "POST",
 
     headers: {
@@ -48,7 +49,7 @@ export async function loginUser(username, password) {
 }
 
 export async function validateToken(token) {
-  const response = await fetch(`${API_URL}/auth/me`, {
+  const response = await apiFetch(`${API_URL}/auth/me`, {
     method: "GET",
 
     headers: {

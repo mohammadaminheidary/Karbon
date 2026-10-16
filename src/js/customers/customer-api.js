@@ -1,3 +1,4 @@
+import { apiFetch } from "../components/api-cache.js";
 import { publishDataChange } from "../components/data-events.js";
 import { getToken, logout } from "../auth/auth-storage.js";
 
@@ -26,7 +27,7 @@ async function request(path = "", { method = "GET", body, signal } = {}) {
   signal?.addEventListener("abort", cancel, { once: true });
   const timeout = setTimeout(cancel, 15000);
   try {
-    response = await fetch(`${API_URL}${path}`, {
+    response = await apiFetch(`${API_URL}${path}`, {
       method,
       signal: controller.signal,
       headers: {

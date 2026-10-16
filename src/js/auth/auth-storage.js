@@ -1,3 +1,5 @@
+import { invalidateApiCache } from "../components/api-cache.js";
+
 const AUTH_KEY = "karbon_auth";
 
 export function saveAuth(data) {
@@ -12,6 +14,7 @@ export function saveAuth(data) {
   }
 
 
+  invalidateApiCache({ auth: true });
   localStorage.setItem(
     AUTH_KEY,
     JSON.stringify({
@@ -54,5 +57,6 @@ export function getToken() {
 }
 
 export function logout() {
+  invalidateApiCache({ auth: true });
   localStorage.removeItem("karbon_auth");
 }

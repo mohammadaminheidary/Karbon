@@ -24,6 +24,7 @@ parser.add_argument("--customers", type=int, default=0)
 parser.add_argument("--finance", action="store_true", help="Create finance references in the disposable database")
 parser.add_argument("--orders", action="store_true", help="Seed products only in the disposable database")
 parser.add_argument("--bank-ledger", type=int, default=0, help="Seed account ledger rows only in the disposable database")
+parser.add_argument("--direct-api", action="store_true", help="Use the separate backend origin, including real CORS preflight")
 args = parser.parse_args()
 if not 0 <= args.customers <= 200:
     parser.error("--customers must be between 0 and 200")
@@ -36,7 +37,7 @@ class FixtureHandler(SimpleHTTPRequestHandler):
         super().__init__(*handler_args, directory=str(ROOT), **kwargs)
 
     def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "no-store" if self.path.startswith("/api/") else "no-cache")
         super().end_headers()
 
     def proxy_api(self):
@@ -73,10 +74,10 @@ class FixtureHandler(SimpleHTTPRequestHandler):
         # environment can run beside the user's normal app without logging out
         # their session or changing any production JavaScript configuration.
         path = urlsplit(self.path).path
-        if path in ["/src/js/auth/auth-api.js", "/src/js/customers/customer-api.js", "/src/js/finance/finance-api.js", "/src/js/members/members-api.js", "/src/js/attendance/attendance-api.js"]:
+        if path in ["/src/js/auth/auth-api.js", "/src/js/customers/customer-api.js", "/src/js/finance/finance-api.js", "/src/js/members/members-api.js", "/src/js/attendance/attendance-api.js", "/src/js/tasks/tasks-api.js"]:
             content = (ROOT / path.lstrip("/")).read_text().replace(
                 "http://127.0.0.1:8000/api",
-                f"http://127.0.0.1:{args.frontend_port}/api",
+                f"http://127.0.0.1:{args.backend_port if args.direct_api else args.frontend_port}/api",
             ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/javascript; charset=utf-8")

@@ -1,9 +1,10 @@
+import { refreshData } from "../components/api-cache.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { confirmFinanceDelete } from "../finance/delete-dialog.js";
 import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import {
-  onExternalDataChange,
+  onPageRefresh,
   publishLocalDataChange,
 } from "../components/data-events.js";
 import { showOrderDetails } from "./order-details.js";
@@ -12,6 +13,7 @@ const $ = (id) => document.getElementById(id);
 let initialized = false,
   version = 0,
   records = [],
+  loadedSearch = null,
   total = 0,
   loading = false,
   searchTimer;
@@ -107,25 +109,28 @@ async function load(more = false) {
   $("settingsInvoicesList").setAttribute("aria-busy", "true");
   $("settingsInvoicesMore").disabled = true;
   $("refreshInvoices").disabled = true;
-  $("settingsInvoicesStatus").textContent = "در حال دریافت فاکتورها…";
-  if (!more) {
-    records = [];
-    $("settingsInvoicesList").replaceChildren();
-    $("settingsInvoicesMore").hidden = true;
-  }
+  if (loadedSearch === null) $("settingsInvoicesStatus").textContent = "در حال دریافت فاکتورها…";
   try {
-    const data = await financeRequest(
-      `/settings/invoices?${new URLSearchParams({
-        search: $("settingsInvoicesSearch").value.trim().slice(0, 200),
-        skip: more ? records.length : 0,
-        limit: 20,
-      })}`,
-    );
-    if (current !== version) return;
+    const search = $("settingsInvoicesSearch").value.trim().slice(0, 200);
+    const visibleCount =
+      search === loadedSearch ? Math.max(20, records.length) : 20;
+    const nextRecords = more ? [...records] : [];
+    let data;
+    do {
+      data = await financeRequest(
+        `/settings/invoices?${new URLSearchParams({ search, skip: nextRecords.length, limit: 20 })}`,
+      );
+      if (current !== version) return;
+      const existing = new Set(nextRecords.map((record) => record.id));
+      nextRecords.push(...data.items.filter((record) => !existing.has(record.id)));
+      if (more || !data.items.length) break;
+    } while (nextRecords.length < Math.min(visibleCount, data.total));
     total = data.total;
-    const existing = new Set(records.map((record) => record.id));
-    records.push(...data.items.filter((record) => !existing.has(record.id)));
-    render();
+    loadedSearch = search;
+    const unchanged = JSON.stringify(records) === JSON.stringify(nextRecords);
+    records = nextRecords;
+    if (!unchanged) render();
+    $("settingsInvoicesMore").hidden = records.length >= total;
     $("settingsInvoicesStatus").textContent = total
       ? `${formatNumber(records.length)} از ${formatNumber(total)} فاکتور`
       : "فاکتوری پیدا نشد.";
@@ -145,7 +150,7 @@ async function load(more = false) {
 export async function initializeInvoiceSettings() {
   if (!initialized) {
     initialized = true;
-    $("refreshInvoices").addEventListener("click", () => load());
+    $("refreshInvoices").addEventListener("click", refreshData(() => load()));
     $("settingsInvoicesMore").addEventListener("click", () => load(true));
     $("settingsInvoicesSearch").addEventListener("input", () => {
       // Invalidate an older response before the debounce expires.
@@ -153,14 +158,8 @@ export async function initializeInvoiceSettings() {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => load(), 250);
     });
-    onExternalDataChange(() => load());
-    const refreshVisible = () => {
-      if (!document.hidden && $("settingsInvoicesList").getClientRects().length)
-        load();
-    };
-    document.addEventListener("visibilitychange", refreshVisible);
-    window.addEventListener("pageshow", (event) => {
-      if (event.persisted) refreshVisible();
+    onPageRefresh(() => load(), {
+      isVisible: () => $("settingsInvoicesList").getClientRects().length > 0,
     });
   }
   await load();

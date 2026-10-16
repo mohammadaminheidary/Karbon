@@ -1,8 +1,8 @@
+import { startPage } from "../components/page-ready.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { createNavbarNotification } from "../components/navbar-notification.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { protectPage } from "../guards/auth-guard.js";
-import { logout } from "../auth/auth-storage.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { node, fullDate } from "../finance/finance-utils.js";
 import { initializeDocumentDialogs } from "../documents/document-dialogs.js";
@@ -10,8 +10,6 @@ import { initializeDocumentDialogs } from "../documents/document-dialogs.js";
 initializeNavbar();
 const $ = (id) => document.getElementById(id);
 const titleIsland = document.querySelector(".navbar-title-island");
-titleIsland.classList.add("orders-title-island");
-titleIsland.append($("registerDocument"));
 const notify = createNavbarNotification(titleIsland);
 const number = new Intl.NumberFormat("fa-IR");
 const pageSize = 15;
@@ -24,6 +22,7 @@ let items = [],
   controller,
   debounce;
 let loading = false,
+  documentsLoaded = false,
   failed = false,
   ready = false,
   pendingRefresh = false;
@@ -163,43 +162,47 @@ async function loadDocuments({ reset = false, visibleCount = pageSize } = {}) {
   pendingRefresh = false;
   $("documentCards").setAttribute("aria-busy", "true");
   $("documentsError").classList.add("hidden");
-  if (reset) {
-    items = [];
-    nextOffset = 0;
-    $("documentCards").replaceChildren();
+  if (reset && !documentsLoaded) {
     $("documentsStatus").classList.remove("hidden");
     $("documentsStatus").textContent = "در حال دریافت اسناد...";
   }
-  $("documentPage").textContent = "در حال دریافت اسناد...";
+  if (!documentsLoaded) $("documentPage").textContent = "در حال دریافت اسناد...";
+  const nextItems = reset ? [] : [...items];
+  let offset = reset ? 0 : nextOffset;
+  let data;
   try {
     do {
       const params = new URLSearchParams({
         ...filters,
-        skip: nextOffset,
+        skip: offset,
         limit: pageSize,
       });
-      const data = await financeRequest(`/documents?${params}`, {
+      data = await financeRequest(`/documents?${params}`, {
         signal: current.signal,
       });
       if (current.signal.aborted) return;
-      nextOffset += data.items.length;
-      filteredTotal = data.filtered_total;
-      total = data.total;
-      $("documentTotal").textContent = number.format(data.total);
-      setMetadata(data);
-      const seen = new Set(items.map((item) => item.id));
+      offset += data.items.length;
+      const seen = new Set(nextItems.map((item) => item.id));
       const batch = data.items.filter((item) => !seen.has(item.id));
-      items.push(...batch);
-      $("documentCards").append(...batch.map(renderCard));
+      nextItems.push(...batch);
       if (!data.items.length) {
-        nextOffset = filteredTotal;
+        offset = data.filtered_total;
         break;
       }
     } while (
       reset &&
-      items.length < visibleCount &&
-      nextOffset < filteredTotal
+      nextItems.length < visibleCount &&
+      offset < data.filtered_total
     );
+    const unchanged = JSON.stringify(items) === JSON.stringify(nextItems);
+    items = nextItems;
+    documentsLoaded = true;
+    nextOffset = offset;
+    filteredTotal = data.filtered_total;
+    total = data.total;
+    $("documentTotal").textContent = number.format(total);
+    setMetadata(data);
+    if (!unchanged) $("documentCards").replaceChildren(...items.map(renderCard));
     $("documentsStatus").classList.toggle("hidden", items.length > 0);
     $("documentsStatus").textContent =
       total === 0 ? "هنوز سندی ثبت نشده است." : "سندی با این فیلترها پیدا نشد.";
@@ -267,10 +270,6 @@ function applyFilters() {
 async function initialize() {
   if (!(await protectPage())) return;
   ready = true;
-  $("logoutButton").addEventListener("click", () => {
-    logout();
-    window.location.replace("/page/login-page.html");
-  });
   $("registerDocument").disabled = false;
   $("registerDocument").setAttribute("aria-haspopup", "dialog");
   $("registerDocument").setAttribute("aria-controls", "documentCurtain");
@@ -323,16 +322,6 @@ async function initialize() {
     { rootMargin: "240px" },
   );
   observer.observe($("documentSentinel"));
-  onExternalDataChange(() => {
-    dialogs.refreshOptions();
-    void refresh();
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) {
-      dialogs.refreshOptions();
-      void refresh();
-    }
-  });
   // A deferred external refresh can resume when an editor or confirmation closes.
   $("documentCurtain").addEventListener("close", () => {
     if (pendingRefresh) void refresh();
@@ -346,7 +335,6 @@ async function initialize() {
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) {
       observer.observe($("documentSentinel"));
-      void refresh();
     }
   });
   const requestedDocument = new URLSearchParams(window.location.search).get(
@@ -354,6 +342,10 @@ async function initialize() {
   );
   if (/^[1-9]\d*$/.test(requestedDocument || ""))
     void dialogs.openDetails(Number(requestedDocument));
+  onPageRefresh(() => {
+    dialogs.refreshOptions();
+    return refresh();
+  });
   await loadDocuments({ reset: true });
 }
-initialize();
+startPage(initialize);

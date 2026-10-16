@@ -1,8 +1,8 @@
+import { startPage } from "../components/page-ready.js";
 import { transactionActions } from "../finance/transaction-actions.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { protectPage } from "../guards/auth-guard.js";
-import { logout } from "../auth/auth-storage.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { bankLogo, formatCardNumber } from "../finance/bank-accounts.js";
 import {
@@ -26,6 +26,11 @@ let period = "month",
   chartController,
   listController;
 let cursor = null,
+  ledgerItems = [],
+  renderedFilters,
+  renderedChart,
+  listLoaded = false,
+  chartLoaded = false,
   loaded = 0,
   activeFilters = {},
   searchTimer,
@@ -134,12 +139,10 @@ async function loadChart() {
   const version = ++chartVersion;
   chartController?.abort();
   chartController = new AbortController();
-  $("chartStatus").textContent = "در حال دریافت نمودار...";
+  $("bankChart").setAttribute("aria-busy", "true");
+  if (!chartLoaded) $("chartStatus").textContent = "در حال دریافت نمودار...";
   $("chartError").classList.add("hidden");
   $("retryChart").classList.add("hidden");
-  $("bankChart").replaceChildren();
-  $("chartSummary").replaceChildren();
-  $("chartRange").textContent = "";
   try {
     if (!validBank)
       throw new Error(
@@ -150,6 +153,13 @@ async function loadChart() {
       { signal: chartController.signal },
     );
     if (version !== chartVersion) return;
+    chartLoaded = true;
+    $("chartStatus").textContent =
+      data.summary.income || data.summary.expense
+        ? ""
+        : "در این بازه تراکنشی ثبت نشده است.";
+    const signature = JSON.stringify(data);
+    if (signature === renderedChart) return;
     const info = node("div");
     info.append(
       node(
@@ -172,7 +182,7 @@ async function loadChart() {
     $("bankHeader").replaceChildren(bankLogo(data.bank), info);
     $("chartRange").textContent =
       `${fullDate(data.start_date)} تا ${fullDate(data.end_date)} · تومان`;
-    $("chartSummary").append(
+    $("chartSummary").replaceChildren(
       node(
         "p",
         "font-bold text-eucalyptus",
@@ -184,17 +194,16 @@ async function loadChart() {
         `هزینه: ${money(data.summary.expense)}`,
       ),
     );
-    $("chartStatus").textContent =
-      data.summary.income || data.summary.expense
-        ? ""
-        : "در این بازه تراکنشی ثبت نشده است.";
     renderChart(data);
+    renderedChart = signature;
   } catch (error) {
     if (version !== chartVersion) return;
     $("chartStatus").textContent = "";
     $("chartError").textContent = error.message;
     $("chartError").classList.remove("hidden");
     $("retryChart").classList.remove("hidden");
+  } finally {
+    if (version === chartVersion) $("bankChart").setAttribute("aria-busy", "false");
   }
 }
 
@@ -257,28 +266,39 @@ async function loadList(more = false) {
   listController?.abort();
   listController = new AbortController();
   loading = true;
-  if (!more) {
-    cursor = null;
-    loaded = 0;
-    $("ledgerRows").replaceChildren();
-    $("ledgerTable").classList.add("hidden");
-    $("ledgerCount").textContent = "";
-  }
-  $("ledgerStatus").textContent = "در حال دریافت تراکنش‌ها...";
+  $("ledgerRows").setAttribute("aria-busy", "true");
+  if (!listLoaded) $("ledgerStatus").textContent = "در حال دریافت تراکنش‌ها...";
   $("ledgerError").classList.add("hidden");
   $("retryLedger").classList.add("hidden");
   $("moreLedger").disabled = true;
   const query = new URLSearchParams(activeFilters);
+  const filters = query.toString();
+  const visibleCount = filters === renderedFilters ? ledgerItems.length : 0;
   if (more && cursor) query.set("cursor", cursor);
   try {
     if (!validBank) throw new Error("شناسه حساب معتبر نیست.");
-    const result = await financeRequest(
-      `/banks/${bankId}/transactions?${query}`,
-      { signal: listController.signal },
-    );
-    if (version !== listVersion) return;
-    $("ledgerRows").append(...result.items.map(renderRow));
-    loaded += result.items.length;
+    const nextItems = more ? [...ledgerItems] : [];
+    let result;
+    do {
+      result = await financeRequest(
+        `/banks/${bankId}/transactions?${query}`,
+        { signal: listController.signal },
+      );
+      if (version !== listVersion) return;
+      const existing = new Set(nextItems.map((item) => item.id));
+      nextItems.push(...result.items.filter((item) => !existing.has(item.id)));
+      if (more || !result.items.length || !result.next_cursor) break;
+      query.set("cursor", result.next_cursor);
+    } while (nextItems.length < visibleCount);
+    const unchanged = JSON.stringify(ledgerItems) === JSON.stringify(nextItems);
+    if (!unchanged) {
+      if (more) $("ledgerRows").append(...nextItems.slice(ledgerItems.length).map(renderRow));
+      else $("ledgerRows").replaceChildren(...nextItems.map(renderRow));
+    }
+    ledgerItems = nextItems;
+    renderedFilters = filters;
+    listLoaded = true;
+    loaded = ledgerItems.length;
     cursor = result.next_cursor;
     $("ledgerTable").classList.toggle("hidden", loaded === 0);
     $("ledgerStatus").textContent = loaded
@@ -298,6 +318,7 @@ async function loadList(more = false) {
   } finally {
     if (version === listVersion) {
       loading = false;
+      $("ledgerRows").setAttribute("aria-busy", "false");
       $("moreLedger").disabled = false;
     }
   }
@@ -362,10 +383,6 @@ async function refreshLedger() {
 }
 async function initialize() {
   if (!(await protectPage())) return;
-  $("logoutButton").addEventListener("click", () => {
-    logout();
-    window.location.replace("/page/login-page.html");
-  });
   $("chartPeriods")
     .querySelectorAll("button")
     .forEach((button) =>
@@ -444,19 +461,7 @@ async function initialize() {
     listController?.abort();
     clearTimeout(searchTimer);
   });
-  window.addEventListener("pageshow", (event) => {
-    if (event.persisted) {
-      loadChart();
-      loadList();
-    }
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      loadChart();
-      loadList();
-    }
-  });
-  onExternalDataChange(refreshLedger);
+  onPageRefresh(refreshLedger);
   await refreshLedger();
 }
-initialize();
+startPage(initialize);

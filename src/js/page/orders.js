@@ -1,26 +1,24 @@
+import { startPage } from "../components/page-ready.js";
 import { protectPage } from "../guards/auth-guard.js";
-import { logout } from "../auth/auth-storage.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { initializeOrderDialogs } from "../orders/order-dialogs.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { showFinalInvoice } from "../orders/invoice-export.js";
 import { showOrderDetails } from "../orders/order-details.js";
 
 initializeNavbar();
 
 const createOrderButton = document.querySelector(".orders-create");
-const titleIsland = document.querySelector(".navbar-title-island");
-titleIsland.classList.add("orders-title-island");
-titleIsland.append(createOrderButton);
 
 function initializeTabs() {
   const tablist = document.querySelector('[role="tablist"]');
   const tabs = [...tablist.querySelectorAll('[role="tab"]')];
 
   function selectTab(selectedTab) {
+    if (selectedTab.getAttribute("aria-selected") === "true") return;
     tabs.forEach((tab) => {
       const selected = tab === selectedTab;
       tab.setAttribute("aria-selected", String(selected));
@@ -51,8 +49,10 @@ function initializeTabs() {
 }
 
 let listVersion = 0;
+const panelRequests = new WeakMap();
 let currentStatus = "active";
 let records = [];
+let recordTotal = 0;
 const completingOrders = new Set();
 
 async function loadOrders(more = false) {
@@ -62,30 +62,47 @@ async function loadOrders(more = false) {
       .getAttribute("aria-selected") === "true"
       ? "completed"
       : "active";
-  if (status !== currentStatus) more = false;
+  const statusChanged = status !== currentStatus;
+  if (statusChanged) more = false;
   currentStatus = status;
   const panel = document.getElementById(
     status === "active" ? "activeOrdersPanel" : "completedOrdersPanel",
   );
   const version = ++listVersion;
+  panelRequests.set(panel, version);
   panel.setAttribute("aria-busy", "true");
+  panel.querySelectorAll("[data-orders-load-error]").forEach((node) => node.remove());
   const loading = node("p", "orders-list-status", "در حال دریافت سفارش‌ها…");
-  if (!more) {
-    records = [];
+  if (statusChanged || !panel.children.length) {
     panel.replaceChildren(loading);
-  } else panel.append(loading);
+  } else if (more) panel.append(loading);
   try {
-    const data = await financeRequest(
-      `/orders?${new URLSearchParams({ status, skip: more ? records.length : 0, limit: 20 })}`,
-    );
-    if (version !== listVersion) return;
-    records.push(...data.items);
+    const nextRecords = more ? [...records] : [];
+    const visibleCount = more || statusChanged ? 20 : Math.max(20, records.length);
+    let data;
+    do {
+      data = await financeRequest(
+        `/orders?${new URLSearchParams({ status, skip: nextRecords.length, limit: 20 })}`,
+      );
+      if (version !== listVersion) return;
+      nextRecords.push(...data.items);
+      if (more || !data.items.length) break;
+    } while (nextRecords.length < Math.min(visibleCount, data.total));
+    const unchanged =
+      !statusChanged && recordTotal === data.total &&
+      JSON.stringify(records) === JSON.stringify(nextRecords);
+    records = nextRecords;
+    recordTotal = data.total;
     document.querySelectorAll(".orders-stat dd").forEach((dd, index) => {
       dd.textContent = formatNumber(
         index ? data.active_orders : data.total_orders,
       );
       dd.removeAttribute("aria-label");
     });
+    if (unchanged && panel.querySelector(".orders-record")) {
+      loading.remove();
+      return;
+    }
     panel.replaceChildren(
       ...records.map((order) => {
         const card = node("article", "orders-record");
@@ -200,22 +217,24 @@ async function loadOrders(more = false) {
   } catch (error) {
     if (version !== listVersion) return;
     loading.remove();
-    panel.append(node("p", "orders-error", error.message));
+    const failure = node("p", "orders-error", error.message);
+    failure.dataset.ordersLoadError = "";
+    panel.append(failure);
     const retry = node("button", "orders-secondary", "تلاش مجدد");
     retry.type = "button";
+    retry.dataset.ordersLoadError = "";
     retry.addEventListener("click", () => loadOrders());
     panel.append(retry);
   } finally {
-    if (version === listVersion) panel.setAttribute("aria-busy", "false");
+    if (panelRequests.get(panel) === version) {
+      panel.setAttribute("aria-busy", "false");
+      panelRequests.delete(panel);
+    }
   }
 }
 
 async function initializeOrdersPage() {
   if (!(await protectPage())) return;
-  document.getElementById("logoutButton").addEventListener("click", () => {
-    logout();
-    window.location.replace("/page/login-page.html");
-  });
   initializeTabs();
   const openCreateOrder = initializeOrderDialogs((saved) => {
     const notice = document.getElementById("ordersNotice");
@@ -226,14 +245,8 @@ async function initializeOrdersPage() {
   });
   createOrderButton.disabled = false;
   createOrderButton.addEventListener("click", openCreateOrder);
-  onExternalDataChange(() => loadOrders());
-  window.addEventListener("pageshow", (event) => {
-    if (event.persisted) loadOrders();
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) loadOrders();
-  });
   await loadOrders();
+  onPageRefresh(() => loadOrders());
 }
 
-initializeOrdersPage();
+startPage(initializeOrdersPage);

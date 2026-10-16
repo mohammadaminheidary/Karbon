@@ -1,3 +1,4 @@
+import { apiFetch } from "../components/api-cache.js";
 import { getToken } from "../auth/auth-storage.js";
 import { publishDataChange } from "../components/data-events.js";
 
@@ -6,7 +7,7 @@ async function request(path = "", { method = "GET", body } = {}) {
   if (!token) throw new Error("نشست کاربری معتبر نیست.");
   let response;
   try {
-    response = await fetch(`http://127.0.0.1:8000/api/tasks${path}`, {
+    response = await apiFetch(`http://127.0.0.1:8000/api/tasks${path}`, {
       method,
       headers: {
         Accept: "application/json",

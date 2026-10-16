@@ -29,6 +29,11 @@ LOGIN_URL = (
 
 
 def build_frontend():
+    subprocess.run(
+        [sys.executable, str(BASE_DIR / "scripts/build_navigation.py")],
+        cwd=BASE_DIR,
+        check=True,
+    )
     npm = shutil.which("npm")
     if not npm:
         raise RuntimeError("Node.js/npm is required to build styles. Install Node.js and run npm install.")

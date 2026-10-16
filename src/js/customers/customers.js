@@ -1,4 +1,4 @@
-import { onExternalDataChange } from "../components/data-events.js";
+import { onPageRefresh } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
 import { createSpinner } from "../components/loader.js";
 import { getCustomers, getCustomer, deleteCustomer } from "./customer-api.js";
@@ -26,6 +26,7 @@ let search = "",
   nextOffset = 0,
   total = 0,
   loadedCustomers = [],
+  customersLoaded = false,
   loading = false,
   loadingMore = false,
   requestId = 0,
@@ -51,6 +52,10 @@ function toast(message, success = true) {
 }
 
 function listState(state) {
+  if (state === "error" && customersLoaded) {
+    get("customersError").classList.remove("hidden");
+    return;
+  }
   for (const [id, active] of [
     ["customersLoading", state === "loading"],
     ["customersError", state === "error"],
@@ -177,7 +182,8 @@ async function loadCustomers({ visibleCount = PAGE_SIZE } = {}) {
   loading = true;
   loadingMore = false;
   get("customersLoadMoreError").classList.add("hidden");
-  listState("loading");
+  if (!customersLoaded) listState("loading");
+  get("customersWorkspace").setAttribute("aria-busy", "true");
   try {
     const items = [];
     const seenIds = new Set();
@@ -200,9 +206,12 @@ async function loadCustomers({ visibleCount = PAGE_SIZE } = {}) {
       offset += data.items.length;
       if (!data.items.length) break;
     } while (offset < Math.min(visibleCount, total));
+    const unchanged = JSON.stringify(loadedCustomers) === JSON.stringify(items);
     loadedCustomers = items;
+    customersLoaded = true;
     nextOffset = offset;
-    get("customersList").replaceChildren(...items.map(createCustomerCard));
+    if (!unchanged)
+      get("customersList").replaceChildren(...items.map(createCustomerCard));
     listState(items.length ? "ready" : search ? "search-empty" : "empty");
     updateLoadMore();
   } catch (error) {
@@ -210,7 +219,10 @@ async function loadCustomers({ visibleCount = PAGE_SIZE } = {}) {
     get("customersCount").textContent = "دریافت اطلاعات ناموفق بود";
     listState("error");
   } finally {
-    if (current === requestId) loading = false;
+    if (current === requestId) {
+      loading = false;
+      get("customersWorkspace").setAttribute("aria-busy", "false");
+    }
   }
 }
 
@@ -481,7 +493,8 @@ export async function initializeCustomers({ onCreated, onDeleted } = {}) {
     loading = true;
     loadingMore = false;
     get("clearCustomerSearchButton").classList.toggle("hidden", !search);
-    listState("loading");
+    if (!customersLoaded) listState("loading");
+    get("customersWorkspace").setAttribute("aria-busy", "true");
     searchTimer = setTimeout(loadCustomers, 250);
   }
   get("customerSearchInput").maxLength = 200;
@@ -515,7 +528,6 @@ export async function initializeCustomers({ onCreated, onDeleted } = {}) {
       } catch { /* The details dialog retains its own retry flow. */ }
     }
   }
-  onExternalDataChange(refreshCodes);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshCodes(); });
   await loadCustomers();
+  onPageRefresh(refreshCodes);
 }

@@ -36,6 +36,21 @@ html {
   scroll-padding-bottom: var(--navbar-clearance);
 }
 
+/* Native document transitions retain the outgoing surface until the next
+   document can paint. Avoid the default whole-page fade through transparency. */
+::view-transition-old(root) {
+  animation: none;
+}
+
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(root) {
+  animation: none;
+}
+
 .navbar-dock {
   position: fixed;
   left: 50%;
@@ -49,18 +64,6 @@ html {
   max-width: calc(100vw - 32px);
   transform: translateX(-50%);
   pointer-events: none;
-  animation: navbar-dock-in 180ms cubic-bezier(0.2, 0.8, 0.25, 1);
-}
-
-@keyframes navbar-dock-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 6px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
 }
 
 .glass-navbar,

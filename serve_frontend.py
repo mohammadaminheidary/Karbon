@@ -15,7 +15,9 @@ class DevelopmentHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
+        # Revalidate development assets while allowing the browser to retain
+        # whole documents (including filters, scroll and DOM) in its history cache.
+        self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
 
