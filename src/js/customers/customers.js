@@ -1,5 +1,7 @@
 import { onPageRefresh } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
+import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
+import { notifyNavbar } from "../components/navbar-notification.js";
 import { createSpinner } from "../components/loader.js";
 import { getCustomers, getCustomer, deleteCustomer } from "./customer-api.js";
 import { disintegrateCustomerCard } from "./customer-card-animation.js";
@@ -39,16 +41,10 @@ let detailsDialog,
 let deleteTimer,
   deleteDeadline = 0,
   deleteInFlight = false,
-  deletingCustomer = null,
-  toastTimer;
+  deletingCustomer = null;
 
 function toast(message, success = true) {
-  clearTimeout(toastTimer);
-  const output = get("customersToast");
-  output.textContent = message;
-  output.classList.remove("hidden", "bg-eucalyptus", "bg-alizarin-crimson");
-  output.classList.add(success ? "bg-eucalyptus" : "bg-alizarin-crimson");
-  toastTimer = setTimeout(() => output.classList.add("hidden"), 4000);
+  notifyNavbar(message, { role: success ? "status" : "alert" });
 }
 
 function listState(state) {
@@ -444,7 +440,7 @@ function startDelete() {
 
 export async function initializeCustomers({ onCreated, onDeleted } = {}) {
   onCustomerDeleted = onDeleted;
-  detailsDialog = new Dialog("customerDetailsModal", {
+  detailsDialog = new NavbarPanelDialog("customerDetailsModal", {
     onCancel: () => {
       detailsRequest++;
       selectedCustomer = null;

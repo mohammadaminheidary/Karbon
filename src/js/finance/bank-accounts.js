@@ -1,3 +1,4 @@
+import { notifyNavbar } from "../components/navbar-notification.js";
 import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "./delete-dialog.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -471,10 +472,9 @@ export async function initializeBankAccounts() {
     }
     if (!saved) return;
     dialog.close();
-    $("bankNotice").textContent = editing
+    notifyNavbar(editing
       ? "تغییرات حساب ذخیره شد."
-      : "حساب بانکی با موفقیت اضافه شد.";
-    $("bankNotice").classList.remove("hidden");
+      : "حساب بانکی با موفقیت اضافه شد.");
     await load();
   });
   // Group four digits while preserving the caret when editing in the middle.

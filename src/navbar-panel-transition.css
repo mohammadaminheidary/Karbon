@@ -17,12 +17,15 @@
 .document-dock-morphing .navbar-glass {
   will-change: width, height, left, top;
 }
-.document-dock-morphing #mainNavbar > .navbar-glass {
+.document-dock-morphing:not(.document-dock-centered) #mainNavbar > .navbar-glass {
   right: auto;
   bottom: auto;
 }
 .document-dock-open {
   visibility: hidden;
+}
+.document-dock-open.document-dock-centered .navbar-info {
+  visibility: visible;
 }
 
 .bottom-curtain.navbar-registration-panel {
@@ -30,4 +33,8 @@
     var(--task-curtain-left, 16px);
   width: min(1100px, calc(100vw - 32px));
   padding: 0;
+}
+
+.bottom-curtain.navbar-registration-panel.navbar-width-panel {
+  width: var(--task-curtain-width);
 }

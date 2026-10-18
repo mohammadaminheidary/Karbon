@@ -1,3 +1,4 @@
+import { notifyNavbar } from "../components/navbar-notification.js";
 import { getToken } from "../auth/auth-storage.js";
 import { element, number } from "./chart.js";
 import {
@@ -175,11 +176,10 @@ export class LayoutEditor {
       );
       this.saved = structuredClone(layouts);
       this.exit();
-      this.status.textContent =
-        "چیدمان ذخیره شد؛ در بازدید بعدی همین مرورگر و حساب کاربری بازیابی می‌شود.";
+      this.status.textContent = "";
+      notifyNavbar("چیدمان ذخیره شد؛ در بازدید بعدی همین مرورگر و حساب کاربری بازیابی می‌شود.");
     } catch {
-      this.status.textContent =
-        "ذخیره چیدمان در مرورگر انجام نشد. تغییرات فعلی حفظ شده‌اند؛ دسترسی ذخیره‌سازی مرورگر را بررسی و دوباره تلاش کنید.";
+      notifyNavbar("ذخیره چیدمان در مرورگر انجام نشد. تغییرات فعلی حفظ شده‌اند؛ دسترسی ذخیره‌سازی مرورگر را بررسی و دوباره تلاش کنید.", { role: "alert" });
     }
   }
   cancel() {
@@ -187,7 +187,8 @@ export class LayoutEditor {
     this.layouts = this.beforeEditing;
     this.breakpoint();
     this.exit();
-    this.status.textContent = "تغییرات چیدمان لغو شد.";
+    this.status.textContent = "";
+    notifyNavbar("تغییرات چیدمان لغو شد.");
   }
   apply() {
     const layout = this.layouts[this.mode];

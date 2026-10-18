@@ -1,3 +1,4 @@
+import { notifyNavbar } from "../components/navbar-notification.js";
 import { startPage } from "../components/page-ready.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -67,7 +68,6 @@ let deleteRequestInFlight = false;
 
 let deleteSecondsRemaining = 0;
 
-let toastTimeoutId = null;
 
 
 /* ======================================================
@@ -144,60 +144,11 @@ function handleUnauthorized(
    Toast
 ====================================================== */
 
-function showToast(
-  message,
-  type = "success"
-) {
-  const toast =
-    getElement(
-      "settingsToast"
-    );
-
-
-  if (!toast) {
-    return;
-  }
-
-
-  if (toastTimeoutId) {
-    clearTimeout(
-      toastTimeoutId
-    );
-  }
-
-
-  toast.textContent =
-    message;
-
-
-  toast.className = [
-    "fixed",
-    "left-6",
-    "top-6",
-    "z-[150]",
-    "max-w-sm",
-    "rounded-xl",
-    "px-4",
-    "py-3",
-    "text-xs",
-    "font-bold",
-    "shadow-xl",
-
-    type === "success"
-      ? "bg-eucalyptus text-white"
-      : "bg-alizarin-crimson text-white",
-  ].join(" ");
-
-
-  toastTimeoutId =
-    window.setTimeout(
-      () => {
-        toast.classList.add(
-          "hidden"
-        );
-      },
-      3000
-    );
+function showToast(message, type = "success") {
+  notifyNavbar(message, {
+    duration: 3000,
+    role: type === "success" ? "status" : "alert",
+  });
 }
 
 

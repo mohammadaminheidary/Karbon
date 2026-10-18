@@ -1,3 +1,4 @@
+import { notifyNavbar } from "../components/navbar-notification.js";
 import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "../finance/delete-dialog.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -66,7 +67,7 @@ async function load() {
           $("documentAccountActive").value = String(item.active);
           $("saveDocumentAccount").textContent = "ذخیره تغییرات";
           $("cancelDocumentAccountEdit").classList.remove("hidden");
-          $("documentAccountMessage").classList.add("hidden");
+          notifyNavbar("");
           $("documentAccountTitle").focus();
         });
         const remove = node(
@@ -129,13 +130,10 @@ export async function initializeDocumentAccounts() {
           },
         });
         reset();
-        $("documentAccountMessage").className = "mt-4 text-sm text-eucalyptus";
-        $("documentAccountMessage").textContent = "حساب سند ذخیره شد.";
+        notifyNavbar("حساب سند ذخیره شد.");
         await load();
       } catch (error) {
-        $("documentAccountMessage").className =
-          "mt-4 text-sm text-alizarin-crimson";
-        $("documentAccountMessage").textContent = error.message;
+        notifyNavbar(error.message, { role: "alert" });
       } finally {
         saving = false;
         $("documentAccountFields").disabled =

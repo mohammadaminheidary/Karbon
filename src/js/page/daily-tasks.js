@@ -1,6 +1,6 @@
 import { startPage } from "../components/page-ready.js";
 import { refreshData } from "../components/api-cache.js";
-import { CurtainDialog } from "../components/curtain-dialog.js";
+import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { createNavbarNotification } from "../components/navbar-notification.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -27,15 +27,16 @@ const titleIsland = document.querySelector(".navbar-title-island");
 const notify = createNavbarNotification(titleIsland);
 const curtain = $("taskCurtain");
 const details = $("taskDetails");
-const formDialog = new CurtainDialog("taskCurtain", {
+const formDialog = new NavbarPanelDialog("taskCurtain", {
   canClose: () => !saving,
   onCancel: () => {
-    closing = true;
+    void closeForm();
   },
-  restoreFocus: () => $(`task-card-${editingId}`) || $("addTask"),
-  onClosed: () => {
-    closing = false;
-    editingId = null;
+});
+const detailsDialog = new NavbarPanelDialog("taskDetails", {
+  canClose: () => !saving,
+  onCancel: () => {
+    void closeDetails();
   },
 });
 const labels = {
@@ -175,28 +176,22 @@ function openDetails(id) {
     task.description || "توضیحی ثبت نشده است.";
   $("taskDeleteConfirmation").hidden = true;
   showError($("taskDetailsError"));
-  document.body.classList.add("task-details-open");
-  details.showModal();
+  detailsDialog.open();
 }
 
-function closeDetails() {
-  if (saving) return;
+async function closeDetails() {
+  if (saving || detailsDialog.closing) return;
   const id = detailsId;
-  details.close();
+  await detailsDialog.close();
   detailsId = null;
-  document.body.classList.remove("task-details-open");
   ($(`task-card-${id}`) || $("addTask")).focus({ preventScroll: true });
 }
 
-details.addEventListener("cancel", (event) => {
-  event.preventDefault();
-  closeDetails();
-});
 $("closeTaskDetails").addEventListener("click", closeDetails);
-$("editTask").addEventListener("click", () => {
+$("editTask").addEventListener("click", async () => {
   const task = tasks.find((item) => item.id === detailsId);
-  if (!task || saving) return;
-  closeDetails();
+  if (!task || saving || detailsDialog.closing) return;
+  await closeDetails();
   openForm(task);
 });
 $("deleteTask").addEventListener("click", () => {
@@ -233,7 +228,7 @@ $("confirmDeleteTask").addEventListener("click", async () => {
       .forEach((button) => (button.disabled = false));
   }
   if (deleted) {
-    closeDetails();
+    await closeDetails();
     notify("کار حذف شد.");
   }
   if (reloadRequested) void loadTasks();
@@ -285,13 +280,17 @@ function openForm(task = null) {
 }
 
 function updateCurtainHeight() {
-  formDialog.updateHeight();
+  formDialog.position();
 }
 
-function closeForm() {
+async function closeForm() {
   if (saving || closing || !curtain.open) return;
   closing = true;
-  formDialog.close();
+  const id = editingId;
+  await formDialog.close();
+  closing = false;
+  editingId = null;
+  ($(`task-card-${id}`) || $("addTask")).focus({ preventScroll: true });
 }
 
 $("taskTitle").addEventListener("input", () =>
@@ -354,8 +353,9 @@ $("taskForm").addEventListener("submit", async (event) => {
     $("taskForm").setAttribute("aria-busy", "false");
   }
   if (saved) {
-    if (editingId === null) notify("کار اضافه شد.");
-    closeForm();
+    const created = editingId === null;
+    await closeForm();
+    if (created) notify("کار اضافه شد.");
     // Refresh also recovers the board if its initial request failed.
     await loadTasks();
   } else if (reloadRequested) {

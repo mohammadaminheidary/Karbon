@@ -1,3 +1,4 @@
+import { notifyNavbar } from "../components/navbar-notification.js";
 import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "./delete-dialog.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -74,7 +75,7 @@ async function loadCategories() {
             `کد حساب: ${item.account_code}`;
           $("saveExpenseCategory").textContent = "ذخیره تغییرات";
           $("cancelExpenseCategoryEdit").classList.remove("hidden");
-          $("expenseCategoryMessage").classList.add("hidden");
+          notifyNavbar("");
           $("expenseCategoryTitle").focus();
         });
         const actions = node("div", "flex gap-2");
@@ -139,12 +140,9 @@ export async function initializeExpenseSettings() {
         );
         saved = true;
         resetForm();
-        $("expenseCategoryMessage").className = "mt-4 text-sm text-eucalyptus";
-        $("expenseCategoryMessage").textContent = "عنوان هزینه ذخیره شد.";
+        notifyNavbar("عنوان هزینه ذخیره شد.");
       } catch (error) {
-        $("expenseCategoryMessage").className =
-          "mt-4 text-sm text-alizarin-crimson";
-        $("expenseCategoryMessage").textContent = error.message;
+        notifyNavbar(error.message, { role: "alert" });
       } finally {
         saving = false;
         $("expenseCategoryFields").disabled = false;

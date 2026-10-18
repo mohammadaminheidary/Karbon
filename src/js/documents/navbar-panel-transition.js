@@ -21,6 +21,7 @@ export function createNavbarPanelTransition(
     version = 0,
     animations = [];
   const ease = "cubic-bezier(.22, 1, .36, 1)";
+  const centered = () => panel.classList.contains("navbar-width-panel");
 
   function cancelAnimations() {
     animations.forEach((animation) => animation.cancel());
@@ -90,7 +91,11 @@ export function createNavbarPanelTransition(
   }
   function clearState() {
     cancelAnimations();
-    dock.classList.remove("document-dock-open", "document-dock-morphing");
+    dock.classList.remove(
+      "document-dock-open",
+      "document-dock-morphing",
+      "document-dock-centered",
+    );
     panel.removeAttribute("data-morph");
   }
   function settleOpen() {
@@ -115,6 +120,7 @@ export function createNavbarPanelTransition(
     const current = ++version;
     state = "opening";
     panel.dataset.morph = "preparing";
+    if (centered()) dock.classList.add("document-dock-centered");
     dock.classList.add("document-dock-morphing");
     show();
     const sizes = geometry();
@@ -123,15 +129,19 @@ export function createNavbarPanelTransition(
       return;
     }
     try {
-      await Promise.all([
-        animate(glass, shellFrames(sizes), { duration: 520, easing: "linear" }),
-        animate(items, [{ opacity: 1 }, { opacity: 0 }], { duration: 160 }),
-        ...islands.map((island, index) =>
-          animate(island, islandFrames(sizes.bounds[index], sizes.nav), {
-            duration: 360,
+      if (!centered())
+        await Promise.all([
+          animate(glass, shellFrames(sizes), {
+            duration: 520,
+            easing: "linear",
           }),
-        ),
-      ]);
+          animate(items, [{ opacity: 1 }, { opacity: 0 }], { duration: 160 }),
+          ...islands.map((island, index) =>
+            animate(island, islandFrames(sizes.bounds[index], sizes.nav), {
+              duration: 360,
+            }),
+          ),
+        ]);
       if (current !== version) return;
       panel.dataset.morph = "revealing";
       // Percent-based clipping tracks content height as reference data arrives.
@@ -181,25 +191,35 @@ export function createNavbarPanelTransition(
     dock.classList.add("document-dock-morphing");
     // Establish the expanded material while the dock is still invisible.
     const frames = shellFrames(sizes);
-    const shell = animate(
-      glass,
-      [...frames].reverse().map(({ offset, easing, ...frame }, index) => ({
-        ...frame,
-        offset: [0, 0.52, 1][index],
-      })),
-      { duration: 460, delay: 220 },
-    );
-    const icons = animate(items, [{ opacity: 0 }, { opacity: 1 }], {
-      duration: 220,
-      delay: 450,
-    });
-    const splits = islands.map((island, index) =>
-      animate(island, islandFrames(sizes.bounds[index], sizes.nav).reverse(), {
-        duration: 360,
-        delay: 300,
-      }),
-    );
-    dock.classList.remove("document-dock-open");
+    const shell = centered()
+      ? Promise.resolve()
+      : animate(
+          glass,
+          [...frames].reverse().map(({ offset, easing, ...frame }, index) => ({
+            ...frame,
+            offset: [0, 0.52, 1][index],
+          })),
+          { duration: 460, delay: 220 },
+        );
+    const icons = centered()
+      ? Promise.resolve()
+      : animate(items, [{ opacity: 0 }, { opacity: 1 }], {
+          duration: 220,
+          delay: 450,
+        });
+    const splits = centered()
+      ? []
+      : islands.map((island, index) =>
+          animate(
+            island,
+            islandFrames(sizes.bounds[index], sizes.nav).reverse(),
+            {
+              duration: 360,
+              delay: 300,
+            },
+          ),
+        );
+    if (!centered()) dock.classList.remove("document-dock-open");
     try {
       await Promise.all([
         shell,

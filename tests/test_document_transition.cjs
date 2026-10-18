@@ -183,6 +183,42 @@ test("measures panel width, sequences material before content, and restores the 
   assert.equal(f.body.classList.contains("task-form-open"), false);
 });
 
+test("centered panels reveal immediately without moving the navbar or side islands", async () => {
+  const f = fixture();
+  f.panel.classList.add("navbar-width-panel");
+  const opening = f.transition.open();
+  assert.equal(f.panel.dataset.morph, "revealing");
+  assert.equal(f.dock.classList.contains("document-dock-centered"), true);
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.calls[0].target, f.panel);
+  assert.equal(f.calls[0].options.duration, 400);
+  assert.equal(f.calls[0].options.delay || 0, 0);
+  assert.match(f.calls[0].frames[0].clipPath, /100% - 66px/);
+  await f.finish();
+  await opening;
+  const closing = f.transition.close();
+  assert.equal(f.calls.length, 4);
+  assert.equal(f.calls[2].target, f.panel);
+  assert.equal(f.calls[2].options.duration, 260);
+  assert.equal(f.calls[2].options.delay || 0, 0);
+  await f.finish();
+  await closing;
+  assert.equal(f.panel.open, false);
+  assert.equal(f.dock.classList.contains("document-dock-morphing"), false);
+  assert.equal(f.dock.classList.contains("document-dock-centered"), false);
+});
+
+test("interrupting an immediate centered reveal cleans up without reopening", async () => {
+  const f = fixture();
+  f.panel.classList.add("navbar-width-panel");
+  const opening = f.transition.open();
+  await f.transition.close();
+  await opening;
+  assert.equal(f.panel.open, false);
+  assert.equal(f.dock.classList.contains("document-dock-centered"), false);
+  assert.equal(f.panel.dataset.morph, undefined);
+});
+
 test("Escape-style close during absorption cannot reopen the panel later", async () => {
   const f = fixture();
   const opening = f.transition.open();

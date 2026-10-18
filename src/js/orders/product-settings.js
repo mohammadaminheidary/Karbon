@@ -1,3 +1,4 @@
+import { notifyNavbar } from "../components/navbar-notification.js";
 import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "../finance/delete-dialog.js";
 import { financeRequest } from "../finance/finance-api.js";
@@ -27,14 +28,10 @@ function reset() {
   $("saveSettingsProduct").textContent = "ثبت کالا";
   $("cancelSettingsProductEdit").hidden = true;
 }
+let messageFailed = false;
 function message(text, failed = false) {
-  $("settingsProductMessage").textContent = text;
-  $("settingsProductMessage").hidden = !text;
-  $("settingsProductMessage").dataset.failed = String(failed);
-  $("settingsProductMessage").setAttribute("role", failed ? "alert" : "status");
-  $("settingsProductMessage").style.color = failed
-    ? "var(--color-alizarin-crimson)"
-    : "var(--color-eucalyptus)";
+  messageFailed = failed;
+  notifyNavbar(text, { role: failed ? "alert" : "status" });
 }
 async function load() {
   const current = ++version;
@@ -50,7 +47,7 @@ async function load() {
       : "هنوز کالایی ثبت نشده است.";
     if (editing && !products.some((product) => product.id === editing.id))
       reset();
-    if ($("settingsProductMessage").dataset.failed === "true") message("");
+    if (messageFailed) message("");
     const signature = JSON.stringify(products);
     if (signature === renderedProducts) return true;
     $("settingsProductsList").replaceChildren(
@@ -144,7 +141,7 @@ async function load() {
     return true;
   } catch (error) {
     if (current === version) {
-      $("settingsProductsStatus").textContent = error.message;
+      $("settingsProductsStatus").textContent = "";
       message(error.message, true);
     }
     return false;

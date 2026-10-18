@@ -1,5 +1,14 @@
 // Animate the glass independently so the notification text stays crisp.
+const notifications = new WeakMap();
+
+export function notifyNavbar(message, options) {
+  return createNavbarNotification(
+    document.querySelector(".navbar-title-island"),
+  )(message, options);
+}
+
 export function createNavbarNotification(island) {
+  if (notifications.has(island)) return notifications.get(island);
   const glass = island.querySelector(".navbar-glass");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const notification = document.createElement("span");
@@ -58,12 +67,14 @@ export function createNavbarNotification(island) {
   }
 
   window.addEventListener("pagehide", reset);
-  return (message) => {
+  const notify = (message, { duration = 4000, role = "status" } = {}) => {
     reset();
+    if (!message) return;
     if (island.contains(document.activeElement))
       previousFocus = document.activeElement;
     const current = version;
     notification.textContent = message;
+    notification.setAttribute("role", role);
     island.classList.add("navbar-notifying");
     if (!reducedMotion.matches && glass.animate) {
       animations = [
@@ -89,6 +100,8 @@ export function createNavbarNotification(island) {
         ),
       ];
     }
-    timer = window.setTimeout(() => restore(current), 4000);
+    timer = window.setTimeout(() => restore(current), duration);
   };
+  notifications.set(island, notify);
+  return notify;
 }

@@ -1,3 +1,4 @@
+import { notifyNavbar } from "../components/navbar-notification.js";
 import { startPage } from "../components/page-ready.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { initializeNavbar } from "../components/navbar.js";
@@ -163,31 +164,20 @@ async function loadOrders(more = false) {
             "aria-label",
             `تکمیل سفارش ${order.order_number}`,
           );
-          const error = node("p", "orders-error");
-          error.hidden = true;
-          error.setAttribute("role", "alert");
           complete.addEventListener("click", async (event) => {
             event.stopPropagation();
             if (completingOrders.has(order.id)) return;
             completingOrders.add(order.id);
             complete.disabled = true;
             complete.textContent = "در حال تکمیل…";
-            error.hidden = true;
             try {
               await financeRequest(`/orders/${order.id}/complete`, {
                 method: "POST",
               });
-              const notice = document.getElementById("ordersNotice");
-              notice.textContent = `سفارش ${order.order_number} به سفارشات تکمیل‌شده منتقل شد.`;
-              notice.hidden = false;
+              notifyNavbar(`سفارش ${order.order_number} به سفارشات تکمیل‌شده منتقل شد.`);
               await loadOrders();
             } catch (failure) {
-              const visibleError =
-                document.querySelector(
-                  `.orders-record[data-order-id="${order.id}"] .orders-error`,
-                ) || error;
-              visibleError.textContent = failure.message;
-              visibleError.hidden = false;
+              notifyNavbar(failure.message, { role: "alert" });
             } finally {
               completingOrders.delete(order.id);
               complete.disabled = false;
@@ -200,7 +190,7 @@ async function loadOrders(more = false) {
                 });
             }
           });
-          actions.append(error, complete);
+          actions.append(complete);
           card.append(actions);
         }
         return card;
@@ -237,9 +227,7 @@ async function initializeOrdersPage() {
   if (!(await protectPage())) return;
   initializeTabs();
   const openCreateOrder = initializeOrderDialogs((saved) => {
-    const notice = document.getElementById("ordersNotice");
-    notice.textContent = `سفارش ${saved.order_number} ثبت شد؛ پرداختی ${money(saved.paid)} و مانده ${money(saved.remaining)}.`;
-    notice.hidden = false;
+    notifyNavbar(`سفارش ${saved.order_number} ثبت شد؛ پرداختی ${money(saved.paid)} و مانده ${money(saved.remaining)}.`);
     loadOrders();
     showFinalInvoice(saved.id);
   });

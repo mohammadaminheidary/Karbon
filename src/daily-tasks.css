@@ -184,22 +184,7 @@
   visibility: hidden;
 }
 .tasks-surface .task-details {
-  width: min(580px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
-  margin: auto;
   padding: 24px;
-  border: 1px solid rgb(255 255 255 / 80%);
-  border-radius: 24px;
-  color: var(--color-mirage);
-  background: rgb(248 250 252 / 94%);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  box-shadow: 0 20px 60px rgb(15 23 42 / 18%);
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-.task-details::backdrop {
-  background: rgb(15 23 42 / 30%);
 }
 .task-details > header {
   display: flex;

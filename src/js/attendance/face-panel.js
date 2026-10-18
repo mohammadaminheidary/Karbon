@@ -219,6 +219,7 @@ class FacePanel {
     this.resetView();
     this.$("faceMemberCount").textContent = "";
     const enroll = mode === "enroll";
+    this.root.classList.toggle("navbar-width-panel", !enroll);
     this.$("memberFaceTitle").textContent = enroll
       ? "ثبت چهره عضو"
       : "ورود اعضا";

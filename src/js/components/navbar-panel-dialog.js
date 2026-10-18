@@ -58,6 +58,7 @@ export class NavbarPanelDialog {
 
   position() {
     const rect = this.navbar.getBoundingClientRect();
+    this.root.style.setProperty("--task-curtain-width", `${rect.width}px`);
     const width =
       this.root.getBoundingClientRect().width || window.innerWidth - 32;
     const bottom = Math.max(12, window.innerHeight - rect.bottom);

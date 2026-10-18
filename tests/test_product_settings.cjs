@@ -47,10 +47,10 @@ async function scenario(metadata) {
     "settingsProductCode",
     "saveSettingsProduct",
     "cancelSettingsProductEdit",
-    "settingsProductMessage",
     "settingsProductPrice",
   ];
   const els = Object.fromEntries(ids.map((id) => [id, new Element()]));
+  let notification;
   let fail = false,
     confirmation;
   const product = {
@@ -75,6 +75,7 @@ async function scenario(metadata) {
     },
     Intl,
     console,
+    notifyNavbar: (message, options) => (notification = { message, ...options }),
     node: (...args) => new Element(...args),
     money: String,
     formatNumber: String,
@@ -99,6 +100,9 @@ async function scenario(metadata) {
   await context.initializeProductSettings();
   return {
     els,
+    get notification() {
+      return notification;
+    },
     remove: els.settingsProductsList.children[0].children[1].children[1],
     get confirmation() {
       return confirmation;
@@ -137,14 +141,15 @@ async function scenario(metadata) {
     test.failRefresh();
     await test.confirmation.onDeleted();
     assert.equal(test.els.settingsProductsList.children.length, 0);
-    assert.match(test.els.settingsProductMessage.textContent, /حذف شد/);
-    assert.match(test.els.settingsProductMessage.textContent, /بروزرسانی/);
+    assert.match(test.notification.message, /حذف شد/);
+    assert.match(test.notification.message, /بروزرسانی/);
     assert.equal(test.els.refreshProducts.disabled, false);
-    assert.equal(test.els.settingsProductMessage.attrs.role, "alert");
+    assert.equal(test.notification.role, "alert");
+    assert.equal(test.els.settingsProductsStatus.textContent, "");
     test.recoverRefresh();
     await test.els.refreshProducts.listeners.click();
     assert.equal(test.els.settingsProductsList.children.length, 0);
-    assert.equal(test.els.settingsProductMessage.hidden, true);
+    assert.equal(test.notification.message, "");
     assert.equal(test.els.settingsProductsList.attrs["aria-busy"], "false");
     console.log(
       "PASS: successful deletion removes the product even if refresh fails, with visible retry error",
