@@ -9,6 +9,7 @@ src/output.css
 # Local database
 backend/karbon.db
 backend/karbon.db.bak
+face.key
 # Build output
 dist/
 build/

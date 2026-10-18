@@ -5,11 +5,13 @@ from sqlalchemy import (
     DateTime,
     Integer,
     String,
+    select,
 )
 
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import column_property, relationship
 
 from database import Base
+from models.member_face import MemberFace
 
 
 class Member(Base):
@@ -21,6 +23,11 @@ class Member(Base):
         Integer,
         primary_key=True,
         index=True,
+    )
+
+    # Expose enrollment state without loading or exporting encrypted templates.
+    face_registered = column_property(
+        select(MemberFace.member_id).where(MemberFace.member_id == id).exists()
     )
 
 

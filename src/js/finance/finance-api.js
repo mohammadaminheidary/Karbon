@@ -6,7 +6,7 @@ const API_URL = "http://127.0.0.1:8000/api";
 
 export async function financeRequest(
   path,
-  { method = "GET", body, signal } = {},
+  { method = "GET", body, signal, cache } = {},
 ) {
   const controller = new AbortController();
   const cancel = () => controller.abort();
@@ -25,6 +25,7 @@ export async function financeRequest(
     try {
       response = await apiFetch(`${API_URL}${path}`, {
         method,
+        cache,
         signal: controller.signal,
         headers: {
           Accept: "application/json",

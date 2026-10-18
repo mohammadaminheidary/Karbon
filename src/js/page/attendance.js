@@ -9,6 +9,7 @@ import {
   node,
 } from "../finance/finance-utils.js";
 import { initializeNavbar } from "../components/navbar.js";
+import { initializeFaceCheckIn } from "../attendance/face-panel.js";
 
 initializeNavbar();
 
@@ -282,7 +283,7 @@ function setupCalendarInteractions() {
 ====================================================== */
 
 async function initializeMembersSection() {
-  await initializeAttendanceMembers({ onNotification: notifyAttendance });
+  await initializeAttendanceMembers();
 }
 
 /* ======================================================
@@ -425,6 +426,8 @@ async function initializeAttendancePage() {
   setupCalendarInteractions();
 
   setupAutomaticSynchronization();
+
+  initializeFaceCheckIn(() => refreshAttendanceData());
 
   await Promise.all([initializeMembersSection(), refreshCalendarStatistics()]);
 }

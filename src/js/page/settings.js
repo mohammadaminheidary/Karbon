@@ -6,6 +6,7 @@ import { initializeExpenseSettings } from "../finance/expense-settings.js";
 import { initializeBankAccounts } from "../finance/bank-accounts.js";
 import { initializeProductSettings } from "../orders/product-settings.js";
 import { initializeInvoiceSettings } from "../orders/invoice-settings.js";
+import { openFaceRegistration } from "../attendance/face-panel.js";
 
 initializeNavbar();
 
@@ -665,6 +666,14 @@ function createMemberRow(
     deleteButton
   );
 
+  const faceButton = createElement("button", "member-face-button rounded-lg bg-persian-blue/10 px-3 py-2 text-xs font-bold text-persian-blue transition-colors hover:bg-persian-blue hover:text-white");
+  faceButton.type = "button";
+  faceButton.dataset.memberFace = String(member.id);
+  faceButton.textContent = member.face_registered ? "مدیریت چهره ✓" : "ثبت چهره";
+  faceButton.setAttribute("aria-label", `${faceButton.textContent} · ${getMemberFullName(member)}`);
+  faceButton.addEventListener("click", () => void openFaceRegistration(member, member.face_registered, loadMembers));
+  actions.prepend(faceButton);
+
 
   actionsCell.appendChild(
     actions
@@ -755,8 +764,7 @@ async function loadMembers() {
 
 
   try {
-    const data =
-      await getMembers();
+    const data = await getMembers();
 
 
     const nextMembers =

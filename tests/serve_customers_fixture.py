@@ -23,6 +23,7 @@ parser.add_argument("--frontend-port", type=int, default=5501)
 parser.add_argument("--customers", type=int, default=0)
 parser.add_argument("--finance", action="store_true", help="Create finance references in the disposable database")
 parser.add_argument("--orders", action="store_true", help="Seed products only in the disposable database")
+parser.add_argument("--members", type=int, default=0, help="Seed members only in the disposable database")
 parser.add_argument("--bank-ledger", type=int, default=0, help="Seed account ledger rows only in the disposable database")
 parser.add_argument("--direct-api", action="store_true", help="Use the separate backend origin, including real CORS preflight")
 args = parser.parse_args()
@@ -74,7 +75,7 @@ class FixtureHandler(SimpleHTTPRequestHandler):
         # environment can run beside the user's normal app without logging out
         # their session or changing any production JavaScript configuration.
         path = urlsplit(self.path).path
-        if path in ["/src/js/auth/auth-api.js", "/src/js/customers/customer-api.js", "/src/js/finance/finance-api.js", "/src/js/members/members-api.js", "/src/js/attendance/attendance-api.js", "/src/js/tasks/tasks-api.js"]:
+        if path in ["/src/js/auth/auth-api.js", "/src/js/customers/customer-api.js", "/src/js/finance/finance-api.js", "/src/js/members/members-api.js", "/src/js/attendance/attendance-api.js", "/src/js/attendance/face-api.js", "/src/js/tasks/tasks-api.js"]:
             content = (ROOT / path.lstrip("/")).read_text().replace(
                 "http://127.0.0.1:8000/api",
                 f"http://127.0.0.1:{args.backend_port if args.direct_api else args.frontend_port}/api",
@@ -96,6 +97,7 @@ with tempfile.TemporaryDirectory(prefix="karbon-browser-test-") as directory:
 import app
 from database import SessionLocal
 from models.user import User
+from models.member import Member
 from models.customer import Customer
 from models.order import Product
 from models.finance import BankAccount, ExpenseCategory, FinancialTransaction
@@ -105,9 +107,11 @@ from security.password import hash_password
 from services.reference_codes import compact_category_codes, compact_transaction_numbers
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-app.app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:{args.frontend_port}"], allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type", "Authorization"])
+app.app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:{args.frontend_port}"], allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type", "Authorization"], expose_headers=["Retry-After"])
 with SessionLocal() as db:
     db.add(User(username="customers-test", password_hash=hash_password("test-password")))
+    for index in range({args.members}):
+        db.add(Member(first_name=f"عضو {{index + 1}}", last_name="آزمایشی", phone=f"0912{{index + 1:07d}}"))
     for index in range({args.customers}):
         db.add(Customer(customer_code=1001 + index, first_name=f"مشتری {{index + 1}}", last_name="آزمایشی", gender="male" if index % 2 else "female", phone_numbers=[f"0912{{index + 1:07d}}"], address="آدرس محیط آزمایشی"))
     if {args.orders!r}:

@@ -2,6 +2,7 @@ from .user import User
 from .task import Task
 from .document import Document, DocumentAccount
 from .member import Member
+from .member_face import MemberFace
 from .attendance import Attendance
 from .customer import Customer
 from .finance import BankAccount, BankDirectory, ExpenseCategory, FinancialTransaction

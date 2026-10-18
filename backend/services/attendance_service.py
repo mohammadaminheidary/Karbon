@@ -18,6 +18,7 @@ from sqlalchemy.exc import (
 )
 
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.sqlite import insert
 
 from config import (
     APP_TIMEZONE,
@@ -36,6 +37,30 @@ VALID_ATTENDANCE_STATUSES = {
     "present",
     "absent",
 }
+
+
+def check_in_member(db: Session, member_id: int):
+    """Atomic, idempotent arrival. Repeated scans retain the first present time."""
+    get_member_or_raise(db, member_id)
+    now = get_local_now()
+    statement = insert(Attendance).values(
+        member_id=member_id, date=now.date(), status="present",
+        recorded_time=get_recorded_time(now),
+    )
+    # Upgrade an absent record once; leave an existing present record untouched.
+    statement = statement.on_conflict_do_update(
+        index_elements=[Attendance.member_id, Attendance.date],
+        set_={"status": "present", "recorded_time": get_recorded_time(now), "updated_at": datetime.utcnow()},
+        where=Attendance.status != "present",
+    ).returning(Attendance.id)
+    try:
+        changed = db.execute(statement).scalar_one_or_none()
+        db.commit()
+        record = db.query(Attendance).filter(Attendance.member_id == member_id, Attendance.date == now.date()).populate_existing().one()
+        return record, changed is None
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
 
    #Service Errors

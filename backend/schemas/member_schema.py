@@ -173,6 +173,8 @@ class MemberResponse(BaseModel):
 
     id: int
 
+    face_registered: bool = False
+
     first_name: str
 
     last_name: str

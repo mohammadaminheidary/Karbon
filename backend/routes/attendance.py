@@ -19,6 +19,7 @@ from database import (
 )
 
 from models.user import User
+from schemas.face_schema import ManualCheckIn
 
 from schemas.attendance_schema import (
     AttendanceCalendarDayResponse,
@@ -43,6 +44,7 @@ from services.attendance_service import (
     get_member_attendance_summaries,
     record_today_attendance,
     update_attendance_record,
+    check_in_member,
 )
 
 
@@ -53,6 +55,21 @@ router = APIRouter(
 
 
 MAX_CALENDAR_RANGE_DAYS = 62
+
+
+@router.post("/check-in")
+def manual_check_in(
+    data: ManualCheckIn,
+    db: Session = Depends(get_database),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        record, already_checked_in = check_in_member(db, data.member_id)
+        return {"attendance": AttendanceRecordResponse.model_validate(record).model_dump(mode="json"), "already_checked_in": already_checked_in}
+    except MemberNotFoundError:
+        raise member_not_found()
+    except SQLAlchemyError:
+        raise database_error()
 
 
 # ======================================================

@@ -1,13 +1,24 @@
 <!doctype html>
-<html lang="en" dir="rtl">
+<html lang="fa" dir="rtl">
   <head>
     <meta charset="UTF-8" />
     <script src="./src/js/components/page-bootstrap.js"></script>
-    <style>@view-transition { navigation: auto; }</style>
+    <style>
+      @view-transition {
+        navigation: auto;
+      }
+    </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="./src/output.css" />
-    <title>Karbon</title>
-    <script type="module" data-page-entry blocking="render" src="src/js/page/index.js"></script>
+    <link rel="stylesheet" href="./src/dashboard.css" />
+    <link rel="stylesheet" href="./src/dashboard-layout.css" />
+    <title>داشبورد | Karbon</title>
+    <script
+      type="module"
+      data-page-entry
+      blocking="render"
+      src="src/js/page/index.js"
+    ></script>
   </head>
 
   <body class="min-h-screen bg-alabaster text-mirage">
@@ -252,7 +263,448 @@
 
     <!-- Main Content -->
     <main class="min-h-screen navigation-content bg-alabaster">
-      <!-- Hero Section will be added here -->
+      <div class="dashboard" id="dashboardWorkspace" aria-busy="true">
+        <header class="dash-header">
+          <div>
+            <p class="dash-eyebrow">
+              <span class="dash-brand-mark">K</span> KARBON <span>/</span> نمای
+              کسب‌وکار
+            </p>
+            <h1>تصویر روشن از کسب‌وکار شما</h1>
+            <p class="dash-muted">عملکرد مالی و عملیات، در یک نگاه.</p>
+          </div>
+          <div class="dash-sync">
+            <span id="dashboardStatus" role="status"
+              >در حال دریافت اطلاعات…</span
+            ><button
+              type="button"
+              id="refreshDashboard"
+              class="dash-button"
+              aria-label="بروزرسانی داشبورد"
+            >
+              <span aria-hidden="true">↻</span> بروزرسانی
+            </button>
+          </div>
+        </header>
+        <section class="dash-toolbar" aria-label="بازه گزارش">
+          <div class="dash-periods" role="group" aria-label="انتخاب بازه">
+            <button type="button" data-period="7" aria-pressed="false">
+              ۷ روز</button
+            ><button type="button" data-period="30" aria-pressed="true">
+              ۳۰ روز</button
+            ><button type="button" data-period="90" aria-pressed="false">
+              ۹۰ روز</button
+            ><button type="button" data-period="365" aria-pressed="false">
+              یک سال</button
+            ><button type="button" data-period="custom" aria-pressed="false">
+              بازه دلخواه
+            </button>
+          </div>
+          <p id="periodCaption" class="dash-muted">
+            گزارش ۳۰ روز اخیر · مقایسه با بازه قبل
+          </p>
+          <form id="dashboardDates" class="dash-date-form" hidden>
+            <label
+              >از تاریخ
+              <input
+                type="date"
+                id="dashboardStart"
+                required
+                aria-label="تاریخ شروع میلادی" /></label
+            ><label
+              >تا تاریخ
+              <input
+                type="date"
+                id="dashboardEnd"
+                required
+                aria-label="تاریخ پایان میلادی" /></label
+            ><button class="dash-button dash-primary" type="submit">
+              اعمال بازه</button
+            ><span class="dash-muted">ورود تاریخ میلادی · حداکثر ۳۶۶ روز</span>
+          </form>
+        </section>
+        <div id="dashboardError" class="dash-error" role="alert" hidden>
+          <span></span
+          ><button type="button" id="retryDashboard" class="dash-button">
+            تلاش مجدد
+          </button>
+        </div>
+        <div id="dashboardLoading" class="dash-loading" data-initial-loading>
+          <span></span> در حال محاسبه گزارش از داده‌های شما…
+        </div>
+        <div id="dashboardContent" hidden>
+          <p class="dash-chart-help">
+            لمس یا حرکت روی نمودار برای جزئیات · + و − برای بزرگ‌نمایی · کشیدن
+            برای پیمایش · جدول داده‌ها برای مقادیر دقیق. تاریخچه تغییر موجودی در
+            پروژه ثبت نمی‌شود.
+          </p>
+          <section
+            class="dash-layout-toolbar"
+            aria-label="ویرایش چیدمان داشبورد"
+          >
+            <div>
+              <button
+                type="button"
+                id="editDashboardLayout"
+                class="dash-button"
+                aria-pressed="false"
+                aria-controls="dashboardGrid"
+              >
+                <span aria-hidden="true">⊞</span> ویرایش چیدمان</button
+              ><span id="dashboardLayoutMode" class="dash-layout-mode"></span>
+            </div>
+            <div id="dashboardLayoutActions" hidden>
+              <button
+                type="button"
+                id="saveDashboardLayout"
+                class="dash-button dash-primary"
+              >
+                ذخیره چیدمان</button
+              ><button
+                type="button"
+                id="cancelDashboardLayout"
+                class="dash-button"
+              >
+                انصراف</button
+              ><button
+                type="button"
+                id="resetDashboardLayout"
+                class="dash-button"
+              >
+                چیدمان پیش‌فرض این نما
+              </button>
+            </div>
+            <p id="dashboardLayoutStatus" role="status" aria-live="polite">
+              چیدمان دلخواه خود را بسازید؛ نمودارها همراه با اندازه کارت تغییر
+              می‌کنند.
+            </p>
+          </section>
+          <section
+            id="dashboardGrid"
+            class="dash-widget-grid"
+            aria-label="ابزارک‌های داشبورد"
+          >
+            <article
+              data-widget-id="revenue"
+              data-default-width="4"
+              data-default-height="12"
+              class="dash-card dash-feature"
+              data-accent="primary"
+            >
+              <div class="dash-card-heading">
+                <h2>کل درآمد</h2>
+                <span class="dash-badge">دریافت‌شده</span>
+              </div>
+              <p class="dash-big-number">
+                <strong id="revenueValue">—</strong><span>تومان</span>
+              </p>
+              <p id="revenueChange" class="dash-comparison"></p>
+              <div id="revenueChart" aria-label="درآمد روزانه به تومان"></div>
+            </article>
+            <article
+              data-widget-id="expense"
+              data-default-width="4"
+              data-default-height="12"
+              class="dash-card dash-feature"
+              data-accent="secondary"
+            >
+              <div class="dash-card-heading">
+                <h2>کل هزینه‌ها</h2>
+                <span class="dash-badge">پرداخت‌شده</span>
+              </div>
+              <p class="dash-big-number">
+                <strong id="expenseValue">—</strong><span>تومان</span>
+              </p>
+              <p id="expenseChange" class="dash-comparison"></p>
+              <div id="expenseChart" aria-label="هزینه روزانه به تومان"></div>
+            </article>
+            <article
+              data-widget-id="inventory"
+              data-default-width="4"
+              data-default-height="12"
+              class="dash-card dash-feature"
+              data-accent="primary"
+            >
+              <div class="dash-card-heading">
+                <h2>ارزش کل موجودی</h2>
+                <span class="dash-badge">اکنون</span>
+              </div>
+              <p class="dash-big-number">
+                <strong id="inventoryValue">—</strong><span>تومان</span>
+              </p>
+              <p class="dash-comparison">
+                موجودی × قیمت فروش فعلی؛ شامل کالاهای غیرفعال
+              </p>
+              <div
+                id="inventoryChart"
+                aria-label="ارزش فعلی موجودی به تفکیک کالا"
+              ></div>
+            </article>
+            <article
+              class="dash-kpi"
+              data-widget-id="net"
+              data-default-width="3"
+              data-default-height="5"
+            >
+              <div class="dash-kpi-content">
+                <h2>خالص جریان نقدی</h2>
+                <strong>—</strong>
+                <p></p>
+              </div>
+            </article>
+            <article
+              class="dash-kpi"
+              data-widget-id="invoiced"
+              data-default-width="3"
+              data-default-height="5"
+            >
+              <div class="dash-kpi-content">
+                <h2>فروش خالص فاکتورها</h2>
+                <strong>—</strong>
+                <p></p>
+              </div>
+            </article>
+            <article
+              class="dash-kpi"
+              data-widget-id="active-orders"
+              data-default-width="3"
+              data-default-height="5"
+            >
+              <div class="dash-kpi-content">
+                <h2>سفارش‌های فعال</h2>
+                <strong>—</strong>
+                <p></p>
+              </div>
+            </article>
+            <article
+              class="dash-kpi"
+              data-widget-id="outstanding"
+              data-default-width="3"
+              data-default-height="5"
+            >
+              <div class="dash-kpi-content">
+                <h2>مطالبات فعلی</h2>
+                <strong>—</strong>
+                <p></p>
+              </div>
+            </article>
+            <article
+              data-widget-id="cashflow"
+              data-default-width="8"
+              data-default-height="12"
+              class="dash-card dash-wide"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>جریان نقدی</h2>
+                  <p class="dash-muted">درآمد و هزینه روزانه در بازه انتخابی</p>
+                </div>
+                <a href="/page/finance-page.html">دفتر مالی ↗</a>
+              </div>
+              <div
+                id="cashflowChart"
+                aria-label="مقایسه درآمد و هزینه روزانه"
+              ></div>
+              <p id="transactionSummary" class="dash-footnote"></p>
+            </article>
+            <article
+              data-widget-id="expenseBreakdown"
+              data-default-width="4"
+              data-default-height="12"
+              class="dash-card"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>ترکیب هزینه‌ها</h2>
+                  <p class="dash-muted">بر اساس عنوان هزینه و حساب سند</p>
+                </div>
+              </div>
+              <div
+                id="expenseBreakdownChart"
+                aria-label="هزینه به تفکیک منبع"
+              ></div>
+            </article>
+            <article
+              data-widget-id="sales"
+              data-default-width="8"
+              data-default-height="12"
+              class="dash-card dash-wide"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>روند سفارش و فروش</h2>
+                  <p class="dash-muted">
+                    فروش خالص فاکتورها، پس از تخفیف؛ بر اساس تاریخ فاکتور
+                  </p>
+                </div>
+                <a href="/page/orders-page.html">سفارشات ↗</a>
+              </div>
+              <div id="salesChart" aria-label="فروش خالص روزانه فاکتورها"></div>
+              <div id="orderStats" class="dash-inline-stats"></div>
+            </article>
+            <article
+              data-widget-id="bank"
+              data-default-width="4"
+              data-default-height="12"
+              class="dash-card"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>موجودی حساب‌ها</h2>
+                  <p id="bankBalance" class="dash-card-total"></p>
+                </div>
+                <a href="/page/banks-page.html">حساب‌ها ↗</a>
+              </div>
+              <div
+                id="bankChart"
+                aria-label="مانده فعلی حساب‌های بانکی و صندوق"
+              ></div>
+              <p class="dash-footnote">
+                مانده اولیه + کل دریافت‌ها − کل پرداخت‌ها؛ شامل حساب‌های
+                غیرفعال.
+              </p>
+            </article>
+            <article
+              data-widget-id="customers"
+              data-default-width="8"
+              data-default-height="12"
+              class="dash-card dash-wide"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>رشد مشتریان</h2>
+                  <p id="customerSummary" class="dash-muted"></p>
+                </div>
+                <a href="/page/customers-page.html">مشتریان ↗</a>
+              </div>
+              <div
+                id="customersChart"
+                aria-label="مشتریان ثبت‌شده در هر روز"
+              ></div>
+              <p id="customerChange" class="dash-footnote"></p>
+            </article>
+            <article
+              data-widget-id="products"
+              data-default-width="4"
+              data-default-height="12"
+              class="dash-card"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>فروش به تفکیک کالا و خدمت</h2>
+                  <p class="dash-muted">
+                    مبلغ ناخالص اقلام، پیش از تخفیف کلی فاکتور
+                  </p>
+                </div>
+              </div>
+              <div
+                id="productsChart"
+                aria-label="فروش ناخالص کالاها و خدمات"
+              ></div>
+              <p id="stockSummary" class="dash-footnote"></p>
+            </article>
+            <article
+              data-widget-id="receivables"
+              data-default-width="12"
+              data-default-height="7"
+              class="dash-card dash-full"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>مطالبات مشتریان</h2>
+                  <p class="dash-muted">
+                    بدهی فعلی همه فاکتورهای حذف‌نشده، مستقل از بازه گزارش
+                  </p>
+                </div>
+                <span id="debtorsCount" class="dash-badge"></span>
+              </div>
+              <div
+                id="debtorsTable"
+                class="dash-table-scroll dash-receivables"
+              ></div>
+            </article>
+            <article
+              data-widget-id="tasks"
+              data-default-width="4"
+              data-default-height="12"
+              class="dash-card"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>کارهای روزانه</h2>
+                  <p id="taskSummary" class="dash-muted"></p>
+                </div>
+                <a href="/page/daily-tasks-page.html">تابلو ↗</a>
+              </div>
+              <div
+                id="tasksChart"
+                aria-label="کارهای روزانه و کارهای تکمیل‌شده"
+              ></div>
+              <div id="taskStatus" class="dash-inline-stats"></div>
+            </article>
+            <article
+              data-widget-id="attendance"
+              data-default-width="4"
+              data-default-height="12"
+              class="dash-card"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>حضور و غیاب</h2>
+                  <p id="attendanceSummary" class="dash-muted"></p>
+                </div>
+                <a href="/page/attendance-page.html">اعضا ↗</a>
+              </div>
+              <div
+                id="attendanceChart"
+                aria-label="روند حضور و غیبت ثبت‌شده اعضا"
+              ></div>
+              <p id="attendanceRate" class="dash-footnote"></p>
+            </article>
+            <article
+              data-widget-id="documents"
+              data-default-width="4"
+              data-default-height="12"
+              class="dash-card"
+            >
+              <div class="dash-card-heading">
+                <div>
+                  <h2>اسناد ثبت‌شده</h2>
+                  <p id="documentSummary" class="dash-muted"></p>
+                </div>
+                <a href="/page/documents-page.html">اسناد ↗</a>
+              </div>
+              <div
+                id="documentsChart"
+                aria-label="تعداد اسناد ثبت‌شده روزانه"
+              ></div>
+              <div id="documentTypes" class="dash-inline-stats"></div>
+            </article>
+            <aside
+              class="dash-card dash-alert-widget"
+              data-widget-id="follow-up"
+              data-default-width="12"
+              data-default-height="4"
+            >
+              <h2>موارد قابل پیگیری</h2>
+              <div
+                id="dashboardAlerts"
+                class="dash-alerts"
+                aria-label="موارد قابل پیگیری"
+              ></div>
+            </aside>
+          </section>
+          <footer class="dash-footer">
+            <span
+              >Karbon <span aria-hidden="true">/</span> گزارش بر اساس داده‌های
+              ثبت‌شده</span
+            ><span
+              >مبالغ به تومان · تاریخ‌ها شمسی · بروزرسانی خودکار هر ۳۰
+              ثانیه</span
+            >
+          </footer>
+        </div>
+      </div>
     </main>
   </body>
 </html>

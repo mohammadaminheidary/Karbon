@@ -10,6 +10,7 @@
     <title>Karbon | ورودی اعضا</title>
 
     <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/face-attendance.css" />
     <script type="module" data-page-entry blocking="render" src="../src/js/page/attendance.js"></script>
   </head>
 
@@ -18,11 +19,11 @@
     <!-- navigation:start -->
 <div id="navbarHost">
 <div class="navbar-dock">
-  <section class="navbar-info navbar-title-island" aria-label="صفحه فعلی">
+  <section class="navbar-info navbar-title-island orders-title-island" aria-label="صفحه فعلی">
     <span class="navbar-glass" aria-hidden="true"></span>
     <span class="navbar-page-title" aria-live="polite" title="ورودی اعضا">ورودی اعضا</span>
     <!-- navbar-actions:start -->
-
+<button id="memberCheckInButton" type="button" class="orders-create face-check-in" aria-haspopup="dialog" aria-controls="memberFacePanel">ثبت ورود</button>
     <!-- navbar-actions:end -->
   </section>
   <nav id="mainNavbar" class="glass-navbar" aria-label="ناوبری اصلی">
@@ -321,7 +322,7 @@
               </div>
 
               <p class="mt-1.5 text-xs text-mirage/40">
-                ثبت وضعیت حضور یا غیبت اعضای مجموعه
+                ثبت ورود با تشخیص چهره یا انتخاب دستی عضو از نوار ناوبری
               </p>
             </div>
           </div>
@@ -425,7 +426,7 @@
                 >
                   <span class="h-2 w-2 rounded-full bg-french-gray"></span>
 
-                  <span> اطلاعات اعضا هنوز به Backend متصل نشده است </span>
+                  <a href="/page/settings-page.html#members">افزودن عضو در تنظیمات</a>
                 </div>
               </div>
             </div>

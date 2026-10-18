@@ -119,8 +119,13 @@ function validateMemberId(memberId) {
   return id;
 }
 
-export function getMembers() {
-  return request("/members?skip=0&limit=500");
+export async function getMembers() {
+  const members = [];
+  for (let skip = 0; ; skip += 500) {
+    const batch = await request(`/members?skip=${skip}&limit=500`);
+    members.push(...batch);
+    if (batch.length < 500) return members;
+  }
 }
 
 export function createMember(data) {

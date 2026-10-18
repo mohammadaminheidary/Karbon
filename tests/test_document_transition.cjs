@@ -85,13 +85,16 @@ function fixture(reduced = false, adapted = false) {
     matches: reduced,
     addEventListener: (name, handler) =>
       listeners.set("motion-" + name, handler),
+    removeEventListener: (name) => listeners.delete("motion-" + name),
   };
   const window = {
     matchMedia: () => media,
     addEventListener: (name, handler) => listeners.set(name, handler),
+    removeEventListener: (name) => listeners.delete(name),
     visualViewport: {
       addEventListener: (name, handler) =>
         listeners.set("viewport-" + name, handler),
+      removeEventListener: (name) => listeners.delete("viewport-" + name),
     },
   };
   const document = {
@@ -240,4 +243,17 @@ test("existing dialogs reuse identical staged motion through lifecycle adapters"
   await closing;
   assert.equal(f.hidden(), 1);
   assert.equal(f.transition.active, false);
+});
+
+test("unmount cancels transitions and detaches shared window listeners", async () => {
+  const f = fixture();
+  const opening = f.transition.open();
+  assert.ok(f.listeners.size > 0);
+  f.transition.destroy();
+  await opening;
+  assert.equal(f.listeners.size, 0);
+  assert.equal(f.transition.active, false);
+  assert.equal(f.panel.open, false);
+  assert.equal(f.dock.classList.contains("document-dock-open"), false);
+  assert.equal(f.dock.classList.contains("document-dock-morphing"), false);
 });

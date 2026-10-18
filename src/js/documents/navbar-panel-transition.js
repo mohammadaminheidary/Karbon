@@ -236,6 +236,13 @@ export function createNavbarPanelTransition(
   return {
     open,
     close,
+    destroy() {
+      window.removeEventListener?.("resize", resize);
+      window.visualViewport?.removeEventListener?.("resize", resize);
+      motion.removeEventListener?.("change", resize);
+      window.removeEventListener?.("pagehide", settleClosed);
+      settleClosed();
+    },
     get active() {
       return state !== "closed";
     },

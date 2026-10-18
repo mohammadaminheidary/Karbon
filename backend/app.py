@@ -30,6 +30,12 @@ from routes.documents import router as documents_router, settings_router as docu
 from services.finance_service import initialize_bank_storage
 from services.order_service import initialize_order_storage
 from services.document_service import initialize_document_storage
+from routes.faces import router as faces_router
+from routes.dashboard import router as dashboard_router
+from security.face_requests import FaceRequestMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.responses import JSONResponse
 
 
 # ======================================================
@@ -41,6 +47,17 @@ app = FastAPI(
     title="Karbon API",
     version="1.0.0",
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def private_face_validation(request, error):
+    if request.url.path.startswith("/api/faces"):
+        # Pydantic's default error includes input values (including biometrics).
+        return JSONResponse({"detail": {"code": "INVALID_INPUT", "message": "تصاویر معتبر با تعداد مناسب و رضایت ثبت چهره لازم است."}}, status_code=422)
+    return await request_validation_exception_handler(request, error)
+
+
+app.add_middleware(FaceRequestMiddleware)
 
 
 # ======================================================
@@ -70,6 +87,7 @@ app.add_middleware(
     ],
 
     allow_credentials=False,
+    expose_headers=["Retry-After"],
 
     allow_methods=[
         "GET",
@@ -108,6 +126,8 @@ app.include_router(orders_router)
 app.include_router(tasks_router)
 app.include_router(documents_router)
 app.include_router(document_settings_router)
+app.include_router(faces_router)
+app.include_router(dashboard_router)
 
 
 # ======================================================
