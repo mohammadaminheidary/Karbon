@@ -1,3 +1,4 @@
+from .inventory import InventoryOption
 from .user import User
 from .task import Task
 from .document import Document, DocumentAccount

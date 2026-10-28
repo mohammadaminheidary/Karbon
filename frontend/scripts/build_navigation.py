@@ -20,6 +20,7 @@ PAGES = {
     "page/banks-page.html": "بانک ها",
     "page/bank-transactions-page.html": "تراکنش‌های حساب",
     "page/settings-page.html": "تنظیمات",
+    "page/warehouse-page.html": "انبار",
 }
 NAVIGATION = re.compile(r"<!-- navigation:start -->[\s\S]*?<!-- navigation:end -->")
 ACTIONS = re.compile(r"<!-- navbar-actions:start -->([\s\S]*?)<!-- navbar-actions:end -->")

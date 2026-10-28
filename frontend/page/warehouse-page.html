@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <script src="../src/js/components/page-bootstrap.js"></script>
+    <style>
+      @view-transition {
+        navigation: auto;
+      }
+    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Karbon | انبار</title>
+    <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/orders.css" />
+    <link rel="stylesheet" href="../src/warehouse.css" />
+    <script
+      type="module"
+      data-page-entry
+      blocking="render"
+      src="../src/js/page/warehouse.js"
+    ></script>
+  </head>
+  <body class="warehouse-surface min-h-screen bg-alabaster text-mirage">
+    <!-- navigation:start -->
+<div id="navbarHost">
+<div class="navbar-dock">
+  <section class="navbar-info navbar-title-island orders-title-island" aria-label="صفحه فعلی">
+    <span class="navbar-glass" aria-hidden="true"></span>
+    <span class="navbar-page-title" aria-live="polite" title="انبار">انبار</span>
+    <!-- navbar-actions:start -->
+<button
+            id="buyItemsButton"
+            type="button"
+            class="orders-create warehouse-buy"
+            aria-controls="purchaseEntryPage"
+            aria-expanded="false"
+          >
+            خرید کالا
+          </button>
+    <!-- navbar-actions:end -->
+  </section>
+  <nav id="mainNavbar" class="glass-navbar" aria-label="ناوبری اصلی">
+    <span class="navbar-glass" aria-hidden="true"></span>
+    <div class="navbar-items">
+    <a href="/index.html" class="navbar-item" aria-label="داشبورد">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">داشبورد</span>
+    </a>
+    <a href="/page/customers-page.html" class="navbar-item" aria-label="مشتریان">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+            />
+            <circle cx="9" cy="7" r="4" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">مشتریان</span>
+    </a>
+    <a href="/page/orders-page.html" class="navbar-item" aria-label="سفارشات">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6 2h12l2 4v16H4V6l2-4Z"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 6h16M9 10h6"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">سفارشات</span>
+    </a>
+    <a href="/page/finance-page.html" class="navbar-item" aria-label="مالی">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path stroke-linecap="round" d="M3 10h18M7 15h3" />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">مالی</span>
+    </a>
+    <a href="/page/attendance-page.html" class="navbar-item" aria-label="ورودی اعضا">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <circle cx="9" cy="7" r="4" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M3 21v-2a6 6 0 0 1 12 0v2"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M19 8v6M16 11h6"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">ورودی اعضا</span>
+    </a>
+    <a href="/page/daily-tasks-page.html" class="navbar-item" aria-label="کارهای روزانه">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <path stroke-linecap="round" d="M8 2v4M16 2v4M3 10h18" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m8 15 2 2 5-5"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">کارهای روزانه</span>
+    </a>
+    <a href="/page/documents-page.html" class="navbar-item" aria-label="ثبت سند">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M14 2v6h6M8 13h8M8 17h5"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">ثبت سند</span>
+    </a>
+    <a href="#" class="navbar-item" aria-label="گزارشات">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 19V5M4 19h16"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m7 15 4-5 3 3 5-7"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">گزارشات</span>
+    </a>
+    <a href="/page/banks-page.html" class="navbar-item" aria-label="بانک ها">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m3 10 9-7 9 7"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M5 10h14M5 21h14M7 10v8M12 10v8M17 10v8M3 21h18"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">بانک ها</span>
+    </a>
+    <a href="#" class="navbar-item" aria-label="چشم‌انداز">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"
+            />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">چشم‌انداز</span>
+    </a>
+    <a href="#" class="navbar-item" aria-label="تولید">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M3 21V3h4v9l7-4v4l7-4v13H3ZM7 17h1M12 17h1M17 17h1"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">تولید</span>
+    </a>
+    <a href="/page/warehouse-page.html" aria-current="page" class="navbar-item" aria-label="انبار">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M3 21V8l9-5 9 5v13H3ZM7 21V11h10v10M7 15h10M7 18h10"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">انبار</span>
+    </a>
+    <a href="/page/settings-page.html" class="navbar-item" aria-label="تنظیمات">
+      <svg
+            class="navbar-icon" aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.9 1.9-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-2.7v-.1a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.9-1.9.06-.06A1.7 1.7 0 0 0 7.76 15a1.7 1.7 0 0 0-1.56-1.03H6v-2.7h.2a1.7 1.7 0 0 0 1.56-1.03 1.7 1.7 0 0 0-.34-1.88l-.06-.06 1.9-1.9.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 12.23 5.2V5h2.7v.2a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.9 1.9-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 11H21v2.7h-.2A1.7 1.7 0 0 0 19.4 15Z"
+            />
+          </svg>
+      <span class="navbar-tooltip" aria-hidden="true">تنظیمات</span>
+    </a>
+    <button type="button" id="logoutButton" class="navbar-item navbar-logout" aria-label="خروج از حساب">
+      <svg
+              class="navbar-icon" aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="m10 17 5-5-5-5M15 12H3"
+              />
+            </svg>
+      <span class="navbar-tooltip" aria-hidden="true">خروج از حساب</span>
+    </button>
+    </div>
+  </nav>
+  <section class="navbar-info navbar-clock-island" aria-label="تاریخ و ساعت">
+    <span class="navbar-glass" aria-hidden="true"></span>
+    <time class="navbar-clock" dir="ltr" aria-live="off" aria-label="تاریخ و ساعت تهران">—</time>
+  </section>
+  </div>
+</div>
+<!-- navigation:end -->
+    <main class="min-h-screen overflow-x-hidden navigation-content">
+      <div class="warehouse">
+        <h1 class="sr-only">انبار</h1>
+        <section aria-labelledby="warehouse-summary-title">
+          <h2 id="warehouse-summary-title" class="sr-only">
+            خلاصه موجودی انبار
+          </h2>
+          <dl class="warehouse-summary">
+            <div class="orders-stat warehouse-stat">
+              <dt>
+                <span class="warehouse-stat-icon"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="m12 3 9 5-9 5-9-5 9-5ZM3 8v9l9 5 9-5V8M12 13v9M7.5 5.5l9 5"
+                    /></svg></span
+                >کل کالاها
+              </dt>
+              <dd aria-label="بدون داده">—</dd>
+              <span class="warehouse-stat-note">قلم کالا در انبار</span>
+            </div>
+            <div class="orders-stat warehouse-stat">
+              <dt>
+                <span class="warehouse-stat-icon warehouse-warning"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="m12 3 10 18H2L12 3ZM12 9v5M12 17h.01"
+                    /></svg></span
+                >کالاهای کم‌موجودی
+              </dt>
+              <dd aria-label="بدون داده">—</dd>
+              <span class="warehouse-stat-note">پایین‌تر از حداقل موجودی</span>
+            </div>
+            <div class="orders-stat warehouse-stat">
+              <dt>
+                <span class="warehouse-stat-icon warehouse-danger"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="m9 9 6 6m0-6-6 6" /></svg></span
+                >کالاهای ناموجود
+              </dt>
+              <dd aria-label="بدون داده">—</dd>
+              <span class="warehouse-stat-note">نیازمند تأمین مجدد</span>
+            </div>
+            <div class="orders-stat warehouse-stat">
+              <dt>
+                <span class="warehouse-stat-icon"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5" /></svg></span
+                >ورودی امروز
+              </dt>
+              <dd aria-label="بدون داده">—</dd>
+              <span class="warehouse-stat-note">قلم کالای ورودی</span>
+            </div>
+            <div class="orders-stat warehouse-stat">
+              <dt>
+                <span class="warehouse-stat-icon"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 16V4m-4 4 4-4 4 4M4 16v5h16v-5" /></svg></span
+                >خروجی امروز
+              </dt>
+              <dd aria-label="بدون داده">—</dd>
+              <span class="warehouse-stat-note">قلم کالای خروجی</span>
+            </div>
+            <div class="orders-stat warehouse-stat">
+              <dt>
+                <span class="warehouse-stat-icon"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="5" width="18" height="14" rx="3" />
+                    <path d="M3 10h18M7 15h3" /></svg></span
+                >ارزش تخمینی موجودی
+              </dt>
+              <dd aria-label="بدون داده">—</dd>
+              <span class="warehouse-stat-note">تومان</span>
+            </div>
+            <div class="orders-stat warehouse-stat warehouse-reserved">
+              <dt>
+                <span class="warehouse-stat-icon"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="5" y="5" width="14" height="16" rx="2" />
+                    <path d="M9 3h6v4H9zM9 13h6M9 17h4" /></svg></span
+                >مواد رزروشده برای تولید
+              </dt>
+              <dd aria-label="بدون داده">—</dd>
+              <span class="warehouse-stat-note">واحد مواد اولیه</span>
+            </div>
+          </dl>
+        </section>
+        <section
+          class="warehouse-panel"
+          aria-labelledby="warehouse-items-title"
+        >
+          <div class="warehouse-panel-heading">
+            <div>
+              <h2 id="warehouse-items-title">موجودی کالاها</h2>
+            </div>
+          </div>
+          <div class="warehouse-toolbar" aria-label="ابزارهای نمایشی فهرست">
+            <label class="warehouse-search"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="10.5" cy="10.5" r="6.5" />
+                <path d="m16 16 4 4" /></svg
+              ><span class="sr-only">جستجوی کالا</span
+              ><input
+                type="search"
+                placeholder="جستجوی نام یا کد کالا…"
+                disabled
+            /></label>
+            <label class="warehouse-filter"
+              ><span class="sr-only">دسته‌بندی کالا</span
+              ><select disabled>
+                <option>همه دسته‌بندی‌ها</option>
+              </select></label
+            >
+            <label class="warehouse-filter"
+              ><span class="sr-only">وضعیت موجودی</span
+              ><select disabled>
+                <option>همه وضعیت‌ها</option>
+              </select></label
+            >
+          </div>
+          <div
+            class="warehouse-table-scroll"
+            role="region"
+            aria-label="جدول موجودی؛ برای مشاهده همه ستون‌ها به طرفین حرکت کنید"
+            tabindex="0"
+          >
+            <table class="warehouse-table">
+              <caption class="sr-only">
+                فهرست موجودی کالاها
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">نام کالا / کد</th>
+                  <th scope="col">دسته‌بندی</th>
+                  <th scope="col">واحد</th>
+                  <th scope="col">موجودی</th>
+                  <th scope="col">رزروشده</th>
+                  <th scope="col">وضعیت</th>
+                  <th scope="col"><span class="sr-only">جزئیات</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="7" class="warehouse-empty">
+                    داده‌ای برای نمایش وجود ندارد.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <section
+        id="purchaseEntryPage"
+        class="purchase-page bottom-curtain navbar-registration-panel navbar-transition-panel"
+        aria-hidden="true"
+        inert
+        aria-labelledby="purchaseEntryTitle"
+        tabindex="-1"
+        hidden
+      >
+        <form id="purchaseEntryForm">
+          <header class="purchase-heading">
+            <div>
+              <p class="warehouse-eyebrow">انبار</p>
+              <h2 id="purchaseEntryTitle">خرید کالا</h2>
+            </div>
+            <button type="button" id="closePurchaseEntry" class="purchase-back">
+              بازگشت به انبار ←
+            </button>
+          </header>
+          <div class="purchase-metadata">
+            <label for="purchaseDate"
+              >تاریخ<input
+                id="purchaseDate"
+                readonly
+                aria-readonly="true"
+                dir="ltr"
+            /></label>
+            <label for="purchaseInvoiceNumber"
+              >شماره فاکتور خرید<input
+                id="purchaseInvoiceNumber"
+                readonly
+                aria-readonly="true"
+                dir="ltr"
+            /></label>
+          </div>
+          <div class="purchase-fields">
+            <label class="purchase-item-name" for="purchaseItemName"
+              >نام کالا<input
+                id="purchaseItemName"
+                name="itemName"
+                maxlength="150"
+                autocomplete="off"
+                required
+            /></label>
+            <label for="purchaseCategory"
+              >دسته‌بندی<select
+                id="purchaseCategory"
+                name="category"
+                required
+                disabled
+              >
+                <option value="">در حال دریافت…</option>
+              </select></label
+            >
+            <label for="purchaseUnit"
+              >واحد<select id="purchaseUnit" name="unit" required disabled>
+                <option value="">در حال دریافت…</option>
+              </select></label
+            >
+            <label for="purchaseQuantity"
+              >مقدار<input
+                id="purchaseQuantity"
+                name="quantity"
+                inputmode="decimal"
+                dir="ltr"
+                maxlength="16"
+                required
+            /></label>
+            <label for="purchasePrice"
+              >قیمت خرید (تومان)<input
+                id="purchasePrice"
+                name="price"
+                inputmode="numeric"
+                dir="ltr"
+                maxlength="21"
+                required
+            /></label>
+          </div>
+          <div class="purchase-options-help">
+            <a href="/page/settings-page.html#inventory"
+              >مدیریت دسته‌بندی و واحد در تنظیمات ←</a
+            ><button
+              type="button"
+              id="reloadPurchaseOptions"
+              class="purchase-back"
+            >
+              بروزرسانی گزینه‌ها
+            </button>
+          </div>
+          <p
+            id="purchaseOptionsStatus"
+            class="purchase-status"
+            role="status"
+          ></p>
+          <footer class="purchase-footer">
+            <p>
+              این فرم برای ورود اطلاعات است؛ ثبت نهایی خرید و تغییر موجودی هنوز
+              فعال نیست.
+            </p>
+            <button type="button" id="newPurchaseEntry" class="purchase-back">
+              فرم جدید
+            </button>
+          </footer>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

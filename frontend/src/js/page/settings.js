@@ -5,6 +5,7 @@ import { onPageRefresh } from "../components/data-events.js";
 import { initializeDocumentAccounts } from "../documents/account-settings.js";
 import { initializeExpenseSettings } from "../finance/expense-settings.js";
 import { initializeBankAccounts } from "../finance/bank-accounts.js";
+import { initializeInventorySettings } from "../warehouse/inventory-settings.js";
 import { initializeProductSettings } from "../orders/product-settings.js";
 import { initializeInvoiceSettings } from "../orders/invoice-settings.js";
 import { openFaceRegistration } from "../attendance/face-panel.js";
@@ -40,6 +41,7 @@ const SETTINGS_SECTIONS =
     "document-accounts",
     "banks",
     "products",
+    "inventory",
     "invoices",
     "appearance",
     "security",
@@ -289,6 +291,9 @@ async function showSettingsSection(
   }
   if (section === "banks") {
     await initializeBankAccounts();
+  }
+  if (section === "inventory") {
+    await initializeInventorySettings();
   }
   if (section === "products") {
     await initializeProductSettings();

@@ -25,6 +25,7 @@ from routes.attendance import (
 from routes.customers import router as customers_router
 from routes.finance import router as finance_router
 from routes.orders import router as orders_router
+from routes.inventory import router as inventory_settings_router
 from routes.tasks import router as tasks_router
 from routes.documents import router as documents_router, settings_router as document_settings_router
 from services.finance_service import initialize_bank_storage
@@ -123,6 +124,7 @@ app.include_router(
 app.include_router(customers_router)
 app.include_router(finance_router)
 app.include_router(orders_router)
+app.include_router(inventory_settings_router)
 app.include_router(tasks_router)
 app.include_router(documents_router)
 app.include_router(document_settings_router)

@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="../src/output.css" />
     <link rel="stylesheet" href="../src/finance.css" />
     <link rel="stylesheet" href="../src/orders.css" />
+    <link rel="stylesheet" href="../src/inventory-settings.css" />
     <link rel="stylesheet" href="../src/face-attendance.css" />
     <script type="module" data-page-entry blocking="render" src="../src/js/page/settings.js"></script>
   </head>
@@ -238,7 +239,7 @@
           </svg>
       <span class="navbar-tooltip" aria-hidden="true">تولید</span>
     </a>
-    <a href="#" class="navbar-item" aria-label="انبار">
+    <a href="/page/warehouse-page.html" class="navbar-item" aria-label="انبار">
       <svg
             class="navbar-icon" aria-hidden="true"
             fill="none"
@@ -410,6 +411,8 @@
                   <span>کالاها</span>
                 </button>
 
+                <button type="button" data-settings-target="inventory" class="settings-nav-button flex items-center gap-3 rounded-xl px-3.5 py-3 text-right text-sm font-bold transition-all"><span>دسته‌بندی و واحد انبار</span></button>
+
                 <button type="button" data-settings-target="invoices" class="settings-nav-button flex items-center gap-3 rounded-xl px-3.5 py-3 text-right text-sm font-bold transition-all">
                   <span>فاکتورها</span>
                 </button>
@@ -467,6 +470,13 @@
                   </button>
                 </div>
               </div>
+            </section>
+
+            <section data-settings-panel="inventory" class="finance-surface hidden min-w-0 w-full max-w-full">
+              <div class="mb-5 flex flex-wrap items-center justify-between gap-4"><h2 class="text-xl font-black">دسته‌بندی و واحد انبار</h2><button id="refreshInventoryOptions" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button></div>
+              <p class="text-sm text-mirage/60">گزینه‌های فعال در فرم خرید کالا نمایش داده می‌شوند.</p>
+              <p id="inventoryOptionsStatus" role="status" class="mt-4 text-sm text-mirage/60"></p>
+              <div id="inventoryOptionsLists" class="inventory-options-grid"><article class="inventory-options-card"><h3>دسته‌بندی‌های کالا</h3><form id="inventory-categories-form"><fieldset><label for="inventory-categories-name">عنوان دسته‌بندی</label><div class="inventory-option-entry"><input id="inventory-categories-name" class="finance-field" maxlength="80" required autocomplete="off"/><button type="submit" class="finance-button bg-persian-blue text-white">افزودن</button></div></fieldset></form><ul id="inventory-categories-list" class="inventory-options-list"></ul></article><article class="inventory-options-card"><h3>واحد‌های کالا</h3><form id="inventory-units-form"><fieldset><label for="inventory-units-name">عنوان واحد</label><div class="inventory-option-entry"><input id="inventory-units-name" class="finance-field" maxlength="80" required autocomplete="off"/><button type="submit" class="finance-button bg-persian-blue text-white">افزودن</button></div></fieldset></form><ul id="inventory-units-list" class="inventory-options-list"></ul></article></div>
             </section>
 
             <section data-settings-panel="invoices" class="finance-surface hidden min-w-0 w-full max-w-full">
