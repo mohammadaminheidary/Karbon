@@ -146,7 +146,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={args.backend_port})
 '''
     frontend = ThreadingHTTPServer(("127.0.0.1", args.frontend_port), FixtureHandler)
     thread = threading.Thread(target=frontend.serve_forever, daemon=True)
-    backend = subprocess.Popen([sys.executable, "-c", bootstrap], cwd=ROOT / "backend", env=env)
+    backend = subprocess.Popen([sys.executable, "-c", bootstrap], cwd=ROOT.parent / "backend", env=env)
     thread.start()
     print(f"Isolated browser fixture: http://127.0.0.1:{args.frontend_port}/page/customers-page.html", flush=True)
     try:

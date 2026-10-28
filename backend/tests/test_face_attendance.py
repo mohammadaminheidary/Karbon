@@ -1,6 +1,6 @@
 """Isolated attendance/biometrics API tests. Optional three-angle JPEGs in env.
 
-KARBON_TEST_FACE_IMAGES=front.jpg,left.jpg,right.jpg python3 -m unittest discover -s tests -p test_face_attendance.py
+KARBON_TEST_FACE_IMAGES=front.jpg,left.jpg,right.jpg python3 -m unittest discover -s backend/tests -p test_face_attendance.py
 No test writes to the normal application database; photos use disposable storage.
 """
 import base64
@@ -19,7 +19,7 @@ import unittest
 import urllib.error
 import urllib.request
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class FaceAttendanceTests(unittest.TestCase):

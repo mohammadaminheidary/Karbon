@@ -6,12 +6,12 @@
 
 ```sh
 python3 -m pip install -r backend/requirements.txt
-npm install
-npx tailwindcss -i ./src/input.css -o ./src/output.css
+npm --prefix frontend install
+npm --prefix frontend run build
 python3 start.py
 ```
 
-`npm run dev` کامپایل Tailwind را در حالت watch اجرا می‌کند. سرور Frontend روی `127.0.0.1:5501` و Backend روی `127.0.0.1:8000` است.
+`npm --prefix frontend run dev` کامپایل Tailwind را در حالت watch اجرا می‌کند. سرور Frontend روی `127.0.0.1:5501` و Backend روی `127.0.0.1:8000` است.
 
 مسیر پیش‌فرض دیتابیس طبق معماری موجود `~/.karbon/karbon.db` حفظ شده است. متغیر اختیاری `KARBON_DATABASE_PATH` مسیر دیتابیس را برای محیط توسعه یا تست تغییر می‌دهد؛ مسیر والد باید وجود داشته باشد. جدول مشتریان با `Base.metadata.create_all` ایجاد می‌شود و جدول کاربران یا داده‌های قبلی بازنشانی نمی‌شوند. secret مربوط به JWT همان تنظیمات فعلی در `~/.karbon/.env` است.
 
@@ -48,16 +48,16 @@ python3 start.py
 | `backend/schemas/customer_schema.py` | اعتبارسنجی، نرمال‌سازی و قرارداد خروجی |
 | `backend/services/customer_service.py` | CRUD، کد مشتری، تکرار، جستجو و مرز آمار آینده |
 | `backend/routes/customers.py` | API محافظت‌شده و خطاهای JSON |
-| `page/customers-page.html` | ساختار RTL، فرم‌ها، جزئیات، هشدار و حالت‌های صفحه |
-| `src/js/page/customers.js` | ورود به صفحه و auth guard |
-| `src/js/customers/customer-api.js` | API، token، لغو درخواست و مهلت اتصال |
-| `src/js/customers/customers.js` | فهرست ۱۲تایی و نمایش بیشتر، جستجو، جزئیات، Toast و حذف ۱۰ ثانیه‌ای |
-| `src/js/customers/customer-modal.js` | فرم مشترک ثبت/ویرایش و تأیید مشتری مشابه |
-| `src/js/customers/customer-utils.js` | نمایش تاریخ شمسی، اعداد و اجزای مشترک مشتری |
-| `src/js/components/navbar.js` | Sidebar مشترک و فهرست موبایل |
-| `src/js/components/dialog.js` | مدیریت Focus، Escape، Overlay و Modalهای تو‌در‌تو |
-| `tests/test_customers.py` | تست‌های یکپارچه HTTP/SQLite بدون تغییر دیتابیس اصلی |
-| `tests/serve_customers_fixture.py` | اجرای محیط مرورگر با دیتابیس موقت |
+| `frontend/page/customers-page.html` | ساختار RTL، فرم‌ها، جزئیات، هشدار و حالت‌های صفحه |
+| `frontend/src/js/page/customers.js` | ورود به صفحه و auth guard |
+| `frontend/src/js/customers/customer-api.js` | API، token، لغو درخواست و مهلت اتصال |
+| `frontend/src/js/customers/customers.js` | فهرست ۱۲تایی و نمایش بیشتر، جستجو، جزئیات، Toast و حذف ۱۰ ثانیه‌ای |
+| `frontend/src/js/customers/customer-modal.js` | فرم مشترک ثبت/ویرایش و تأیید مشتری مشابه |
+| `frontend/src/js/customers/customer-utils.js` | نمایش تاریخ شمسی، اعداد و اجزای مشترک مشتری |
+| `frontend/src/js/components/navbar.js` | Sidebar مشترک و فهرست موبایل |
+| `frontend/src/js/components/dialog.js` | مدیریت Focus، Escape، Overlay و Modalهای تو‌در‌تو |
+| `backend/tests/test_customers.py` | تست‌های یکپارچه HTTP/SQLite بدون تغییر دیتابیس اصلی |
+| `frontend/tests/serve_customers_fixture.py` | اجرای محیط مرورگر با دیتابیس موقت |
 | `docs/customers.md` | راهنمای اجرا، قرارداد و فهرست تغییرات |
 
 فایل‌های صفحه و اسکریپت مشتریان پیش‌تر در working tree به‌صورت مقدماتی و untracked وجود داشتند؛ همان فایل‌ها تکمیل شدند.
@@ -69,21 +69,21 @@ python3 start.py
 | `backend/app.py` | ثبت Router مشتریان |
 | `backend/models/__init__.py` | ثبت مدل در initialization موجود |
 | `backend/config.py` | مسیر اختیاری دیتابیس برای محیط‌های جداگانه |
-| `src/js/components/loader.js` | افزودن Spinner قابل استفاده مجدد؛ حفظ Loader قبلی |
-| `index.html` | استفاده از Navbar مشترک و فاصله واکنش‌گرا |
-| `page/attendance-page.html` | استفاده از Navbar مشترک و فاصله واکنش‌گرا |
-| `page/settings-page.html` | استفاده از Navbar مشترک و فاصله واکنش‌گرا |
-| `src/js/page/index.js` | initialization Navbar |
-| `src/js/page/attendance.js` | initialization Navbar |
-| `src/js/page/settings.js` | initialization Navbar |
+| `frontend/src/js/components/loader.js` | افزودن Spinner قابل استفاده مجدد؛ حفظ Loader قبلی |
+| `frontend/index.html` | استفاده از Navbar مشترک و فاصله واکنش‌گرا |
+| `frontend/page/attendance-page.html` | استفاده از Navbar مشترک و فاصله واکنش‌گرا |
+| `frontend/page/settings-page.html` | استفاده از Navbar مشترک و فاصله واکنش‌گرا |
+| `frontend/src/js/page/index.js` | initialization Navbar |
+| `frontend/src/js/page/attendance.js` | initialization Navbar |
+| `frontend/src/js/page/settings.js` | initialization Navbar |
 
-`src/output.css` با Tailwind بازسازی می‌شود و طبق `.gitignore` وارد Git نمی‌شود. تغییرات قبلی working tree در محتویات تنظیمات و لینک مشتریان حفظ شدند؛ حذف markup تکراری Sidebar به دلیل انتقال آن به کامپوننت مشترک است.
+`frontend/src/output.css` با Tailwind بازسازی می‌شود و طبق `.gitignore` وارد Git نمی‌شود. تغییرات قبلی working tree در محتویات تنظیمات و لینک مشتریان حفظ شدند؛ حذف markup تکراری Sidebar به دلیل انتقال آن به کامپوننت مشترک است.
 
 ## تست
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 tests/serve_customers_fixture.py
+python3 -m unittest discover -s backend/tests -v
+python3 frontend/tests/serve_customers_fixture.py
 ```
 
 تست‌های یکپارچه، خودشان سرور با پورت موقت و دیتابیس مستقل ایجاد و پاک‌سازی می‌کنند. محیط مرورگر نیز هیچ داده‌ای در دیتابیس اصلی وارد نمی‌کند. حساب آن فقط `customers-test` با رمز `test-password` است. برای خروج و پاک‌سازی محیط موقت Ctrl+C بزنید.
@@ -107,7 +107,7 @@ python3 tests/serve_customers_fixture.py
 تست نمایش بیشتر با ۲۵ مشتری فقط در دیتابیس موقت انجام شد: ۱۲ → ۲۴ → ۲۵ کارت، بدون شناسه تکراری؛ شروع مجدد جستجو از ۱۲ کارت و حفظ ۲۴ کارت پس از ذخیره ویرایش نیز تأیید شد.
 
 ```sh
-python3 tests/serve_customers_fixture.py --backend-port 8001 --frontend-port 5502 --customers 25
+python3 frontend/tests/serve_customers_fixture.py --backend-port 8001 --frontend-port 5502 --customers 25
 ```
 
 این محیط آزمایشی در کنار اجرای عادی روی پورت‌های جدا اجرا می‌شود. بازنویسی آدرس API فقط در پاسخ سرور تست انجام می‌شود و تنظیمات یا نشست ورود اجرای عادی را تغییر نمی‌دهد. تعداد مشتری پیش‌فرض محیط تست همچنان صفر است.

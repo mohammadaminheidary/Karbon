@@ -7,7 +7,7 @@
 ## اجرا و ارتقای اطلاعات قبلی
 
 ```sh
-npx tailwindcss -i ./src/input.css -o ./src/output.css
+npm --prefix frontend run build
 python3 start.py
 ```
 
@@ -47,15 +47,15 @@ python3 start.py
 
 ## افزودن بانک به فهرست مرجع
 
-نام بانک و لوگو در جدول `bank_directory` هستند. فایل `data/banks.json` داده مرجع اولیه را نگهداری می‌کند و هیچ حساب یا تراکنشی تولید نمی‌کند. برای افزودن بانک، کد یکتا، نام، `logo_url` و وضعیت را به همین فایل اضافه و SVG را در `assets/image/banks` قرار دهید؛ راه‌اندازی بعدی فقط کد جدید را درج می‌کند. ردیف‌های موجود بازنویسی نمی‌شوند تا تغییرات دیتابیس حفظ شوند؛ تغییر نام/وضعیت بانک موجود باید در دیتابیس اعمال شود.
+نام بانک و لوگو در جدول `bank_directory` هستند. فایل `backend/data/banks.json` داده مرجع اولیه را نگهداری می‌کند و هیچ حساب یا تراکنشی تولید نمی‌کند. برای افزودن بانک، کد یکتا، نام، `logo_url` و وضعیت را به همین فایل اضافه و SVG را در `frontend/assets/image/banks` قرار دهید؛ راه‌اندازی بعدی فقط کد جدید را درج می‌کند. ردیف‌های موجود بازنویسی نمی‌شوند تا تغییرات دیتابیس حفظ شوند؛ تغییر نام/وضعیت بانک موجود باید در دیتابیس اعمال شود.
 
-۲۶ لوگوی رنگی محلی از [iranian-banks-react-icons متعلق به Snapp Store](https://github.com/snapp-store/iranian-banks-react-icons/tree/e3c68fceb51620ed817568aa78210a4a5e17c31b) گرفته شده‌اند. مجوز MIT و انتساب در `assets/image/banks/LICENSE.txt` حفظ شده است. فایل‌ها SVG بررسی‌شده‌اند و برای نمایش به سرویس خارجی وابسته نیستند. مرجع بررسی قالب/الگوریتم‌ها: [اعتبارسنجی شبا](https://github.com/persian-tools/persian-tools/blob/master/src/modules/sheba/index.ts) و [اعتبارسنجی کارت](https://github.com/persian-tools/persian-tools/blob/master/src/modules/verifyCardNumber/index.ts) در Persian Tools.
+۲۶ لوگوی رنگی محلی از [iranian-banks-react-icons متعلق به Snapp Store](https://github.com/snapp-store/iranian-banks-react-icons/tree/e3c68fceb51620ed817568aa78210a4a5e17c31b) گرفته شده‌اند. مجوز MIT و انتساب در `frontend/assets/image/banks/LICENSE.txt` حفظ شده است. فایل‌ها SVG بررسی‌شده‌اند و برای نمایش به سرویس خارجی وابسته نیستند. مرجع بررسی قالب/الگوریتم‌ها: [اعتبارسنجی شبا](https://github.com/persian-tools/persian-tools/blob/master/src/modules/sheba/index.ts) و [اعتبارسنجی کارت](https://github.com/persian-tools/persian-tools/blob/master/src/modules/verifyCardNumber/index.ts) در Persian Tools.
 
 ## بررسی
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 tests/serve_customers_fixture.py --backend-port 8019 --frontend-port 5519 --customers 2
+python3 -m unittest discover -s backend/tests -v
+python3 frontend/tests/serve_customers_fixture.py --backend-port 8019 --frontend-port 5519 --customers 2
 ```
 
 هر ۳۶ تست موفق شدند؛ شش تست بانک شامل فهرست دیتابیس و لوگو، احراز هویت، ارقام فارسی، اطلاعات نامعتبر، چند حساب و زمان‌ها، تکراری‌ها، شبا اختیاری و استفاده مالی حساب بدون شبا، و حفظ حساب و تراکنش پیش از ارتقا هستند. پنج تست دفتر حساب نیز نمودار، فیلترها، صفحه‌بندی و لوگوی تراکنش‌ها را پوشش می‌دهند. محیط تست از دیتابیس موقت مستقل استفاده می‌کند و هیچ اطلاعات نمونه‌ای به دیتابیس اصلی نمی‌نویسد.

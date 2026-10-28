@@ -1,4 +1,4 @@
-// Run against tests/serve_customers_fixture.py with --customers 25 --finance
+// Run against frontend/tests/serve_customers_fixture.py with --customers 25 --finance
 // --orders --bank-ledger 25. Uses only the fixture's disposable database.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";

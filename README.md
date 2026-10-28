@@ -18,3 +18,50 @@ The project focuses on providing a simple, intuitive, and efficient management e
 - 🔐 Secure and scalable architecture
 
 **Karban — Manage smarter. Work better.**
+
+### Development
+
+Run these commands from the project root:
+
+```sh
+python3 -m pip install -r backend/requirements.txt
+npm --prefix frontend install
+python3 start.py
+```
+
+`python start.py` works when `python` is the installed Python 3 interpreter.
+The launcher also works from another directory using its absolute path. It builds
+frontend assets, starts the API at `http://127.0.0.1:8000` and the frontend at
+`http://127.0.0.1:5501`, then opens `/page/login-page.html`. Ctrl+C or SIGTERM
+stops the servers it started, including Uvicorn's reload worker. Existing servers
+on those ports are reused and remain running when this launcher stops.
+
+- `backend/`: API, models, services, schemas, security, bundled bank catalog,
+  biometric models, Python dependencies and API tests.
+- `frontend/`: pages, templates, JavaScript, styles, assets, Node dependencies,
+  build tools, static development server and frontend/browser tests.
+- `docs/`: shared domain guides, dependency map, verification report and existing artifacts.
+
+Database, environment and encryption settings are unchanged: the default database
+is `~/.karbon/karbon.db`, JWT configuration loads from `~/.karbon/.env`, and the
+face encryption key remains beside the selected database unless overridden.
+`KARBON_DATABASE_PATH`, `KARBON_TIMEZONE`, `KARBON_JWT_SECRET`, `KARBON_FACE_KEY`
+and `KARBON_FACE_KEY_PATH` retain their behavior. Relative database/key overrides
+are resolved from `backend/` when using the root launcher. Backend modules retain
+their local import names; use `python3 backend/run.py` from the root (or its
+absolute path), or run `python3 -m uvicorn app:app --reload` inside `backend/`.
+Do not run the app against production data merely to verify this reorganization.
+
+```sh
+npm --prefix frontend run build
+npm --prefix frontend run dev
+npm --prefix frontend test
+python3 -m unittest discover -s backend/tests -v
+python3 -m unittest discover -s frontend/tests -v
+python3 frontend/scripts/build_navigation.py --check
+```
+
+Browser tests use `frontend/tests/serve_customers_fixture.py`, which creates a
+disposable database. Set `KARBON_PLAYWRIGHT_PATH` and `KARBON_CHROME_PATH` if
+Playwright or Chromium are installed outside the frontend's Node dependencies.
+See [the dependency map](docs/project-layout.md) for execution and storage paths.

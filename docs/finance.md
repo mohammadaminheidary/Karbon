@@ -7,7 +7,7 @@
 با همان وابستگی‌های موجود پروژه اجرا می‌شود؛ پکیج جدیدی نیاز ندارد.
 
 ```sh
-npx tailwindcss -i ./src/input.css -o ./src/output.css
+npm --prefix frontend run build
 python3 start.py
 ```
 
@@ -68,8 +68,8 @@ python3 start.py
 ## بررسی
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 tests/serve_customers_fixture.py --backend-port 8017 --frontend-port 5517 --customers 2 --finance
+python3 -m unittest discover -s backend/tests -v
+python3 frontend/tests/serve_customers_fixture.py --backend-port 8017 --frontend-port 5517 --customers 2 --finance
 ```
 
 تست‌ها و محیط مرورگر از دیتابیس موقت و مستقل استفاده می‌کنند. گزینه `--finance` فقط در محیط آزمایشی بانک و عنوان هزینه ایجاد می‌کند؛ تراکنش نمونه‌ای در اجرای عادی تولید نمی‌شود. ورود محیط تست همان `customers-test` / `test-password` است.

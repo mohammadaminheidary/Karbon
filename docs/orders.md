@@ -47,8 +47,8 @@ UUID درخواست و اثر انگشت محتوای نرمال‌شده، تک
 ## بررسی
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 tests/serve_customers_fixture.py --backend-port 8002 --frontend-port 5503 --customers 2 --finance --orders
+python3 -m unittest discover -s backend/tests -v
+python3 frontend/tests/serve_customers_fixture.py --backend-port 8002 --frontend-port 5503 --customers 2 --finance --orders
 ```
 
 محیط مرورگر دیتابیس موقت دارد و API را فقط در سرور تست به همان origin منتقل می‌کند. داده نمونه در دیتابیس اصلی ساخته نمی‌شود. ۸ تست سفارش، صحت جمع‌ها، سه روش پرداخت، مانده مشتری و بانک، تاریخ، حفظ اقلام تاریخی، موجودی، خطا و rollback، ثبت هم‌زمان، یکتایی، احراز هویت و حفاظت دفتر مالی را بررسی می‌کنند. تست‌های پیشین مالی، مشتری و بانک نیز اجرا می‌شوند.

@@ -26,7 +26,7 @@ def initialize_bank_storage(engine):
     Serialized and idempotent for existing SQLite databases and reload workers.
     Unknown historical owner/card/date information stays NULL, never guessed.
     """
-    catalog = json.loads((Path(__file__).resolve().parents[2] / "data" / "banks.json").read_text())
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "data" / "banks.json").read_text())
     additions = {
         "first_name": "VARCHAR(100)", "last_name": "VARCHAR(100)",
         "bank": "VARCHAR(40) REFERENCES bank_directory(code) ON DELETE RESTRICT",

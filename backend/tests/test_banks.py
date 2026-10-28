@@ -14,7 +14,7 @@ import uuid
 import test_finance as finance_tests
 import test_customers as customer_tests
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class BanksIntegrationTests(unittest.TestCase):
@@ -40,7 +40,7 @@ class BanksIntegrationTests(unittest.TestCase):
         self.assertEqual(len({item["code"] for item in catalog}), len(catalog))
         self.assertEqual(next(item for item in catalog if item["code"] == "mellat")["name"], "بانک ملت")
         for bank in catalog:
-            self.assertTrue((ROOT / bank["logo_url"].lstrip("/")).is_file())
+            self.assertTrue((ROOT / "frontend" / bank["logo_url"].lstrip("/")).is_file())
         with closing(sqlite3.connect(self.database)) as db:
             db.execute("UPDATE bank_directory SET name=? WHERE code='mellat'", ("نام ذخیره‌شده در دیتابیس",))
             db.commit()

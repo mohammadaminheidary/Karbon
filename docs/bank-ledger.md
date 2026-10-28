@@ -32,8 +32,8 @@
 ## بررسی
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 tests/serve_customers_fixture.py --backend-port 8019 --frontend-port 5519 --customers 2 --bank-ledger 33
+python3 -m unittest discover -s backend/tests -v
+python3 frontend/tests/serve_customers_fixture.py --backend-port 8019 --frontend-port 5519 --customers 2 --bank-ledger 33
 ```
 
 هر ۳۶ تست موفق شد؛ پنج تست جدید شامل ترتیب و صفحه‌بندی ۱۵تایی هنگام درج هم‌زمان، جداسازی حساب‌ها، جستجوی شماره و شرح، فیلتر تاریخ شمسی و مبلغ، کبیسه و مرز بازه‌های نمودار، مبالغ واقعی، احراز هویت، ورودی نامعتبر و لوگوی تراکنش‌ها هستند. تمام تست‌ها از دیتابیس موقت مستقل استفاده می‌کنند. گزینه `--bank-ledger` فقط در fixture حساب و تراکنش آزمایشی می‌سازد؛ اجرای عادی پروژه داده نمونه نمی‌سازد.

@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { readFileSync } = require("node:fs");
 const { test } = require("node:test");
-const source = readFileSync("src/js/dashboard/layout-model.js", "utf8");
+const source = readFileSync(require("node:path").join(__dirname, "../src/js/dashboard/layout-model.js"), "utf8");
 const modelPromise = import(
   "data:text/javascript;base64," + Buffer.from(source).toString("base64")
 );

@@ -1,6 +1,6 @@
 # Dependencies
 node_modules/
-src/output.css
+frontend/src/output.css
 
 # Environment variables
 .env

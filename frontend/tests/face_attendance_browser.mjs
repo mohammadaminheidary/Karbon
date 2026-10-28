@@ -1,4 +1,4 @@
-// Run with tests/serve_customers_fixture.py --members 3. Synthetic cameras and
+// Run with frontend/tests/serve_customers_fixture.py --members 3. Synthetic cameras and
 // controlled inference responses exercise the real UI and attendance backend.
 // Pose/quality/matching/encryption are covered separately by Python tests.
 import assert from "node:assert/strict";

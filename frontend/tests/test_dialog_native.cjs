@@ -58,7 +58,7 @@ function fixture() {
   });
   vm.runInContext(
     fs
-      .readFileSync("src/js/components/dialog.js", "utf8")
+      .readFileSync(require("node:path").join(__dirname, "../src/js/components/dialog.js"), "utf8")
       .replace("export class Dialog", "class Dialog") +
       "\nthis.Dialog = Dialog;",
     context,

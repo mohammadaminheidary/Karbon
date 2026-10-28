@@ -37,7 +37,7 @@ function fixture() {
   };
   vm.createContext(context);
   vm.runInContext(
-    readFileSync("src/js/components/navbar-notification.js", "utf8")
+    readFileSync(require("node:path").join(__dirname, "../src/js/components/navbar-notification.js"), "utf8")
       .replace(/^export /gm, ""),
     context,
   );

@@ -1,5 +1,5 @@
 """Real HTTP/SQLite integration checks. Never uses the application's live database.
-Run: python3 -m unittest discover -s tests -v
+Run: python3 -m unittest discover -s backend/tests -v
 """
 import concurrent.futures
 from contextlib import closing
@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class CustomersIntegrationTests(unittest.TestCase):

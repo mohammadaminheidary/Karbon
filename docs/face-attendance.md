@@ -47,10 +47,10 @@ This attendance feature does not establish liveness; a photo/video can spoof it.
 Tests use disposable databases and synthetic video tracks; they never open a physical webcam or modify normal records.
 
 ```sh
-python3 -m unittest discover -s tests -p 'test_*.py'
-node --test tests/*.cjs
-python3 tests/serve_customers_fixture.py --backend-port 8012 --frontend-port 5512 --members 3
-KARBON_TEST_URL=http://127.0.0.1:5512 KARBON_PLAYWRIGHT_PATH=/path/to/playwright node tests/face_attendance_browser.mjs
+python3 -m unittest discover -s backend/tests -p 'test_*.py'
+npm --prefix frontend test
+python3 frontend/tests/serve_customers_fixture.py --backend-port 8012 --frontend-port 5512 --members 3
+KARBON_TEST_URL=http://127.0.0.1:5512 KARBON_PLAYWRIGHT_PATH=/path/to/playwright node frontend/tests/face_attendance_browser.mjs
 ```
 
 The browser suite covers fully automatic capture and saving without confirmation, fixed guide geometry despite changing face boxes, missing faces, and stale feedback, distance/centering/pose/blur/lighting feedback, motion and stale-frame rejection, all three guided steps, automatic replacement after a final quality error, save retry without recapturing valid photos, invalid angle/quality retries, idle scanning beyond the former deadline, background suspension/resume, retry/backoff, camera switching/hotplug, constrained resolutions, portrait frames, busy/missing/denied cameras, late grants, unmount cleanup, non-mirrored pixels, circular desktop/mobile layout, progress, consent withdrawal, manual attendance, focus, and deletion. Set `KARBON_TEST_BROWSER=firefox` or `webkit` when those Playwright engines are installed; Chromium uses the local Chrome binary by default.
@@ -58,7 +58,7 @@ The browser suite covers fully automatic capture and saving without confirmation
 Python tests cover fixed-oval alignment and outline containment across eight camera resolutions/aspect ratios, narrow/broad/long faces and several distances, small turns with different landmark proportions and head roll, moderate softness/lighting acceptance with excessive blur/dark/bright rejection, bounding boxes during invalid positioning and incomplete faces, circular crop coordinates across portrait/landscape/square inputs, distance and centering errors, guide feedback without embedding inference, consent/privacy, nearest-angle matching, legacy templates, unknown/ambiguous matches, encryption, atomic replacement/deletion, invalid images, privacy, authentication, contention, payload bounds, and concurrent attendance. To additionally exercise real inference and persistence with three consented JPEGs, supply paths in front,left,right order:
 
 ```sh
-KARBON_TEST_FACE_IMAGES=/path/front.jpg,/path/left.jpg,/path/right.jpg python3 -m unittest discover -s tests -p test_face_attendance.py
+KARBON_TEST_FACE_IMAGES=/path/front.jpg,/path/left.jpg,/path/right.jpg python3 -m unittest discover -s backend/tests -p test_face_attendance.py
 ```
 
 Physical device/OS permission behavior, real participant recognition accuracy across the three angles, and browser engines unavailable on the test machine require deployment-device verification.

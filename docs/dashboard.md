@@ -43,9 +43,9 @@ Reports refresh on Karbon's existing data-change events, cross-tab storage chang
 ## Verification
 
 ```sh
-npm exec -- tailwindcss -i ./src/input.css -o ./src/output.css
-python3 -m unittest discover -s tests -v
-for file in tests/test_*.cjs; do node "$file" || exit 1; done
+npm --prefix frontend run build
+python3 -m unittest discover -s backend/tests -v
+for file in frontend/tests/test_*.cjs; do node "$file" || exit 1; done
 ```
 
 The dashboard integration tests use a disposable SQLite database and the actual authenticated HTTP API. They cover money reconciliation, partial payments, discounts, deleted invoices/documents/receipts, stock restoration, inactive inventory, values above JavaScript's safe integer range, UTC/Tehran date boundaries, leap-year ranges, unrecorded attendance, and datasets exceeding page limits.
@@ -53,10 +53,10 @@ The dashboard integration tests use a disposable SQLite database and the actual 
 For browser checks, start the isolated fixture, then run the test with an installed Playwright and Chromium (or supply `KARBON_PLAYWRIGHT_PATH` / `KARBON_CHROME_PATH`):
 
 ```sh
-python3 tests/serve_customers_fixture.py --backend-port 8026 --frontend-port 5526 --customers 25 --bank-ledger 25 --orders --members 3
-node tests/dashboard_browser.mjs
+python3 frontend/tests/serve_customers_fixture.py --backend-port 8026 --frontend-port 5526 --customers 25 --bank-ledger 25 --orders --members 3
+node frontend/tests/dashboard_browser.mjs
 ```
 
 Only the fixture database receives test records. Browser checks cover all 12 charts, exact totals, zoom/pan/wheel, pinned selection, keyboard inspection, tables, custom dates, request races, cross-tab mutation refresh, periodic polling, initial errors, retry, and widths 390/768/1024/1440/1920. Desktop/mobile screenshots are saved under `/tmp/karbon-dashboard-*.png`.
 
-Layout geometry checks run with `node tests/test_dashboard_layout.cjs`. They cover all breakpoints, occupied-cell moves, boundary clamping, 3,600 random move/resize operations, round-trip restoration, and corrupted storage. Browser verification also covered all 18 widgets at minimum sizes, pointer movement/resizing, keyboard editing, save/reload persistence, mobile/desktop isolation, cancellation, default reset, chart inspection after resizing, open data tables, live refresh while retaining geometry, and widths 320/390/768/1024/1150/1440/1920. No widget overlap, page overflow, surface overflow, or clipped SVG labels was found. A real fixture product valued above JavaScript's safe integer range also retained exact display and fitting axis labels at the smallest desktop chart width.
+Layout geometry checks run with `node frontend/tests/test_dashboard_layout.cjs`. They cover all breakpoints, occupied-cell moves, boundary clamping, 3,600 random move/resize operations, round-trip restoration, and corrupted storage. Browser verification also covered all 18 widgets at minimum sizes, pointer movement/resizing, keyboard editing, save/reload persistence, mobile/desktop isolation, cancellation, default reset, chart inspection after resizing, open data tables, live refresh while retaining geometry, and widths 320/390/768/1024/1150/1440/1920. No widget overlap, page overflow, surface overflow, or clipped SVG labels was found. A real fixture product valued above JavaScript's safe integer range also retained exact display and fitting axis labels at the smallest desktop chart width.

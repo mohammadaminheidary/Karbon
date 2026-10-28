@@ -1,4 +1,4 @@
-// Run with tests/serve_customers_fixture.py --customers 25 --bank-ledger 25
+// Run with frontend/tests/serve_customers_fixture.py --customers 25 --bank-ledger 25
 // --orders --members 3. All writes go to that disposable database.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";

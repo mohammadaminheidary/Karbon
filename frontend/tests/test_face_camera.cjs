@@ -62,7 +62,7 @@ function fixture({
   });
   vm.runInContext(
     fs
-      .readFileSync("src/js/attendance/face-camera.js", "utf8")
+      .readFileSync(require("node:path").join(__dirname, "../src/js/attendance/face-camera.js"), "utf8")
       .replaceAll("export ", "") + "\nthis.FaceCamera = FaceCamera;",
     context,
   );

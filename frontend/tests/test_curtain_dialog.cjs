@@ -94,7 +94,7 @@ function fixture() {
   });
   vm.runInContext(
     fs
-      .readFileSync("src/js/components/curtain-dialog.js", "utf8")
+      .readFileSync(require("node:path").join(__dirname, "../src/js/components/curtain-dialog.js"), "utf8")
       .replace("export class", "class") +
       "\nthis.CurtainDialog = CurtainDialog;",
     context,

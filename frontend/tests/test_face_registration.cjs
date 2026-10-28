@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 const source = fs
-  .readFileSync("src/js/attendance/face-registration.js", "utf8")
+  .readFileSync(require("node:path").join(__dirname, "../src/js/attendance/face-registration.js"), "utf8")
   .replace(/^import .*;\n/gm, "")
   .replaceAll("export ", "");
 const context = vm.createContext({ DOMException, Intl, Number });
