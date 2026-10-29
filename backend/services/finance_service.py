@@ -86,8 +86,13 @@ def totals(income, expense):
     return {"income": int(income), "expense": int(expense), "balance": int(income - expense)}
 
 
-def bank_list(db):
-    grouped = db.query(Transaction.bank_id, *sums()).filter(Transaction.deleted_at.is_(None)).group_by(Transaction.bank_id).all()
+def bank_list(db, bank_id=None):
+    ledger = db.query(Transaction.bank_id, *sums()).filter(Transaction.deleted_at.is_(None))
+    accounts = db.query(BankAccount, BankDirectory).outerjoin(BankDirectory, BankAccount.bank == BankDirectory.code).filter(BankAccount.deleted_at.is_(None))
+    if bank_id is not None:
+        ledger = ledger.filter(Transaction.bank_id == bank_id)
+        accounts = accounts.filter(BankAccount.id == bank_id)
+    grouped = ledger.group_by(Transaction.bank_id).all()
     values = {key: totals(income, expense) for key, income, expense in grouped}
     return [{
         **{column.name: getattr(bank, column.name) for column in BankAccount.__table__.columns},
@@ -97,11 +102,10 @@ def bank_list(db):
         "opening_balance": bank.opening_balance, "active": bank.active,
         "is_cash": bank.account_number == CASH_ACCOUNT_NUMBER,
         "can_edit": bank.account_number != CASH_ACCOUNT_NUMBER,
-        "can_delete": bank.account_number != CASH_ACCOUNT_NUMBER and not db.query(Transaction.id).filter(Transaction.bank_id == bank.id, Transaction.deleted_at.is_(None)).first(),
+        "can_delete": bank.account_number != CASH_ACCOUNT_NUMBER and bank.id not in values,
         **values.get(bank.id, totals(0, 0)),
         "balance": bank.opening_balance + values.get(bank.id, totals(0, 0))["balance"],
-    } for bank, directory in db.query(BankAccount, BankDirectory).outerjoin(
-        BankDirectory, BankAccount.bank == BankDirectory.code).filter(BankAccount.deleted_at.is_(None)).order_by(BankAccount.id).all()]
+    } for bank, directory in accounts.order_by(BankAccount.id).all()]
 
 
 def category_list(db):
@@ -152,21 +156,31 @@ def save_bank(db, data, record_id=None):
     db.add(bank)
     db.flush()
     # Compute the reviewable response before committing so failure rolls back.
-    result = next(item for item in bank_list(db) if item["id"] == bank.id)
+    result = bank_list(db, bank.id)[0]
     db.commit()
     return result
 
 
-def serialize(item, bank, directory=None):
+def invoice_links(db, transaction_ids):
+    """Resolve invoice metadata once per response, including shared receipt totals."""
+    if not transaction_ids:
+        return {}
+    links = db.query(OrderPayment, Order).join(Order, OrderPayment.order_id == Order.id).filter(OrderPayment.transaction_id.in_(transaction_ids)).all()
+    if not links:
+        return {}
+    order_ids = {order.id for _, order in links}
+    paid = dict(db.query(OrderPayment.order_id, func.sum(Transaction.amount)).join(Transaction, OrderPayment.transaction_id == Transaction.id).filter(OrderPayment.order_id.in_(order_ids)).group_by(OrderPayment.order_id).all())
+    return {payment.transaction_id: {"order_id": order.id, "invoice_code": order.invoice_code, "method": payment.method,
+            "subtotal": order.subtotal, "discount": order.discount, "total": order.subtotal-order.discount,
+            "paid": int(paid[order.id]), "remaining": order.subtotal-order.discount-int(paid[order.id])}
+            for payment, order in links}
+
+
+def serialize(item, bank, directory=None, *, links=None):
     db = object_session(item)
-    linked = db.query(OrderPayment, Order).join(Order, OrderPayment.order_id == Order.id).filter(OrderPayment.transaction_id == item.id).first()
-    invoice = None
-    if linked:
-        payment, order = linked
-        paid = int(db.query(func.coalesce(func.sum(Transaction.amount), 0)).join(OrderPayment, OrderPayment.transaction_id == Transaction.id).filter(OrderPayment.order_id == order.id).scalar())
-        invoice = {"order_id": order.id, "invoice_code": order.invoice_code, "method": payment.method,
-                   "subtotal": order.subtotal, "discount": order.discount, "total": order.subtotal - order.discount,
-                   "paid": paid, "remaining": order.subtotal - order.discount - paid}
+    if links is None:
+        links = invoice_links(db, [item.id])
+    invoice = links.get(item.id)
     return {
         "invoice": invoice,
         **{column.name: getattr(item, column.name) for column in Transaction.__table__.columns},
@@ -248,6 +262,7 @@ def daily(db, day):
     rows = db.query(Transaction, BankAccount, BankDirectory).join(BankAccount, Transaction.bank_id == BankAccount.id).outerjoin(
         BankDirectory, BankAccount.bank == BankDirectory.code).filter(
         Transaction.transaction_date == day, Transaction.deleted_at.is_(None)).order_by(Transaction.transaction_time, Transaction.id).all()
+    links = invoice_links(db, [item.id for item, _, _ in rows])
     income = expense = 0
     points = [{"time": "00:00:00", **totals(0, 0)}]
     for item, bank, directory in rows:
@@ -259,7 +274,7 @@ def daily(db, day):
     points.append({"time": "23:59:59", **totals(income, expense)})
     return {"date": day, "jalali_date": jalali_date,
             "summary": totals(income, expense), "chart": points,
-            "transactions": [serialize(item, bank, directory) for item, bank, directory in reversed(rows)]}
+            "transactions": [serialize(item, bank, directory, links=links) for item, bank, directory in reversed(rows)]}
 
 
 def calendar(db, start, end):
@@ -293,7 +308,7 @@ def jalali_month(value):
 
 
 def bank_activity(db, bank_id, period, anchor=None):
-    bank = next((item for item in bank_list(db) if item["id"] == bank_id), None)
+    bank = next(iter(bank_list(db, bank_id)), None)
     if bank is None:
         raise FinanceError("حساب بانکی موردنظر پیدا نشد.", 404)
     try:
@@ -394,7 +409,8 @@ def bank_transactions(db, bank_id, *, start_date=None, end_date=None, day=None, 
         last = rows[-1]
         next_cursor = base64.urlsafe_b64encode(json.dumps({"date": last.transaction_date.isoformat(), "time": last.transaction_time,
                                                           "id": last.id, "snapshot": snapshot}).encode()).decode()
-    return {"items": [serialize(item, bank, directory) for item in rows], "total": total, "next_cursor": next_cursor}
+    links = invoice_links(db, [item.id for item in rows])
+    return {"items": [serialize(item, bank, directory, links=links) for item in rows], "total": total, "next_cursor": next_cursor}
 
 
 def edit_transaction(db, transaction_id, data):

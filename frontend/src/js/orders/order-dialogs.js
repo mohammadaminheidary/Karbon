@@ -2,7 +2,7 @@ import { Dialog } from "../components/dialog.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { onExternalDataChange } from "../components/data-events.js";
 import { financeRequest, getBanks } from "../finance/finance-api.js";
-import { getCustomers, getCustomer } from "../customers/customer-api.js";
+import { getCustomerOptions as getCustomers, getCustomer } from "../customers/customer-api.js";
 import {
   fullName,
   genderLabel,

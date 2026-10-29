@@ -1,0 +1,542 @@
+diff --git a/backend/models/finance.py b/backend/models/finance.py
+index 8fabc70..b82433e 100644
+--- a/backend/models/finance.py
++++ b/backend/models/finance.py
+@@ -1,6 +1,6 @@
+ from datetime import datetime, timezone
+ 
+-from sqlalchemy import BigInteger, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, Boolean
++from sqlalchemy import BigInteger, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, Boolean, text
+ 
+ from database import Base
+ 
+@@ -57,6 +57,7 @@ class FinancialTransaction(Base):
+         CheckConstraint("(document_account_id IS NULL AND ((kind = 'income' AND customer_id IS NOT NULL AND expense_category_id IS NULL) OR (kind = 'expense' AND customer_id IS NULL AND expense_category_id IS NOT NULL))) OR (document_id IS NOT NULL AND document_account_id IS NOT NULL AND customer_id IS NULL AND expense_category_id IS NULL AND kind IN ('income', 'expense'))", name="financial_source"),
+         CheckConstraint("time_mode IN ('auto', 'manual')", name="financial_time_mode"),
+         Index("ix_finance_date_time", "transaction_date", "transaction_time", "id"),
++        Index("ix_finance_bank_live_date", "bank_id", "transaction_date", "transaction_time", "id", sqlite_where=text("deleted_at IS NULL")),
+     )
+     id = Column(Integer, primary_key=True)
+     transaction_number = Column(Integer, nullable=True)
+diff --git a/backend/routes/customers.py b/backend/routes/customers.py
+index f892fa9..bd63135 100644
+--- a/backend/routes/customers.py
++++ b/backend/routes/customers.py
+@@ -45,6 +45,12 @@ def list_customers(search: str = Query("", max_length=200), skip: int = Query(0,
+         return service.list_customers(db, search, skip, limit)
+ 
+ 
++@router.get("/options")
++def customer_options(search: str = Query("", max_length=200), skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), db: Session = Depends(get_database)):
++    with customer_errors():
++        return service.list_customers(db, search, skip, limit, options_only=True)
++
++
+ @router.get("/next-code")
+ def next_code(db: Session = Depends(get_database)):
+     with customer_errors():
+diff --git a/backend/services/customer_service.py b/backend/services/customer_service.py
+index bed64bc..aa6b458 100644
+--- a/backend/services/customer_service.py
++++ b/backend/services/customer_service.py
+@@ -43,10 +43,10 @@ def get_summary(db, customer_id):
+     return summary
+ 
+ 
+-def serialize_customer(customer):
++def serialize_customer(customer, summary=None):
+     return {
+         **{column.name: getattr(customer, column.name) for column in Customer.__table__.columns},
+-        "summary": get_summary(object_session(customer), customer.id),
++        "summary": summary if summary is not None else get_summary(object_session(customer), customer.id),
+     }
+ 
+ 
+@@ -61,7 +61,7 @@ def phone_values():
+     return func.json_each(Customer.phone_numbers).table_valued("value")
+ 
+ 
+-def list_customers(db, search="", skip=0, limit=50):
++def list_customers(db, search="", skip=0, limit=50, *, options_only=False):
+     query = db.query(Customer).filter(Customer.deleted_at.is_(None))
+     # Match get_summary's debt/status rules across all customers, independently
+     # of the visible search results and pagination. Aggregate payments separately
+@@ -78,7 +78,7 @@ def list_customers(db, search="", skip=0, limit=50):
+         OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id,
+     ).join(Order, Order.id == OrderPayment.order_id).filter(Order.deleted_at.is_(None)).group_by(Order.customer_id).subquery()
+     debt = func.coalesce(orders.c.total, 0) - func.coalesce(payments.c.paid, 0)
+-    counts = query.outerjoin(orders, orders.c.customer_id == Customer.id).outerjoin(
++    counts = None if options_only else query.outerjoin(orders, orders.c.customer_id == Customer.id).outerjoin(
+         payments, payments.c.customer_id == Customer.id,
+     ).with_entities(
+         func.count(Customer.id),
+@@ -101,8 +101,20 @@ def list_customers(db, search="", skip=0, limit=50):
+             exists(select(1).select_from(phones).where(phones.c.value.like(phone_pattern, escape="\\"))),
+         ))
+     total = query.count()
+-    items = query.order_by(Customer.id.desc()).offset(skip).limit(limit).all()
+-    return {"items": [serialize_customer(item) for item in items], "total": total, "skip": skip, "limit": limit,
++    if options_only:
++        fields = (Customer.id, Customer.customer_code, Customer.first_name, Customer.last_name, Customer.phone_numbers)
++        items = query.with_entities(*fields).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
++        return {"items": [dict(row._mapping) for row in items], "total": total, "skip": skip, "limit": limit}
++    items = query.outerjoin(orders, orders.c.customer_id == Customer.id).outerjoin(
++        payments, payments.c.customer_id == Customer.id,
++    ).add_columns(orders.c.order_count, orders.c.total, payments.c.paid).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
++    serialized = []
++    for item, count, amount, paid in items:
++        count, amount, paid = int(count or 0), int(amount or 0), int(paid or 0)
++        summary = CustomerSummary(order_count=count, total_orders=amount, paid=paid, debt=amount-paid,
++                                  status="debtor" if amount > paid else "settled" if count else "no_payment", available=True)
++        serialized.append(serialize_customer(item, summary))
++    return {"items": serialized, "total": total, "skip": skip, "limit": limit,
+             "total_customers": counts[0], "unsettled_customers": counts[1], "settled_customers": counts[2]}
+ 
+ 
+diff --git a/backend/services/dashboard_service.py b/backend/services/dashboard_service.py
+index 024b3ee..666d476 100644
+--- a/backend/services/dashboard_service.py
++++ b/backend/services/dashboard_service.py
+@@ -71,13 +71,12 @@ def dashboard(db, start, end):
+     ).filter(Transaction.deleted_at.is_(None)).group_by(OrderPayment.order_id).subquery()
+     remaining = case((Order.subtotal - Order.discount - func.coalesce(paid.c.paid, 0) > 0,
+                       Order.subtotal - Order.discount - func.coalesce(paid.c.paid, 0)), else_=0)
+-    debts = dict(db.query(Order.customer_id, func.sum(remaining)).outerjoin(paid, paid.c.order_id == Order.id).filter(
++    debt_rows = db.query(Order.customer_id, func.sum(remaining), func.sum(case((Order.payment_date < now.date(), remaining), else_=0))).outerjoin(paid, paid.c.order_id == Order.id).filter(
+         Order.deleted_at.is_(None),
+-    ).group_by(Order.customer_id).all())
++    ).group_by(Order.customer_id).all()
++    debts = {customer_id: amount for customer_id, amount, _ in debt_rows}
+     outstanding = sum(int(value) for value in debts.values())
+-    overdue = int(db.query(func.coalesce(func.sum(remaining), 0)).select_from(Order).outerjoin(
+-        paid, paid.c.order_id == Order.id,
+-    ).filter(Order.deleted_at.is_(None), Order.payment_date < now.date()).scalar())
++    overdue = sum(int(value or 0) for _, _, value in debt_rows)
+ 
+     customers = db.query(Customer.id, Customer.first_name, Customer.last_name, Customer.created_at).filter(Customer.deleted_at.is_(None)).all()
+     new_customers = 0
+diff --git a/backend/services/document_service.py b/backend/services/document_service.py
+index 227168c..1f4b0d0 100644
+--- a/backend/services/document_service.py
++++ b/backend/services/document_service.py
+@@ -16,7 +16,7 @@ from models.order import OrderPayment
+ from schemas.customer_schema import normalize_text
+ from schemas.finance_schema import TransactionEdit
+ from security.password import verify_password
+-from services.finance_service import FinanceError, apply_transaction_fields, require, serialize, sums
++from services.finance_service import FinanceError, apply_transaction_fields, require, serialize, sums, invoice_links
+ from services.reference_codes import compact_transaction_numbers
+ 
+ 
+@@ -178,7 +178,8 @@ def get_document(db, document_id):
+         BankDirectory, BankAccount.bank == BankDirectory.code).filter(Transaction.document_id == document.id, Transaction.deleted_at.is_(None)).order_by(Transaction.id).all()
+     income = sum(item.amount for item, _, _ in rows if item.kind == "income")
+     expense = sum(item.amount for item, _, _ in rows if item.kind == "expense")
+-    return {**summary(document, income, expense, len(rows)), "rows": [serialize(item, bank, directory) for item, bank, directory in rows]}
++    links = invoice_links(db, [item.id for item, _, _ in rows])
++    return {**summary(document, income, expense, len(rows)), "rows": [serialize(item, bank, directory, links=links) for item, bank, directory in rows]}
+ 
+ 
+ def fingerprint(data):
+diff --git a/backend/services/finance_service.py b/backend/services/finance_service.py
+index 66be936..d65721d 100644
+--- a/backend/services/finance_service.py
++++ b/backend/services/finance_service.py
+@@ -86,8 +86,13 @@ def totals(income, expense):
+     return {"income": int(income), "expense": int(expense), "balance": int(income - expense)}
+ 
+ 
+-def bank_list(db):
+-    grouped = db.query(Transaction.bank_id, *sums()).filter(Transaction.deleted_at.is_(None)).group_by(Transaction.bank_id).all()
++def bank_list(db, bank_id=None):
++    ledger = db.query(Transaction.bank_id, *sums()).filter(Transaction.deleted_at.is_(None))
++    accounts = db.query(BankAccount, BankDirectory).outerjoin(BankDirectory, BankAccount.bank == BankDirectory.code).filter(BankAccount.deleted_at.is_(None))
++    if bank_id is not None:
++        ledger = ledger.filter(Transaction.bank_id == bank_id)
++        accounts = accounts.filter(BankAccount.id == bank_id)
++    grouped = ledger.group_by(Transaction.bank_id).all()
+     values = {key: totals(income, expense) for key, income, expense in grouped}
+     return [{
+         **{column.name: getattr(bank, column.name) for column in BankAccount.__table__.columns},
+@@ -97,11 +102,10 @@ def bank_list(db):
+         "opening_balance": bank.opening_balance, "active": bank.active,
+         "is_cash": bank.account_number == CASH_ACCOUNT_NUMBER,
+         "can_edit": bank.account_number != CASH_ACCOUNT_NUMBER,
+-        "can_delete": bank.account_number != CASH_ACCOUNT_NUMBER and not db.query(Transaction.id).filter(Transaction.bank_id == bank.id, Transaction.deleted_at.is_(None)).first(),
++        "can_delete": bank.account_number != CASH_ACCOUNT_NUMBER and bank.id not in values,
+         **values.get(bank.id, totals(0, 0)),
+         "balance": bank.opening_balance + values.get(bank.id, totals(0, 0))["balance"],
+-    } for bank, directory in db.query(BankAccount, BankDirectory).outerjoin(
+-        BankDirectory, BankAccount.bank == BankDirectory.code).filter(BankAccount.deleted_at.is_(None)).order_by(BankAccount.id).all()]
++    } for bank, directory in accounts.order_by(BankAccount.id).all()]
+ 
+ 
+ def category_list(db):
+@@ -152,21 +156,31 @@ def save_bank(db, data, record_id=None):
+     db.add(bank)
+     db.flush()
+     # Compute the reviewable response before committing so failure rolls back.
+-    result = next(item for item in bank_list(db) if item["id"] == bank.id)
++    result = bank_list(db, bank.id)[0]
+     db.commit()
+     return result
+ 
+ 
+-def serialize(item, bank, directory=None):
++def invoice_links(db, transaction_ids):
++    """Resolve invoice metadata once per response, including shared receipt totals."""
++    if not transaction_ids:
++        return {}
++    links = db.query(OrderPayment, Order).join(Order, OrderPayment.order_id == Order.id).filter(OrderPayment.transaction_id.in_(transaction_ids)).all()
++    if not links:
++        return {}
++    order_ids = {order.id for _, order in links}
++    paid = dict(db.query(OrderPayment.order_id, func.sum(Transaction.amount)).join(Transaction, OrderPayment.transaction_id == Transaction.id).filter(OrderPayment.order_id.in_(order_ids)).group_by(OrderPayment.order_id).all())
++    return {payment.transaction_id: {"order_id": order.id, "invoice_code": order.invoice_code, "method": payment.method,
++            "subtotal": order.subtotal, "discount": order.discount, "total": order.subtotal-order.discount,
++            "paid": int(paid[order.id]), "remaining": order.subtotal-order.discount-int(paid[order.id])}
++            for payment, order in links}
++
++
++def serialize(item, bank, directory=None, *, links=None):
+     db = object_session(item)
+-    linked = db.query(OrderPayment, Order).join(Order, OrderPayment.order_id == Order.id).filter(OrderPayment.transaction_id == item.id).first()
+-    invoice = None
+-    if linked:
+-        payment, order = linked
+-        paid = int(db.query(func.coalesce(func.sum(Transaction.amount), 0)).join(OrderPayment, OrderPayment.transaction_id == Transaction.id).filter(OrderPayment.order_id == order.id).scalar())
+-        invoice = {"order_id": order.id, "invoice_code": order.invoice_code, "method": payment.method,
+-                   "subtotal": order.subtotal, "discount": order.discount, "total": order.subtotal - order.discount,
+-                   "paid": paid, "remaining": order.subtotal - order.discount - paid}
++    if links is None:
++        links = invoice_links(db, [item.id])
++    invoice = links.get(item.id)
+     return {
+         "invoice": invoice,
+         **{column.name: getattr(item, column.name) for column in Transaction.__table__.columns},
+@@ -248,6 +262,7 @@ def daily(db, day):
+     rows = db.query(Transaction, BankAccount, BankDirectory).join(BankAccount, Transaction.bank_id == BankAccount.id).outerjoin(
+         BankDirectory, BankAccount.bank == BankDirectory.code).filter(
+         Transaction.transaction_date == day, Transaction.deleted_at.is_(None)).order_by(Transaction.transaction_time, Transaction.id).all()
++    links = invoice_links(db, [item.id for item, _, _ in rows])
+     income = expense = 0
+     points = [{"time": "00:00:00", **totals(0, 0)}]
+     for item, bank, directory in rows:
+@@ -259,7 +274,7 @@ def daily(db, day):
+     points.append({"time": "23:59:59", **totals(income, expense)})
+     return {"date": day, "jalali_date": jalali_date,
+             "summary": totals(income, expense), "chart": points,
+-            "transactions": [serialize(item, bank, directory) for item, bank, directory in reversed(rows)]}
++            "transactions": [serialize(item, bank, directory, links=links) for item, bank, directory in reversed(rows)]}
+ 
+ 
+ def calendar(db, start, end):
+@@ -293,7 +308,7 @@ def jalali_month(value):
+ 
+ 
+ def bank_activity(db, bank_id, period, anchor=None):
+-    bank = next((item for item in bank_list(db) if item["id"] == bank_id), None)
++    bank = next(iter(bank_list(db, bank_id)), None)
+     if bank is None:
+         raise FinanceError("حساب بانکی موردنظر پیدا نشد.", 404)
+     try:
+@@ -394,7 +409,8 @@ def bank_transactions(db, bank_id, *, start_date=None, end_date=None, day=None,
+         last = rows[-1]
+         next_cursor = base64.urlsafe_b64encode(json.dumps({"date": last.transaction_date.isoformat(), "time": last.transaction_time,
+                                                           "id": last.id, "snapshot": snapshot}).encode()).decode()
+-    return {"items": [serialize(item, bank, directory) for item in rows], "total": total, "next_cursor": next_cursor}
++    links = invoice_links(db, [item.id for item in rows])
++    return {"items": [serialize(item, bank, directory, links=links) for item in rows], "total": total, "next_cursor": next_cursor}
+ 
+ 
+ def edit_transaction(db, transaction_id, data):
+diff --git a/backend/services/order_service.py b/backend/services/order_service.py
+index 1bc0074..6dee93e 100644
+--- a/backend/services/order_service.py
++++ b/backend/services/order_service.py
+@@ -119,10 +119,13 @@ def next_number(db):
+     return str(number)
+ 
+ 
+-def serialize(db, order):
+-    customer = db.get(Customer, order.customer_id)
+-    items = db.query(OrderItem).filter(OrderItem.order_id == order.id).order_by(OrderItem.position).all()
+-    payments = db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(OrderPayment.order_id == order.id).all()
++def serialize(db, order, *, loaded=None):
++    if loaded is None:
++        customer = db.get(Customer, order.customer_id)
++        items = db.query(OrderItem).filter(OrderItem.order_id == order.id).order_by(OrderItem.position).all()
++        payments = db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(OrderPayment.order_id == order.id).all()
++    else:
++        customer, items, payments = loaded
+     paid = sum(transaction.amount for _, transaction in payments)
+     total = order.subtotal - order.discount
+     return {
+@@ -198,9 +201,18 @@ def base36(value):
+ 
+ def list_orders(db, status, skip, limit):
+     query = db.query(Order).filter(Order.deleted_at.is_(None))
++    orders = query.filter(Order.status == status).order_by(Order.id.desc()).offset(skip).limit(limit).all()
++    ids = [order.id for order in orders]
++    customers = {item.id: item for item in db.query(Customer).filter(Customer.id.in_({order.customer_id for order in orders})).all()} if ids else {}
++    items, payments = {}, {}
++    if ids:
++        for item in db.query(OrderItem).filter(OrderItem.order_id.in_(ids)).order_by(OrderItem.position).all():
++            items.setdefault(item.order_id, []).append(item)
++        for payment, transaction in db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(OrderPayment.order_id.in_(ids)).all():
++            payments.setdefault(payment.order_id, []).append((payment, transaction))
+     return {"total_orders": query.count(), "active_orders": query.filter(Order.status == "active").count(),
+             "total": query.filter(Order.status == status).count(),
+-            "items": [serialize(db, order) for order in query.filter(Order.status == status).order_by(Order.id.desc()).offset(skip).limit(limit).all()]}
++            "items": [serialize(db, order, loaded=(customers[order.customer_id], items.get(order.id, []), payments.get(order.id, []))) for order in orders]}
+ 
+ 
+ def list_invoices(db, search, skip, limit):
+diff --git a/backend/services/reference_codes.py b/backend/services/reference_codes.py
+index 20b9f67..10cc600 100644
+--- a/backend/services/reference_codes.py
++++ b/backend/services/reference_codes.py
+@@ -6,22 +6,29 @@ from sqlalchemy import text
+ 
+ 
+ def compact_customer_codes(db):
+-    rows = db.execute(text("SELECT id FROM customers WHERE deleted_at IS NULL ORDER BY id")).scalars().all()
++    rows = db.execute(text("SELECT id, customer_code FROM customers WHERE deleted_at IS NULL ORDER BY id")).all()
++    codes = [{"code": code, "id": record_id} for code, (record_id, _) in enumerate(rows, 1001)]
++    changed = [item for item, (_, old) in zip(codes, rows) if item["code"] != old]
+     # Two passes prevent the unique index from colliding with old codes.
+-    db.execute(text("UPDATE customers SET customer_code = -id"))
+-    for code, record_id in enumerate(rows, 1001):
+-        db.execute(text("UPDATE customers SET customer_code=:code WHERE id=:id"), {"code": code, "id": record_id})
+-        db.execute(text("UPDATE financial_transactions SET account_code=:code WHERE customer_id=:id"), {"code": str(code), "id": record_id})
++    if changed:
++        db.execute(text("UPDATE customers SET customer_code = -id WHERE id=:id"), [{"id": item["id"]} for item in changed])
++        db.execute(text("UPDATE customers SET customer_code=:code WHERE id=:id"), changed)
++    if codes:
++        db.execute(text("UPDATE financial_transactions SET account_code=:code WHERE customer_id=:id AND account_code!=:code"), [{**item, "code": str(item["code"])} for item in codes])
+ 
+ 
+ def compact_category_codes(db):
+-    rows = db.execute(text("SELECT id FROM expense_categories WHERE deleted_at IS NULL ORDER BY display_code IS NULL, display_code, id")).scalars().all()
+-    for code, record_id in enumerate(rows, 1):
+-        db.execute(text("UPDATE expense_categories SET display_code=:code WHERE id=:id"), {"code": code, "id": record_id})
+-        db.execute(text("UPDATE financial_transactions SET account_code=:code WHERE expense_category_id=:id"), {"code": f"E-{code:06d}", "id": record_id})
++    rows = db.execute(text("SELECT id, display_code FROM expense_categories WHERE deleted_at IS NULL ORDER BY display_code IS NULL, display_code, id")).all()
++    codes = [{"code": code, "id": record_id} for code, (record_id, _) in enumerate(rows, 1)]
++    changed = [item for item, (_, old) in zip(codes, rows) if item["code"] != old]
++    if changed:
++        db.execute(text("UPDATE expense_categories SET display_code=:code WHERE id=:id"), changed)
++    if codes:
++        db.execute(text("UPDATE financial_transactions SET account_code=:code WHERE expense_category_id=:id AND account_code!=:code"), [{**item, "code": f"E-{item['code']:06d}"} for item in codes])
+ 
+ 
+ def compact_transaction_numbers(db):
+-    rows = db.execute(text("SELECT id FROM financial_transactions WHERE deleted_at IS NULL ORDER BY id")).scalars().all()
+-    for number, record_id in enumerate(rows, 1):
+-        db.execute(text("UPDATE financial_transactions SET transaction_number=:number WHERE id=:id"), {"number": number, "id": record_id})
++    rows = db.execute(text("SELECT id, transaction_number FROM financial_transactions WHERE deleted_at IS NULL ORDER BY id")).all()
++    changed = [{"number": number, "id": record_id} for number, (record_id, old) in enumerate(rows, 1) if number != old]
++    if changed:
++        db.execute(text("UPDATE financial_transactions SET transaction_number=:number WHERE id=:id"), changed)
+diff --git a/backend/tests/test_customers.py b/backend/tests/test_customers.py
+index a44b096..cf70f05 100644
+--- a/backend/tests/test_customers.py
++++ b/backend/tests/test_customers.py
+@@ -97,6 +97,22 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
+         self.assertEqual(self.request("GET", "/members")[0], 200)
+         self.assertEqual(self.request("POST", "/login", {"username": "customers-test", "password": "wrong"}, False)[0], 401)
+ 
++    def test_lightweight_options_search_pagination_and_authentication(self):
++        one = self.create(first_name="علی", phone_numbers=["09121111111"], notes="private notes")
++        two = self.create(first_name="سارا", phone_numbers=["09122222222"])
++        self.assertEqual(self.request("GET", "/customers/options", authenticated=False)[0], 401)
++        status, data = self.request("GET", "/customers/options?limit=1")
++        self.assertEqual(status, 200)
++        self.assertEqual(data["total"], 2)
++        self.assertEqual(data["items"][0]["id"], two["id"])
++        self.assertEqual(set(data["items"][0]), {"id", "customer_code", "first_name", "last_name", "phone_numbers"})
++        self.assertEqual(self.request("GET", "/customers/options?skip=1&limit=1")[1]["items"][0]["id"], one["id"])
++        self.assertEqual(self.request("GET", "/customers/options?search=09121111111")[1]["total"], 1)
++        self.assertEqual(self.request("GET", "/customers/options?search=%25")[1]["items"], [])
++        self.assertEqual(self.request("GET", "/customers/options?limit=101")[0], 422)
++        self.assertEqual(self.request("DELETE", f'/customers/{one["id"]}')[0], 204)
++        self.assertEqual(self.request("GET", "/customers/options?search=09121111111")[1]["total"], 0)
++
+     def test_empty_create_and_persistence(self):
+         empty = self.request("GET", "/customers")[1]
+         self.assertEqual(empty["total"], 0)
+diff --git a/backend/tests/test_finance_migration.py b/backend/tests/test_finance_migration.py
+index c6f18dd..1647e27 100644
+--- a/backend/tests/test_finance_migration.py
++++ b/backend/tests/test_finance_migration.py
+@@ -32,6 +32,8 @@ with SessionLocal() as db:
+                 FinancialTransaction(id=11, request_id="old-expense", kind="expense", bank_id=7, expense_category_id=8, title="دو", account_code="E-000008", amount=100, transaction_date=date(2026,10,6), transaction_time="13:00:00", time_mode="manual")])
+     db.commit()
+ with engine.begin() as connection:
++    # This fixture deliberately recreates a schema predating deleted_at.
++    connection.exec_driver_sql("DROP INDEX IF EXISTS ix_finance_bank_live_date")
+     for table, fields in {"customers":["deleted_at"], "bank_accounts":["deleted_at"], "expense_categories":["display_code","deleted_at"], "financial_transactions":["transaction_number","updated_at","deleted_at"]}.items():
+         for field in fields:
+             connection.exec_driver_sql(f"ALTER TABLE {table} DROP COLUMN {field}")
+diff --git a/frontend/src/js/customers/customer-api.js b/frontend/src/js/customers/customer-api.js
+index 884a8e2..de539c2 100644
+--- a/frontend/src/js/customers/customer-api.js
++++ b/frontend/src/js/customers/customer-api.js
+@@ -88,3 +88,7 @@ export const updateCustomer = (id, data) =>
+   request(`/${Number(id)}`, { method: "PUT", body: data });
+ export const deleteCustomer = (id) =>
+   request(`/${Number(id)}`, { method: "DELETE" });
++
++// Selectors need identity/contact fields, not invoice aggregates.
++export const getCustomerOptions = ({ search = "", skip = 0, limit = 100, signal } = {}) =>
++  request(`/options?${new URLSearchParams({ search, skip, limit })}`, { signal });
+diff --git a/frontend/src/js/dashboard/chart.js b/frontend/src/js/dashboard/chart.js
+index 3e89b98..c256c1f 100644
+--- a/frontend/src/js/dashboard/chart.js
++++ b/frontend/src/js/dashboard/chart.js
+@@ -109,9 +109,16 @@ export class Chart {
+     this.rangeLabel = element("span");
+     this.range.append(this.rangeLabel);
+     this.details = element("details", "dash-data-details");
+-    this.details.append(element("summary", "", "مشاهده جدول داده‌ها"));
++    const tableSummary = element("summary", "", "مشاهده جدول داده‌ها");
++    tableSummary.addEventListener("click", () => {
++      if (!this.details.open && this.tableDirty) this.renderTable();
++    });
++    this.details.append(tableSummary);
+     this.tableHost = element("div", "dash-table-scroll");
+     this.details.append(this.tableHost);
++    this.details.addEventListener("toggle", () => {
++      if (this.details.open && this.tableDirty) this.renderTable();
++    });
+     host.append(this.plot, this.controls, this.range, this.details);
+     this.plot.addEventListener("pointermove", (event) => {
+       if (this.tip.contains(event.target)) return;
+@@ -217,6 +224,12 @@ export class Chart {
+           )
+         : undefined;
+     }
++    this.tableDirty = true;
++    if (this.details.open) this.renderTable();
++    this.draw();
++  }
++
++  renderTable() {
+     this.tableHost.replaceChildren();
+     const table = element("table", "dash-table");
+     const caption = element(
+@@ -236,7 +249,7 @@ export class Chart {
+     });
+     head.append(tr);
+     const body = element("tbody");
+-    rows.forEach((row) => {
++    this.rows.forEach((row) => {
+       const tr = element("tr");
+       tr.append(element("td", "", row.label));
+       this.series.forEach((s) =>
+@@ -246,7 +259,7 @@ export class Chart {
+     });
+     table.append(caption, head, body);
+     this.tableHost.append(table);
+-    this.draw();
++    this.tableDirty = false;
+   }
+ 
+   reset() {
+diff --git a/frontend/src/js/finance/transaction-actions.js b/frontend/src/js/finance/transaction-actions.js
+index 54236d6..c961927 100644
+--- a/frontend/src/js/finance/transaction-actions.js
++++ b/frontend/src/js/finance/transaction-actions.js
+@@ -1,5 +1,5 @@
+ import { CurtainDialog } from "../components/curtain-dialog.js";
+-import { getCustomers } from "../customers/customer-api.js";
++import { getCustomerOptions as getCustomers } from "../customers/customer-api.js";
+ import {
+   financeRequest,
+   getBanks,
+diff --git a/frontend/src/js/orders/order-dialogs.js b/frontend/src/js/orders/order-dialogs.js
+index 7f71e35..c9a6a6f 100644
+--- a/frontend/src/js/orders/order-dialogs.js
++++ b/frontend/src/js/orders/order-dialogs.js
+@@ -2,7 +2,7 @@ import { Dialog } from "../components/dialog.js";
+ import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
+ import { onExternalDataChange } from "../components/data-events.js";
+ import { financeRequest, getBanks } from "../finance/finance-api.js";
+-import { getCustomers, getCustomer } from "../customers/customer-api.js";
++import { getCustomerOptions as getCustomers, getCustomer } from "../customers/customer-api.js";
+ import {
+   fullName,
+   genderLabel,
+diff --git a/frontend/src/js/page/finance.js b/frontend/src/js/page/finance.js
+index 807440d..7a283af 100644
+--- a/frontend/src/js/page/finance.js
++++ b/frontend/src/js/page/finance.js
+@@ -6,7 +6,7 @@ import { createNavbarNotification } from "../components/navbar-notification.js";
+ import { bankLogo } from "../finance/bank-accounts.js";
+ import { CurtainDialog } from "../components/curtain-dialog.js";
+ import { protectPage } from "../guards/auth-guard.js";
+-import { getCustomers } from "../customers/customer-api.js";
++import { getCustomerOptions as getCustomers } from "../customers/customer-api.js";
+ import {
+   getBanks,
+   getExpenseCategories,
+diff --git a/frontend/src/js/page/index.js b/frontend/src/js/page/index.js
+index bb45751..b611532 100644
+--- a/frontend/src/js/page/index.js
++++ b/frontend/src/js/page/index.js
+@@ -25,7 +25,10 @@ let controller,
+   data,
+   revision = 0,
+   polling,
+-  layoutEditor;
++  layoutEditor,
++  pendingLoad,
++  pendingRange,
++  renderedFingerprint;
+ const fullDate = (value) =>
+   new Intl.DateTimeFormat("fa-IR", {
+     dateStyle: "medium",
+@@ -387,7 +390,18 @@ function render(result, reset) {
+   layoutEditor.contentChanged();
+ }
+ 
+-async function load() {
++function load() {
++  const range = JSON.stringify(currentPeriod === "custom" ? requestedRange : { days: currentPeriod });
++  if (pendingLoad && pendingRange === range) return pendingLoad;
++  pendingRange = range;
++  const current = fetchDashboard().finally(() => {
++    if (pendingLoad === current) pendingLoad = undefined;
++  });
++  pendingLoad = current;
++  return current;
++}
++
++async function fetchDashboard() {
+   const requestId = ++revision;
+   controller?.abort();
+   controller = new AbortController();
+@@ -404,7 +418,11 @@ async function load() {
+     );
+     if (requestId !== revision) return;
+     const key = `${result.period.start}/${result.period.end}`;
+-    render(result, displayedRange !== key);
++    const fingerprint = JSON.stringify({ ...result, generated_at: null });
++    if (fingerprint !== renderedFingerprint) {
++      render(result, displayedRange !== key);
++      renderedFingerprint = fingerprint;
++    } else data = result;
+     displayedRange = key;
+     $("dashboardError").hidden = true;
+     $("dashboardStatus").textContent =
+@@ -490,7 +508,9 @@ startPage(async () => {
+   );
+   $("refreshDashboard").addEventListener("click", load);
+   $("retryDashboard").addEventListener("click", load);
+-  onPageRefresh(load, { maxAge: 30000 });
++  // A mutation during an existing snapshot must fetch again after it settles.
++  // Focus/poll events can share an in-flight read; data-change events cannot.
++  onPageRefresh(() => pendingLoad ? pendingLoad.then(load) : load(), { maxAge: 30000 });
+   window.addEventListener("focus", () => {
+     if (!document.hidden) void load();
+   });

@@ -2,13 +2,23 @@ import { notifyNavbar } from "../components/navbar-notification.js";
 import { startPage } from "../components/page-ready.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { onPageRefresh } from "../components/data-events.js";
-import { initializeDocumentAccounts } from "../documents/account-settings.js";
-import { initializeExpenseSettings } from "../finance/expense-settings.js";
-import { initializeBankAccounts } from "../finance/bank-accounts.js";
-import { initializeInventorySettings } from "../warehouse/inventory-settings.js";
-import { initializeProductSettings } from "../orders/product-settings.js";
-import { initializeInvoiceSettings } from "../orders/invoice-settings.js";
-import { openFaceRegistration } from "../attendance/face-panel.js";
+const initializeDocumentAccounts = lazyTool(() => import("../documents/account-settings.js"), "initializeDocumentAccounts");
+const initializeExpenseSettings = lazyTool(() => import("../finance/expense-settings.js"), "initializeExpenseSettings");
+const initializeBankAccounts = lazyTool(() => import("../finance/bank-accounts.js"), "initializeBankAccounts");
+const initializeInventorySettings = lazyTool(() => import("../warehouse/inventory-settings.js"), "initializeInventorySettings");
+const initializeProductSettings = lazyTool(() => import("../orders/product-settings.js"), "initializeProductSettings");
+const initializeInvoiceSettings = lazyTool(() => import("../orders/invoice-settings.js"), "initializeInvoiceSettings");
+const openFaceRegistration = lazyTool(() => import("../attendance/face-panel.js"), "openFaceRegistration");
+
+function lazyTool(load, name) {
+  return async (...args) => {
+    try { return (await load())[name](...args); }
+    catch (error) {
+      window.dispatchEvent(new CustomEvent("karbon:startup-error", { detail: "دریافت ابزار تنظیمات انجام نشد؛ لطفاً دوباره تلاش کنید." }));
+      throw error;
+    }
+  };
+}
 
 initializeNavbar();
 
@@ -214,6 +224,7 @@ function setSettingsButtonState(
 }
 
 
+const sectionLoads = new Map();
 async function showSettingsSection(
   requestedSection,
   {
@@ -277,6 +288,11 @@ async function showSettingsSection(
   }
 
 
+  const panel = document.querySelector(`[data-settings-panel="${section}"]`);
+  const version = (sectionLoads.get(section) || 0) + 1;
+  sectionLoads.set(section, version);
+  panel?.setAttribute("aria-busy", "true");
+  try {
   if (
     section === "members" &&
     !membersLoading
@@ -300,6 +316,9 @@ async function showSettingsSection(
   }
   if (section === "invoices") {
     await initializeInvoiceSettings();
+  }
+  } finally {
+    if (sectionLoads.get(section) === version) panel?.setAttribute("aria-busy", "false");
   }
 }
 

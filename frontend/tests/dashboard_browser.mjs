@@ -29,6 +29,8 @@ const settled = async () => {
     () => document.documentElement.dataset.pageState === "ready",
   );
   await page.locator('#dashboardWorkspace[aria-busy="false"]').waitFor();
+  // Charts share animation frames; the test's virtual clock is deliberately paused.
+  await page.clock.runFor(100);
 };
 const exact = (v) => new Intl.NumberFormat("fa-IR").format(BigInt(v));
 try {

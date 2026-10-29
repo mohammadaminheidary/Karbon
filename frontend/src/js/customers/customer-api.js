@@ -88,3 +88,7 @@ export const updateCustomer = (id, data) =>
   request(`/${Number(id)}`, { method: "PUT", body: data });
 export const deleteCustomer = (id) =>
   request(`/${Number(id)}`, { method: "DELETE" });
+
+// Selectors need identity/contact fields, not invoice aggregates.
+export const getCustomerOptions = ({ search = "", skip = 0, limit = 100, customer_id, signal } = {}) =>
+  request(`/options?${new URLSearchParams({ search, skip, limit, ...(customer_id ? { customer_id } : {}) })}`, { signal });

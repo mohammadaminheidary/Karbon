@@ -28,7 +28,7 @@ class LauncherTests(unittest.TestCase):
         self.addCleanup(self.log.close)
         env = dict(os.environ, KARBON_DATABASE_PATH=str(self.directory / "test.db"),
                    KARBON_JWT_SECRET="isolated-launcher-test-secret", BROWSER="/usr/bin/true")
-        self.process = subprocess.Popen([sys.executable, str(ROOT / "start.py")],
+        self.process = subprocess.Popen([sys.executable, str(ROOT / "start.py"), *(["--production"] if self._testMethodName.startswith("test_production") else [])],
                                         cwd=self.directory, env=env, stdout=self.log, stderr=self.log)
         self.addCleanup(self.stop)
         deadline = time.monotonic() + 40
@@ -86,6 +86,18 @@ class LauncherTests(unittest.TestCase):
         self.assert_stopped()
 
     def test_sigterm_stops_both_servers_and_reload_worker(self):
+        self.process.terminate()
+        self.assert_stopped()
+
+    def test_production_launcher_serves_versioned_compressed_assets(self):
+        import re
+        with urlopen("http://127.0.0.1:5501/index.html") as response:
+            html = response.read().decode()
+            self.assertEqual(response.headers["Cache-Control"], "no-cache")
+        asset = re.search(r'src="(/assets/build/[^\"]+\.js)"', html)[1]
+        with urlopen(Request("http://127.0.0.1:5501" + asset, headers={"Accept-Encoding": "gzip"})) as response:
+            self.assertIn("immutable", response.headers["Cache-Control"])
+            self.assertEqual(response.headers["Content-Encoding"], "gzip")
         self.process.terminate()
         self.assert_stopped()
 

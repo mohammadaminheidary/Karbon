@@ -43,10 +43,10 @@ def get_summary(db, customer_id):
     return summary
 
 
-def serialize_customer(customer):
+def serialize_customer(customer, summary=None):
     return {
         **{column.name: getattr(customer, column.name) for column in Customer.__table__.columns},
-        "summary": get_summary(object_session(customer), customer.id),
+        "summary": summary if summary is not None else get_summary(object_session(customer), customer.id),
     }
 
 
@@ -61,8 +61,10 @@ def phone_values():
     return func.json_each(Customer.phone_numbers).table_valued("value")
 
 
-def list_customers(db, search="", skip=0, limit=50):
+def list_customers(db, search="", skip=0, limit=50, *, options_only=False, customer_id=None):
     query = db.query(Customer).filter(Customer.deleted_at.is_(None))
+    if customer_id is not None:
+        query = query.filter(Customer.id == customer_id)
     # Match get_summary's debt/status rules across all customers, independently
     # of the visible search results and pagination. Aggregate payments separately
     # so multiple receipts cannot multiply an order's invoice total.
@@ -78,7 +80,7 @@ def list_customers(db, search="", skip=0, limit=50):
         OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id,
     ).join(Order, Order.id == OrderPayment.order_id).filter(Order.deleted_at.is_(None)).group_by(Order.customer_id).subquery()
     debt = func.coalesce(orders.c.total, 0) - func.coalesce(payments.c.paid, 0)
-    counts = query.outerjoin(orders, orders.c.customer_id == Customer.id).outerjoin(
+    counts = None if options_only else query.outerjoin(orders, orders.c.customer_id == Customer.id).outerjoin(
         payments, payments.c.customer_id == Customer.id,
     ).with_entities(
         func.count(Customer.id),
@@ -101,8 +103,20 @@ def list_customers(db, search="", skip=0, limit=50):
             exists(select(1).select_from(phones).where(phones.c.value.like(phone_pattern, escape="\\"))),
         ))
     total = query.count()
-    items = query.order_by(Customer.id.desc()).offset(skip).limit(limit).all()
-    return {"items": [serialize_customer(item) for item in items], "total": total, "skip": skip, "limit": limit,
+    if options_only:
+        fields = (Customer.id, Customer.customer_code, Customer.first_name, Customer.last_name, Customer.phone_numbers)
+        items = query.with_entities(*fields).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
+        return {"items": [dict(row._mapping) for row in items], "total": total, "skip": skip, "limit": limit}
+    items = query.outerjoin(orders, orders.c.customer_id == Customer.id).outerjoin(
+        payments, payments.c.customer_id == Customer.id,
+    ).add_columns(orders.c.order_count, orders.c.total, payments.c.paid).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
+    serialized = []
+    for item, count, amount, paid in items:
+        count, amount, paid = int(count or 0), int(amount or 0), int(paid or 0)
+        summary = CustomerSummary(order_count=count, total_orders=amount, paid=paid, debt=amount-paid,
+                                  status="debtor" if amount > paid else "settled" if count else "no_payment", available=True)
+        serialized.append(serialize_customer(item, summary))
+    return {"items": serialized, "total": total, "skip": skip, "limit": limit,
             "total_customers": counts[0], "unsettled_customers": counts[1], "settled_customers": counts[2]}
 
 

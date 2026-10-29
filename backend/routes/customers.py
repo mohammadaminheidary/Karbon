@@ -45,6 +45,12 @@ def list_customers(search: str = Query("", max_length=200), skip: int = Query(0,
         return service.list_customers(db, search, skip, limit)
 
 
+@router.get("/options")
+def customer_options(search: str = Query("", max_length=200), skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), customer_id: int | None = Query(None, gt=0, le=9223372036854775807), db: Session = Depends(get_database)):
+    with customer_errors():
+        return service.list_customers(db, search, skip, limit, options_only=True, customer_id=customer_id)
+
+
 @router.get("/next-code")
 def next_code(db: Session = Depends(get_database)):
     with customer_errors():

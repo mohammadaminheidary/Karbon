@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import webbrowser
+import argparse
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -58,7 +59,7 @@ def run_build(command):
         stop_process(process)
 
 
-def build_frontend():
+def build_frontend(production=False):
     run_build([sys.executable, str(FRONTEND_DIR / "scripts/build_navigation.py")])
     npm = shutil.which("npm")
     if not npm:
@@ -71,7 +72,9 @@ def build_frontend():
     if not cli.is_file():
         raise RuntimeError("Frontend dependencies are missing. Run npm --prefix frontend install.")
     print("Building frontend styles...", flush=True)
-    run_build([str(cli), "-i", "./src/input.css", "-o", "./src/output.css"])
+    run_build([str(cli), "-i", "./src/input.css", "-o", "./src/output.css", *(["--minify"] if production else [])])
+    if production:
+        run_build([sys.executable, str(FRONTEND_DIR / "scripts/build_production.py")])
 
 
 def is_port_available(host, port):
@@ -79,17 +82,17 @@ def is_port_available(host, port):
         return sock.connect_ex((host, port)) != 0
 
 
-def start_backend():
+def start_backend(production=False):
     print("Starting Backend...", flush=True)
     return spawn([
-        sys.executable, "-m", "uvicorn", "app:app", "--reload",
+        sys.executable, "-m", "uvicorn", "app:app", *([] if production else ["--reload"]),
         "--host", BACKEND_HOST, "--port", str(BACKEND_PORT),
     ], BACKEND_DIR)
 
 
-def start_frontend():
+def start_frontend(production=False):
     print("Starting Frontend...", flush=True)
-    return spawn([sys.executable, str(FRONTEND_DIR / "serve_frontend.py")], FRONTEND_DIR)
+    return spawn([sys.executable, str(FRONTEND_DIR / "serve_frontend.py"), *(["--production"] if production else [])], FRONTEND_DIR)
 
 
 def wait_until_ready(url, processes, timeout=30):
@@ -114,6 +117,9 @@ def open_browser():
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--production", action="store_true", help="Serve compressed, versioned assets without the API reloader")
+    args = parser.parse_args()
     print("\nStarting Karbon\n", flush=True)
     backend_process = frontend_process = None
     previous_handlers = {}
@@ -124,13 +130,13 @@ def main():
     try:
         for signum in (signal.SIGINT, signal.SIGTERM):
             previous_handlers[signum] = signal.signal(signum, interrupt)
-        build_frontend()
+        build_frontend(args.production)
         if is_port_available(BACKEND_HOST, BACKEND_PORT):
-            backend_process = start_backend()
+            backend_process = start_backend(args.production)
         else:
             print("Backend already running", flush=True)
         if is_port_available(FRONTEND_HOST, FRONTEND_PORT):
-            frontend_process = start_frontend()
+            frontend_process = start_frontend(args.production)
         else:
             print("Frontend already running", flush=True)
         processes = [("Backend", backend_process), ("Frontend", frontend_process)]

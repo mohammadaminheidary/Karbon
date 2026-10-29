@@ -32,11 +32,29 @@ const svgNode = (tag, attrs = {}) => {
   return node;
 };
 let chartSequence = 0;
+const pendingDraws = new Set();
+let drawFrame;
+function scheduleDraw(chart) {
+  if (!chart.visible) return;
+  pendingDraws.add(chart);
+  if (drawFrame) return;
+  drawFrame = requestAnimationFrame(() => {
+    drawFrame = undefined;
+    const charts = [...pendingDraws].filter(chart => chart.visible);
+    pendingDraws.clear();
+    // Read every chart's geometry before any SVG/DOM writes.
+    const sizes = charts.map(chart => chart.measure());
+    charts.forEach((chart, index) => {
+      const size = sizes[index];
+      if (chart.dirty || chart.drawnSize !== `${size.width}/${size.height}`) chart.draw(size);
+    });
+  });
+}
 
 export class Chart {
   constructor(
     host,
-    { series, bars = false, donut = false, money = false, height = 200 },
+    { series, bars = false, donut = false, money = false, height = 200, palette },
   ) {
     Object.assign(this, {
       host,
@@ -50,8 +68,9 @@ export class Chart {
       hi: 0,
     });
     this.uid = `karbon-chart-${++chartSequence}`;
-    this.palette = dashboardPalette(host);
+    this.palette = palette || dashboardPalette(host);
     host.dataset.chart = "true";
+    host.dataset.chartState = "pending";
     this.plot = element("div", "dash-plot");
     this.svg = svgNode("svg", {
       role: "img",
@@ -93,6 +112,7 @@ export class Chart {
     }
     this.controls.append(this.legend, actions);
     this.range = element("div", "dash-chart-range");
+    this.range.hidden = true;
     this.sliders = ["آغاز نمایش", "پایان نمایش"].map((label, index) => {
       const input = element("input");
       input.type = "range";
@@ -109,9 +129,16 @@ export class Chart {
     this.rangeLabel = element("span");
     this.range.append(this.rangeLabel);
     this.details = element("details", "dash-data-details");
-    this.details.append(element("summary", "", "مشاهده جدول داده‌ها"));
+    const tableSummary = element("summary", "", "مشاهده جدول داده‌ها");
+    tableSummary.addEventListener("click", () => {
+      if (!this.details.open && this.tableDirty) this.renderTable();
+    });
+    this.details.append(tableSummary);
     this.tableHost = element("div", "dash-table-scroll");
     this.details.append(this.tableHost);
+    this.details.addEventListener("toggle", () => {
+      if (this.details.open && this.tableDirty) this.renderTable();
+    });
     host.append(this.plot, this.controls, this.range, this.details);
     this.plot.addEventListener("pointermove", (event) => {
       if (this.tip.contains(event.target)) return;
@@ -191,17 +218,46 @@ export class Chart {
         this.inspect(Math.max(this.lo, Math.min(this.hi, index)), true);
       }
     });
-    this.observer = new ResizeObserver(() => {
-      cancelAnimationFrame(this.resizeFrame);
-      this.resizeFrame = requestAnimationFrame(() => this.draw());
+    this.visible = typeof IntersectionObserver === "undefined";
+    if (!this.visible) {
+      this.visibility = new IntersectionObserver(entries => {
+        this.visible = entries[0].isIntersecting;
+        if (this.visible) scheduleDraw(this);
+      }, { rootMargin: "150px" });
+      this.visibility.observe(host);
+    }
+    this.observer = new ResizeObserver(entries => {
+      let changed = false;
+      for (const entry of entries) {
+        const key = entry.target === this.host ? "hostSize" : "plotSize";
+        const size = `${entry.contentRect.width}/${entry.contentRect.height}`;
+        if (this[key] !== size) { this[key] = size; changed = true; }
+      }
+      if (changed) scheduleDraw(this);
     });
     this.observer.observe(host);
     this.observer.observe(this.plot);
   }
 
   update(rows, reset = false) {
+    const signature = JSON.stringify(rows.map(row => [row.label, row.shortLabel, row.detail,
+      ...this.series.map(series => row[series.key])]));
+    if (!reset && signature === this.signature) return;
+    this.signature = signature;
+    this.dirty = true;
+    this.host.dataset.chartState = "pending";
     const oldLength = this.rows.length;
     this.rows = rows;
+    this.range.hidden = rows.length <= 1 || this.donut;
+    if (this.donut && !rows.length) {
+      // An empty period must not retain the previous categories or their amounts.
+      this.legend.classList.remove("dash-donut-legend");
+      this.legend.replaceChildren(...this.series.map(series => {
+        const label = element("span", "", series.label);
+        label.style.setProperty("--series-color", series.color);
+        return label;
+      }));
+    }
     if (reset || oldLength !== rows.length) {
       this.lo = 0;
       this.hi = Math.max(0, rows.length - 1);
@@ -217,6 +273,12 @@ export class Chart {
           )
         : undefined;
     }
+    this.tableDirty = true;
+    if (this.details.open) this.renderTable();
+    scheduleDraw(this);
+  }
+
+  renderTable() {
     this.tableHost.replaceChildren();
     const table = element("table", "dash-table");
     const caption = element(
@@ -236,7 +298,7 @@ export class Chart {
     });
     head.append(tr);
     const body = element("tbody");
-    rows.forEach((row) => {
+    this.rows.forEach((row) => {
       const tr = element("tr");
       tr.append(element("td", "", row.label));
       this.series.forEach((s) =>
@@ -246,7 +308,7 @@ export class Chart {
     });
     table.append(caption, head, body);
     this.tableHost.append(table);
-    this.draw();
+    this.tableDirty = false;
   }
 
   reset() {
@@ -267,6 +329,7 @@ export class Chart {
     this.setWindow(Math.round(center - (span - 1) / 2), span);
   }
   indexAt(clientX, clientY) {
+    if (this.dirty || this.width === undefined) this.draw();
     const rect = this.svg.getBoundingClientRect();
     if (this.donut && this.sectors) {
       const angle =
@@ -312,6 +375,7 @@ export class Chart {
   inspect(index, announce = false) {
     const row = this.rows[index];
     if (!row || index < this.lo || index > this.hi) return;
+    if (this.dirty || this.width === undefined) this.draw();
     this.selected = index;
     this.tip.replaceChildren(element("strong", "", row.label));
     const values = this.series.map(
@@ -347,15 +411,22 @@ export class Chart {
     if (announce)
       this.readout.textContent = `${row.label}؛ ${values.join("؛ ")}`;
   }
-  draw() {
+  measure() {
+    const inWidget = Boolean(this.host.closest(".dash-widget"));
+    return { width: Math.max(160, this.host.clientWidth), inWidget,
+      height: Math.max(100, inWidget ? this.plot.clientHeight : this.height) };
+  }
+  draw(size = this.measure()) {
+    this.host.dataset.chartState = "ready";
+    this.dirty = false;
+    this.drawnSize = `${size.width}/${size.height}`;
     this.svg.replaceChildren();
     this.crosshair = null;
     this.hideTip();
-    this.width = Math.max(160, this.host.clientWidth);
-    const inWidget = this.host.closest(".dash-widget");
-    const availableHeight = inWidget ? this.plot.clientHeight : this.height;
+    this.width = size.width;
+    const { inWidget } = size;
     const w = this.width,
-      h = Math.max(100, availableHeight),
+      h = size.height,
       right = w - 12,
       bottom = h - 26,
       top = 12;

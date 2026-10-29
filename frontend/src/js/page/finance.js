@@ -6,7 +6,7 @@ import { createNavbarNotification } from "../components/navbar-notification.js";
 import { bankLogo } from "../finance/bank-accounts.js";
 import { CurtainDialog } from "../components/curtain-dialog.js";
 import { protectPage } from "../guards/auth-guard.js";
-import { getCustomers } from "../customers/customer-api.js";
+import { CustomerSelect } from "../customers/customer-select.js";
 import {
   getBanks,
   getExpenseCategories,
@@ -42,11 +42,13 @@ let kind = "income",
   sources = [],
   saving = false,
   optionsReady = false;
+let customerPicker;
 let requestId, requestFingerprint;
 const dialog = new CurtainDialog("transactionModal", {
   canClose: () => !saving,
   onCancel: () => {
     optionsVersion++;
+    customerPicker?.cancel();
   },
 });
 
@@ -417,17 +419,17 @@ function setOptions(select, items, placeholder, label) {
   );
 }
 
-async function allCustomers() {
-  const items = [];
-  let page;
-  do {
-    page = await getCustomers({ skip: items.length, limit: 100 });
-    items.push(...page.items);
-  } while (items.length < page.total && page.items.length);
-  return items;
-}
-
 async function loadOptions() {
+  customerPicker ||= new CustomerSelect($("transactionSource"), {
+    rows: (rows, selected) => {
+      sources = rows;
+      setOptions($("transactionSource"), rows, "انتخاب مشتری", row => `${row.first_name} ${row.last_name} · ${row.customer_code}`);
+      $("transactionSource").value = selected ? String(selected) : "";
+      $("transactionSource").dispatchEvent(new Event("change"));
+    },
+    busy: busy => { $("submitTransaction").disabled = saving || !optionsReady || busy; },
+  });
+  customerPicker.setActive(kind === "income");
   const version = ++optionsVersion;
   optionsReady = false;
   setFormBusy();
@@ -438,7 +440,7 @@ async function loadOptions() {
   try {
     const [banks, records] = await Promise.all([
       getBanks(),
-      kind === "income" ? allCustomers() : getExpenseCategories(),
+      kind === "income" ? customerPicker.reset() : getExpenseCategories(),
     ]);
     if (version !== optionsVersion) return;
     sources = records.filter((item) => item.active !== false);
@@ -522,7 +524,7 @@ async function openTransaction(nextKind) {
 
 async function submitTransaction(event) {
   event.preventDefault();
-  if (saving || !optionsReady) return;
+  if (saving || !optionsReady || customerPicker?.busy) return;
   $("transactionFormError").classList.add("hidden");
   let result;
   try {
@@ -636,6 +638,7 @@ async function initialize() {
     clearInterval(clock);
     dayController?.abort();
     optionsVersion++;
+    customerPicker?.cancel();
     calendarVersion++;
   });
   window.addEventListener("pageshow", (event) => {

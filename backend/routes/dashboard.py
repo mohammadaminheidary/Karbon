@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
@@ -15,6 +16,8 @@ router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"], dependencies=[De
 @router.get("")
 def report(response: Response, start_date: date | None = None, end_date: date | None = None,
            days: int = Query(30, ge=1, le=366),
+           view: Literal["full", "summary", "debtors", "products"] = "full",
+           include_debtors: bool = False, include_products: bool = False,
            db: Session = Depends(get_database)):
     end = end_date or datetime.now(APP_TIMEZONE).date()
     if end.year < 1901:
@@ -24,4 +27,4 @@ def report(response: Response, start_date: date | None = None, end_date: date | 
         raise HTTPException(422, "بازه باید مرتب، حداکثر ۳۶۶ روز و پس از سال ۱۹۰۰ باشد.")
     response.headers["Cache-Control"] = "no-store"
     with finance_errors():
-        return dashboard(db, start, end)
+        return dashboard(db, start, end, view, include_debtors, include_products)

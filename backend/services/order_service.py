@@ -119,10 +119,13 @@ def next_number(db):
     return str(number)
 
 
-def serialize(db, order):
-    customer = db.get(Customer, order.customer_id)
-    items = db.query(OrderItem).filter(OrderItem.order_id == order.id).order_by(OrderItem.position).all()
-    payments = db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(OrderPayment.order_id == order.id).all()
+def serialize(db, order, *, loaded=None):
+    if loaded is None:
+        customer = db.get(Customer, order.customer_id)
+        items = db.query(OrderItem).filter(OrderItem.order_id == order.id).order_by(OrderItem.position).all()
+        payments = db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(OrderPayment.order_id == order.id).all()
+    else:
+        customer, items, payments = loaded
     paid = sum(transaction.amount for _, transaction in payments)
     total = order.subtotal - order.discount
     return {
@@ -196,11 +199,27 @@ def base36(value):
     return result or "0"
 
 
+def load_order_relations(db, orders):
+    """Load the relationships for this page, including the legacy full response."""
+    ids = [order.id for order in orders]
+    customers = {item.id: item for item in db.query(Customer).filter(Customer.id.in_({order.customer_id for order in orders})).all()} if ids else {}
+    items, payments = {}, {}
+    if ids:
+        for item in db.query(OrderItem).filter(OrderItem.order_id.in_(ids)).order_by(OrderItem.position).all():
+            items.setdefault(item.order_id, []).append(item)
+        for payment, transaction in db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(OrderPayment.order_id.in_(ids)).all():
+            payments.setdefault(payment.order_id, []).append((payment, transaction))
+    return {order.id: (customers[order.customer_id], items.get(order.id, []), payments.get(order.id, [])) for order in orders}
+
+
 def list_orders(db, status, skip, limit):
     query = db.query(Order).filter(Order.deleted_at.is_(None))
-    return {"total_orders": query.count(), "active_orders": query.filter(Order.status == "active").count(),
-            "total": query.filter(Order.status == status).count(),
-            "items": [serialize(db, order) for order in query.filter(Order.status == status).order_by(Order.id.desc()).offset(skip).limit(limit).all()]}
+    orders = query.filter(Order.status == status).order_by(Order.id.desc()).offset(skip).limit(limit).all()
+    loaded = load_order_relations(db, orders)
+    counts = dict(query.with_entities(Order.status, func.count(Order.id)).group_by(Order.status).all())
+    return {"total_orders": sum(counts.values()), "active_orders": counts.get("active", 0),
+            "total": counts.get(status, 0),
+            "items": [serialize(db, order, loaded=loaded[order.id]) for order in orders]}
 
 
 def list_invoices(db, search, skip, limit):
@@ -215,10 +234,12 @@ def list_invoices(db, search, skip, limit):
             Order.order_number.like(pattern, escape="\\"),
         ))
     total = query.count()
+    orders = query.order_by(Order.id.desc()).offset(skip).limit(limit).all()
+    loaded = load_order_relations(db, orders)
     items = []
-    for order in query.order_by(Order.id.desc()).offset(skip).limit(limit).all():
-        customer = db.get(Customer, order.customer_id)
-        items.append({**serialize(db, order), "customer": {
+    for order in orders:
+        customer = loaded[order.id][0]
+        items.append({**serialize(db, order, loaded=loaded[order.id]), "customer": {
             "id": customer.id, "code": customer.customer_code,
             "name": f"{customer.first_name} {customer.last_name}",
         }})

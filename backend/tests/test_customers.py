@@ -97,6 +97,22 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(self.request("GET", "/members")[0], 200)
         self.assertEqual(self.request("POST", "/login", {"username": "customers-test", "password": "wrong"}, False)[0], 401)
 
+    def test_lightweight_options_search_pagination_and_authentication(self):
+        one = self.create(first_name="علی", phone_numbers=["09121111111"], notes="private notes")
+        two = self.create(first_name="سارا", phone_numbers=["09122222222"])
+        self.assertEqual(self.request("GET", "/customers/options", authenticated=False)[0], 401)
+        status, data = self.request("GET", "/customers/options?limit=1")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(data["items"][0]["id"], two["id"])
+        self.assertEqual(set(data["items"][0]), {"id", "customer_code", "first_name", "last_name", "phone_numbers"})
+        self.assertEqual(self.request("GET", "/customers/options?skip=1&limit=1")[1]["items"][0]["id"], one["id"])
+        self.assertEqual(self.request("GET", "/customers/options?search=09121111111")[1]["total"], 1)
+        self.assertEqual(self.request("GET", "/customers/options?search=%25")[1]["items"], [])
+        self.assertEqual(self.request("GET", "/customers/options?limit=101")[0], 422)
+        self.assertEqual(self.request("DELETE", f'/customers/{one["id"]}')[0], 204)
+        self.assertEqual(self.request("GET", "/customers/options?search=09121111111")[1]["total"], 0)
+
     def test_empty_create_and_persistence(self):
         empty = self.request("GET", "/customers")[1]
         self.assertEqual(empty["total"], 0)

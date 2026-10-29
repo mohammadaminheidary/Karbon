@@ -32,6 +32,8 @@ with SessionLocal() as db:
                 FinancialTransaction(id=11, request_id="old-expense", kind="expense", bank_id=7, expense_category_id=8, title="دو", account_code="E-000008", amount=100, transaction_date=date(2026,10,6), transaction_time="13:00:00", time_mode="manual")])
     db.commit()
 with engine.begin() as connection:
+    # This fixture deliberately recreates a schema predating deleted_at.
+    connection.exec_driver_sql("DROP INDEX IF EXISTS ix_finance_bank_live_date")
     for table, fields in {"customers":["deleted_at"], "bank_accounts":["deleted_at"], "expense_categories":["display_code","deleted_at"], "financial_transactions":["transaction_number","updated_at","deleted_at"]}.items():
         for field in fields:
             connection.exec_driver_sql(f"ALTER TABLE {table} DROP COLUMN {field}")

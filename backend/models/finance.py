@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, Boolean
+from sqlalchemy import BigInteger, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, Boolean, text
 
 from database import Base
 
@@ -57,6 +57,7 @@ class FinancialTransaction(Base):
         CheckConstraint("(document_account_id IS NULL AND ((kind = 'income' AND customer_id IS NOT NULL AND expense_category_id IS NULL) OR (kind = 'expense' AND customer_id IS NULL AND expense_category_id IS NOT NULL))) OR (document_id IS NOT NULL AND document_account_id IS NOT NULL AND customer_id IS NULL AND expense_category_id IS NULL AND kind IN ('income', 'expense'))", name="financial_source"),
         CheckConstraint("time_mode IN ('auto', 'manual')", name="financial_time_mode"),
         Index("ix_finance_date_time", "transaction_date", "transaction_time", "id"),
+        Index("ix_finance_bank_live_date", "bank_id", "transaction_date", "transaction_time", "id", sqlite_where=text("deleted_at IS NULL")),
     )
     id = Column(Integer, primary_key=True)
     transaction_number = Column(Integer, nullable=True)

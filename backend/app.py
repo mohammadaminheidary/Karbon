@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 
 from fastapi.middleware.cors import (
     CORSMiddleware,
@@ -58,7 +59,35 @@ async def private_face_validation(request, error):
     return await request_validation_exception_handler(request, error)
 
 
+class NegotiatedGZipMiddleware(GZipMiddleware):
+    async def __call__(self, scope, receive, send):
+        # Starlette checks for the substring "gzip"; honor clients that explicitly
+        # disable it with q=0 while keeping its normal identity/Vary handling.
+        encoding = next((v for k, v in scope.get("headers", []) if k == b"accept-encoding"), b"")
+        if b";" in encoding and b"gzip" in encoding.lower():
+            tokens = encoding.decode("latin-1").split(",")
+            allowed = []
+            for token in tokens:
+                parts = token.split(";")
+                disabled = False
+                if parts[0].strip().lower() == "gzip":
+                    for parameter in parts[1:]:
+                        name, _, value = parameter.partition("=")
+                        if name.strip().lower() == "q":
+                            try:
+                                disabled = not 0 < float(value) <= 1
+                            except ValueError:
+                                disabled = True
+                if not disabled:
+                    allowed.append(token)
+            scope = {**scope, "headers": [(k, ",".join(allowed).encode("latin-1") if k == b"accept-encoding" else v) for k, v in scope["headers"]]}
+        await super().__call__(scope, receive, send)
+
+
 app.add_middleware(FaceRequestMiddleware)
+# Large JSON lists compress well at level 1 without the CPU cost of level 9.
+# Small auth, error, and face-status responses bypass compression entirely.
+app.add_middleware(NegotiatedGZipMiddleware, minimum_size=1024, compresslevel=1)
 
 
 # ======================================================

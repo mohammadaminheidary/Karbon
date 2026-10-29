@@ -65,3 +65,16 @@ Browser tests use `frontend/tests/serve_customers_fixture.py`, which creates a
 disposable database. Set `KARBON_PLAYWRIGHT_PATH` and `KARBON_CHROME_PATH` if
 Playwright or Chromium are installed outside the frontend's Node dependencies.
 See [the dependency map](docs/project-layout.md) for execution and storage paths.
+
+For the production configuration, run `python3 start.py --production`. It uses
+one API process without reload and serves the generated `frontend/dist/` files.
+Alternatively, run `npm --prefix frontend run build` followed by
+`npm --prefix frontend run serve` alongside the API. Native ES modules are
+content-hashed, dependencies are preloaded, optional tools load on demand, and
+text assets have precompressed gzip representations. HTML revalidates; versioned
+assets cache for one year. Builds retain old immutable chunks for open tabs.
+`KARBON_API_BASE_URL` optionally sets the API origin **at build time**; the default
+remains `http://127.0.0.1:8000/api`.
+
+See [the current performance audit](docs/performance/2026-10-29-followup.md) for
+reproducible synthetic benchmarks and the limits of their results.

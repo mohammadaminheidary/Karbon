@@ -6,7 +6,8 @@
   "scripts": {
     "build:navigation": "python3 scripts/build_navigation.py",
     "dev": "npm run build:navigation && tailwindcss -i ./src/input.css -o ./src/output.css --watch",
-    "build": "npm run build:navigation && tailwindcss -i ./src/input.css -o ./src/output.css",
+    "build": "npm run build:navigation && tailwindcss -i ./src/input.css -o ./src/output.css --minify && python3 scripts/build_production.py",
+    "serve": "python3 serve_frontend.py --production",
     "test": "node --test tests/*.cjs"
   },
   "keywords": [

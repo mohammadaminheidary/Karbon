@@ -75,6 +75,29 @@ class DashboardIntegrationTests(unittest.TestCase):
         d = self.report()
         self.assertEqual((d["orders"]["active_total"], d["orders"]["completed"]), (0, 1))
 
+    def test_progressive_views_preserve_global_totals_and_refresh_after_writes(self):
+        self.post("/orders", self.payload(payments=[{"method": "cash", "amount": 600}]))
+        query = "start_date=2026-10-14&end_date=2026-10-15"
+        full = self.request("GET", f"/dashboard?{query}")[1]
+        summary = self.request("GET", f"/dashboard?{query}&view=summary")[1]
+        self.assertNotIn("debtors", summary["customers"])
+        self.assertNotIn("product_sales", summary)
+        for key in full:
+            if key not in {"generated_at", "customers", "product_sales"}:
+                self.assertEqual(summary[key], full[key], key)
+        self.assertEqual(summary["customers"], {k: v for k, v in full["customers"].items() if k != "debtors"})
+        debtors = self.request("GET", f"/dashboard?{query}&view=debtors")[1]
+        products = self.request("GET", f"/dashboard?{query}&view=products")[1]
+        self.assertEqual(debtors["customers"]["debtors"], full["customers"]["debtors"])
+        self.assertEqual(products["product_sales"], full["product_sales"])
+        combined = self.request("GET", f"/dashboard?{query}&view=summary&include_debtors=true&include_products=true")[1]
+        self.assertEqual({k:v for k,v in combined.items() if k != "generated_at"}, {k:v for k,v in full.items() if k != "generated_at"})
+        self.transaction(90)
+        fresh = self.request("GET", f"/dashboard?{query}&view=summary")[1]
+        self.assertEqual(int(fresh["finance"]["income"]), int(summary["finance"]["income"]) + 90)
+        self.assertEqual(self.request("GET", "/dashboard?view=summary", authenticated=False)[0], 401)
+        self.assertEqual(self.request("GET", "/dashboard?view=unsupported")[0], 422)
+
     def test_document_income_expense_once_and_deletion_propagates(self):
         ia = self.post("/settings/document-accounts", {"title": "درآمد سند", "kind": "income"})
         ea = self.post("/settings/document-accounts", {"title": "هزینه سند", "kind": "expense"})

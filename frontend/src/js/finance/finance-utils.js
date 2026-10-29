@@ -5,24 +5,21 @@ import {
 } from "../customers/customer-utils.js";
 export { normalizeDigits, formatJalaliInput, normalizeJalaliDate };
 
-export const money = (value) =>
-  `${new Intl.NumberFormat("fa-IR").format(value)} تومان`;
-export const fullDate = (value) =>
-  new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+const moneyFormatter = new Intl.NumberFormat("fa-IR");
+const fullDateFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
     year: "numeric",
     month: "long",
     day: "numeric",
     timeZone: "Asia/Tehran",
-  }).format(new Date(`${value}T12:00:00+03:30`));
+  });
+const todayFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit",
+});
+export const money = value => `${moneyFormatter.format(value)} تومان`;
+export const fullDate = value => fullDateFormatter.format(new Date(`${value}T12:00:00+03:30`));
 export function todayKey() {
   const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Tehran",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(new Date())
+    todayFormatter.formatToParts(new Date())
       .map((part) => [part.type, part.value]),
   );
   return `${parts.year}-${parts.month}-${parts.day}`;

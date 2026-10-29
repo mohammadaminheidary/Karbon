@@ -1,5 +1,5 @@
 import { CurtainDialog } from "../components/curtain-dialog.js";
-import { getCustomers } from "../customers/customer-api.js";
+import { CustomerSelect } from "../customers/customer-select.js";
 import {
   financeRequest,
   getBanks,
@@ -24,6 +24,7 @@ let root,
   sources = [],
   customers = [],
   categories = [];
+let customerPicker;
 const $ = (id) => root.querySelector(`#edit${id}`);
 
 export function transactionActions(record, changed) {
@@ -105,11 +106,27 @@ function createEditor() {
     canClose: () => !saving,
     onCancel: () => {
       version++;
+      customerPicker?.cancel();
       item = null;
     },
   });
   bindAmount($("Amount"));
-  $("Kind").addEventListener("change", renderSources);
+  customerPicker = new CustomerSelect($("Source"), {
+    rows: (rows, selected) => {
+      customers = rows;
+      if (!item) return;
+      renderSources();
+      if (selected) $("Source").value = selected;
+      renderCode();
+    },
+    busy: busy => { $("Save").disabled = saving || busy; },
+  });
+  $("Kind").addEventListener("change", () => {
+    const income = $("Kind").value === "income";
+    customerPicker.setActive(income);
+    if (income) void customerPicker.reset(item.kind === "income" ? item.customer_id : undefined).catch(error => { $("Error").textContent = error.message; });
+    renderSources();
+  });
   $("Source").addEventListener("change", renderCode);
   $("TimeMode").addEventListener("change", syncTime);
   $("Form").addEventListener("submit", save);
@@ -157,16 +174,6 @@ function renderCode() {
 function syncTime() {
   $("Manual").classList.toggle("hidden", $("TimeMode").value !== "manual");
 }
-async function allCustomers() {
-  const rows = [];
-  let skip = 0;
-  while (true) {
-    const page = await getCustomers({ skip, limit: 100 });
-    rows.push(...page.items);
-    skip += page.items.length;
-    if (skip >= page.total || !page.items.length) return rows;
-  }
-}
 async function editTransaction(record, changed) {
   if (saving) return;
   if (!root) createEditor();
@@ -190,11 +197,12 @@ async function editTransaction(record, changed) {
   $("Save").disabled = true;
   syncTime();
   root.inert = false;
+  customerPicker.setActive(record.kind === "income");
   dialog.open();
   try {
     const [banks, clients, titles] = await Promise.all([
       getBanks(),
-      allCustomers(),
+      record.kind === "income" ? customerPicker.reset(record.customer_id) : Promise.resolve([]),
       getExpenseCategories(),
     ]);
     if (current !== version) return;
@@ -218,7 +226,7 @@ async function editTransaction(record, changed) {
 }
 async function save(event) {
   event.preventDefault();
-  if (saving) return;
+  if (saving || customerPicker?.busy) return;
   let result;
   saving = true;
   $("Fields").disabled = true;

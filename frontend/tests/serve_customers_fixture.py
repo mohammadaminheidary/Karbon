@@ -17,6 +17,8 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from serve_frontend import FrontendServer
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--backend-port", type=int, default=8000)
 parser.add_argument("--frontend-port", type=int, default=5501)
@@ -144,7 +146,7 @@ with SessionLocal() as db:
     db.commit()
 uvicorn.run(app.app, host="127.0.0.1", port={args.backend_port})
 '''
-    frontend = ThreadingHTTPServer(("127.0.0.1", args.frontend_port), FixtureHandler)
+    frontend = FrontendServer(("127.0.0.1", args.frontend_port), FixtureHandler)
     thread = threading.Thread(target=frontend.serve_forever, daemon=True)
     backend = subprocess.Popen([sys.executable, "-c", bootstrap], cwd=ROOT.parent / "backend", env=env)
     thread.start()

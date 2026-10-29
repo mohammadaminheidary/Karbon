@@ -1,0 +1,47 @@
+{
+  "unchanged_base_sha256": "619f4dda422a0ea8ca3a1476e962ac97bb73daf57dbc4d71bd58c5fd0868d0b1",
+  "equal_contracts": [
+    "bank_activity",
+    "bank_ledger",
+    "banks",
+    "categories",
+    "customers",
+    "dashboard",
+    "dashboard_initial",
+    "documents",
+    "finance",
+    "inventory",
+    "inventory_options",
+    "members",
+    "orders",
+    "selector",
+    "settings_invoices",
+    "tasks"
+  ],
+  "ignored": "dashboard.generated_at only; initial view intentionally omits the two deferred detail lists",
+  "compression_roundtrip": "All 16 paths in both phases match identity data",
+  "write_states": {
+    "before": {
+      "customers": 1000,
+      "orders": 1043,
+      "items": 3043,
+      "payments": 2043,
+      "financial_transactions": 5486,
+      "net_money": 63158500,
+      "order_totals": 90290000,
+      "stock_product_1": 9957,
+      "dangling_payments": 0
+    },
+    "after": {
+      "customers": 1000,
+      "orders": 1043,
+      "items": 3043,
+      "payments": 2043,
+      "financial_transactions": 5486,
+      "net_money": 63158500,
+      "order_totals": 90290000,
+      "stock_product_1": 9957,
+      "dangling_payments": 0
+    }
+  }
+}

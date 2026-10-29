@@ -1,8 +1,7 @@
-// Read CSS tokens so chart colors follow the same design system as controls.
-export function dashboardPalette(host = document.querySelector(".dashboard")) {
-  const styles = getComputedStyle(host || document.documentElement);
-  const token = (name, fallback) =>
-    styles.getPropertyValue(name).trim() || fallback;
+// SVG presentation attributes and legend styles resolve CSS tokens themselves.
+// This also follows theme changes without synchronously forcing page layout.
+export function dashboardPalette() {
+  const token = (name, fallback) => `var(${name}, ${fallback})`;
   return {
     primary: token("--dash-blue", "#1e40af"),
     strong: token("--dash-blue-strong", "#1e3a8a"),

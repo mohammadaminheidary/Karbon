@@ -49,7 +49,7 @@ try {
   await page.locator("#passwordInput").fill("test-password");
   await page.locator('button[type="submit"]').click();
   await page.waitForURL("**/index.html");
-  await page.locator('a[href="/page/customers-page.html"]').click();
+  await page.locator('#mainNavbar a[href="/page/customers-page.html"]').click();
   await idleCustomers();
   assert.equal(await page.locator("#customersList > *").count(), 12);
   await page.locator("#loadMoreCustomersButton").click();
@@ -100,7 +100,7 @@ try {
   await page.locator("#customerSearchInput").fill("آزمایشی");
   await idleCustomers();
   const search = await page.locator("#customerSearchInput").inputValue();
-  await page.locator('a[href="/page/orders-page.html"]').click();
+  await page.locator('#mainNavbar a[href="/page/orders-page.html"]').click();
   await page.waitForFunction(
     () =>
       document
@@ -144,7 +144,7 @@ try {
     "orders",
     "customers",
   ]) {
-    await page.locator(`a[href="/page/${name}-page.html"]`).click();
+    await page.locator(`#mainNavbar a[href="/page/${name}-page.html"]`).click();
     await page.waitForURL(`**/page/${name}-page.html`);
     await page.locator("#mainNavbar").waitFor({ state: "visible" });
     await page.waitForFunction(
@@ -188,7 +188,7 @@ try {
       }
     }
   }
-  await page.locator('a[href="/page/banks-page.html"]').click();
+  await page.locator('#mainNavbar a[href="/page/banks-page.html"]').click();
   await page
     .locator("a.bank-account")
     .filter({ hasText: "بانک ملت" })
@@ -218,7 +218,7 @@ try {
   );
   assert.equal(await page.locator("#chartSummary > *").count(), 2);
   await page.unroute("**/api/banks/*/transactions?*");
-  await page.locator('a[href="/page/customers-page.html"]').click();
+  await page.locator('#mainNavbar a[href="/page/customers-page.html"]').click();
   await idleCustomers();
   assert.deepEqual(errors, []);
   if (process.env.KARBON_SCREENSHOT)

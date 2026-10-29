@@ -1,0 +1,40 @@
+{
+  "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "python": "3.13.15 (v3.13.15:4061bc4c35f, Aug  5 2026, 09:08:51) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "node": "v24.19.0",
+  "base_commit": "416065af2351344243bcaacf72963017ead40110",
+  "baseline": "working tree on entry, including existing uncommitted changes",
+  "sqlite": "3.50.4",
+  "logical_cpus": 10,
+  "physical_memory_bytes": 17179869184,
+  "versions": {
+    "fastapi": "0.141.1",
+    "pydantic": "2.13.5",
+    "sqlalchemy": "2.0.54",
+    "uvicorn": "0.53.0"
+  },
+  "dataset_bytes": 5005312,
+  "baseline_snapshot": "/private/tmp/karbon-audit-tdcr_dnd/baseline",
+  "dataset": {
+    "customers": 1000,
+    "products": 250,
+    "orders": 1000,
+    "order_items": 3000,
+    "order_payments": 2000,
+    "financial_transactions": 5400,
+    "bank_accounts": 20,
+    "tasks": 2000,
+    "members": 30,
+    "attendance": 900,
+    "documents": 200,
+    "member_faces": 0
+  },
+  "base_sha256": "619f4dda422a0ea8ca3a1476e962ac97bb73daf57dbc4d71bd58c5fd0868d0b1",
+  "journal_mode": "delete",
+  "cpu_model": "Apple M4",
+  "chrome_before": "156.0.8078.73",
+  "chrome_after": "156.0.8078.73",
+  "opencv": "4.13.0",
+  "tailwind": "4.3.3"
+}

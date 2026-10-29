@@ -16,7 +16,7 @@ from models.order import OrderPayment
 from schemas.customer_schema import normalize_text
 from schemas.finance_schema import TransactionEdit
 from security.password import verify_password
-from services.finance_service import FinanceError, apply_transaction_fields, require, serialize, sums
+from services.finance_service import FinanceError, apply_transaction_fields, require, serialize, sums, invoice_links
 from services.reference_codes import compact_transaction_numbers
 
 
@@ -178,7 +178,8 @@ def get_document(db, document_id):
         BankDirectory, BankAccount.bank == BankDirectory.code).filter(Transaction.document_id == document.id, Transaction.deleted_at.is_(None)).order_by(Transaction.id).all()
     income = sum(item.amount for item, _, _ in rows if item.kind == "income")
     expense = sum(item.amount for item, _, _ in rows if item.kind == "expense")
-    return {**summary(document, income, expense, len(rows)), "rows": [serialize(item, bank, directory) for item, bank, directory in rows]}
+    links = invoice_links(db, [item.id for item, _, _ in rows])
+    return {**summary(document, income, expense, len(rows)), "rows": [serialize(item, bank, directory, links=links) for item, bank, directory in rows]}
 
 
 def fingerprint(data):

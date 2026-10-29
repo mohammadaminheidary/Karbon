@@ -1,0 +1,26 @@
+{
+  "SELECT id FROM financial_transactions WHERE bank_id=1 AND deleted_at IS NULL ORDER BY transaction_date DESC, transaction_time DESC,id DESC LIMIT 16": [
+    [
+      5,
+      0,
+      61,
+      "SEARCH financial_transactions USING INDEX ix_finance_bank_live_date (bank_id=?)"
+    ]
+  ],
+  "SELECT id FROM orders WHERE status=\"active\" AND deleted_at IS NULL ORDER BY id DESC LIMIT 20": [
+    [
+      4,
+      0,
+      216,
+      "SCAN orders"
+    ]
+  ],
+  "SELECT id FROM customers WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 12": [
+    [
+      4,
+      0,
+      216,
+      "SCAN customers"
+    ]
+  ]
+}

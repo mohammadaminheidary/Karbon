@@ -158,7 +158,7 @@ try {
   assert.equal(
     requests.length - beforeConcurrent,
     2,
-    "ten consumers across three API modules should use two distinct GETs",
+    "ten consumers across three API modules should use two distinct GETs: " + JSON.stringify(requests.slice(beforeConcurrent)),
   );
 
   await page.evaluate(async () => {
