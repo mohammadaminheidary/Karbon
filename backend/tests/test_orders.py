@@ -272,6 +272,52 @@ class OrdersIntegrationTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM financial_transactions").fetchone()[0],1)
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(),[])
 
+    def test_reactivation_is_concurrent_idempotent_and_preserves_all_data(self):
+        order = self.post("/orders", self.payload(payments=[{"method": "cash", "amount": 600}], description="شرح بازگشت"))
+        path = f'/orders/{order["id"]}'
+        self.assertEqual(self.request("POST", path + "/complete")[0], 200)
+        completed = self.request("GET", path)[1]
+        tables = ["orders", "order_items", "order_payments", "financial_transactions", "products", "bank_accounts", "customers"]
+
+        def snapshot():
+            with closing(sqlite3.connect(self.database)) as db:
+                db.row_factory = sqlite3.Row
+                return {table: [dict(row) for row in db.execute(f"SELECT * FROM {table} ORDER BY id")] for table in tables}
+
+        before = snapshot()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+            results = list(pool.map(lambda _: self.request("POST", path + "/reactivate"), range(8)))
+        self.assertTrue(all(status == 200 and row["status"] == "active" for status, row in results), results)
+        self.assertEqual(self.request("GET", path)[1], {**completed, "status": "active"})
+        before["orders"][0]["status"] = "active"
+        self.assertEqual(snapshot(), before)
+        active = self.request("GET", "/orders?status=active")[1]
+        self.assertEqual((active["total_orders"], active["active_orders"]), (1, 1))
+        self.assertEqual([row["id"] for row in active["items"]], [order["id"]])
+        self.assertEqual(self.request("GET", "/orders?status=completed")[1]["items"], [])
+        self.assertEqual(self.request("POST", path + "/reactivate")[1]["status"], "active")
+        self.assertEqual(self.request("POST", path + "/complete")[1]["status"], "completed")
+        self.assertEqual(self.request("POST", path + "/reactivate")[1]["status"], "active")
+
+    def test_reactivation_auth_missing_draft_deleted_and_unpaid(self):
+        order = self.post("/orders", self.payload(payments=[]))
+        path = f'/orders/{order["id"]}'
+        self.assertEqual(self.request("POST", path + "/reactivate", authenticated=False)[0], 401)
+        self.assertEqual(self.request("POST", "/orders/999999/reactivate")[0], 404)
+        self.assertEqual(self.request("POST", path + "/complete")[0], 200)
+        status, active = self.request("POST", path + "/reactivate")
+        self.assertEqual(status, 200, active)
+        self.assertEqual((active["status"], active["paid"], active["remaining"]), ("active", 0, 2000))
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE orders SET deleted_at='2026-10-30' WHERE id=?", (order["id"],))
+        self.assertEqual(self.request("POST", path + "/reactivate")[0], 404)
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("INSERT INTO orders(request_id,request_fingerprint,invoice_code,order_number,customer_id,invoice_date,payment_date,subtotal,discount,status,created_at) VALUES('return-draft','draft','RETURN-DRAFT','RETURN-DRAFT',?,'2026-10-14','2026-10-14',100,0,'completed','2026-10-14')", (self.customer["id"],))
+            draft_id = db.execute("SELECT id FROM orders WHERE request_id='return-draft'").fetchone()[0]
+        self.assertEqual(self.request("POST", f'/orders/{draft_id}/reactivate')[0], 409)
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute("SELECT status FROM orders WHERE id=?", (draft_id,)).fetchone()[0], "completed")
+
     def test_completion_auth_missing_draft_and_unpaid_order(self):
         order = self.post("/orders",self.payload(payments=[]))
         path=f'/orders/{order["id"]}'

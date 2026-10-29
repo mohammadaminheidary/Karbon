@@ -190,6 +190,27 @@ def complete_order(db, order_id):
         raise
 
 
+def reactivate_order(db, order_id):
+    db.rollback()
+    try:
+        db.execute(text("BEGIN IMMEDIATE"))
+        order = require(db, Order, order_id, "سفارش")
+        if not order.invoice_snapshot:
+            raise FinanceError("فقط سفارش ثبت‌شده با فاکتور نهایی قابل بازگشت است.", 409)
+        if order.status not in ("active", "completed"):
+            raise FinanceError("وضعیت سفارش اجازه بازگشت را نمی‌دهد.", 409)
+        # Target-state assignment makes duplicate/concurrent retries harmless.
+        # Invoice history, inventory and payments remain unchanged.
+        order.status = "active"
+        db.flush()
+        result = order_details(db, order.id)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+
+
 def base36(value):
     digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     result = ""

@@ -54,7 +54,20 @@ const panelRequests = new WeakMap();
 let currentStatus = "active";
 let records = [];
 let recordTotal = 0;
-const completingOrders = new Set();
+const changingOrderStatuses = new Set();
+
+function finishOrderStatusChange(id) {
+  changingOrderStatuses.delete(id);
+  for (const [attribute, label] of [
+    ["data-complete-order", "تکمیل سفارش"],
+    ["data-reactivate-order", "بازگشت به سفارشات فعال"],
+  ]) {
+    document.querySelectorAll(`[${attribute}="${id}"]`).forEach((button) => {
+      button.disabled = false;
+      button.textContent = label;
+    });
+  }
+}
 
 async function loadOrders(more = false) {
   const status =
@@ -155,19 +168,19 @@ async function loadOrders(more = false) {
           const complete = node(
             "button",
             "orders-primary",
-            completingOrders.has(order.id) ? "در حال تکمیل…" : "تکمیل سفارش",
+            changingOrderStatuses.has(order.id) ? "در حال تکمیل…" : "تکمیل سفارش",
           );
           complete.type = "button";
           complete.dataset.completeOrder = order.id;
-          complete.disabled = completingOrders.has(order.id);
+          complete.disabled = changingOrderStatuses.has(order.id);
           complete.setAttribute(
             "aria-label",
             `تکمیل سفارش ${order.order_number}`,
           );
           complete.addEventListener("click", async (event) => {
             event.stopPropagation();
-            if (completingOrders.has(order.id)) return;
-            completingOrders.add(order.id);
+            if (changingOrderStatuses.has(order.id)) return;
+            changingOrderStatuses.add(order.id);
             complete.disabled = true;
             complete.textContent = "در حال تکمیل…";
             try {
@@ -179,18 +192,43 @@ async function loadOrders(more = false) {
             } catch (failure) {
               notifyNavbar(failure.message, { role: "alert" });
             } finally {
-              completingOrders.delete(order.id);
-              complete.disabled = false;
-              complete.textContent = "تکمیل سفارش";
-              document
-                .querySelectorAll(`[data-complete-order="${order.id}"]`)
-                .forEach((button) => {
-                  button.disabled = false;
-                  button.textContent = "تکمیل سفارش";
-                });
+              finishOrderStatusChange(order.id);
             }
           });
           actions.append(complete);
+          card.append(actions);
+        } else if (order.status === "completed") {
+          const actions = node("div", "orders-card-actions");
+          const label = "بازگشت به سفارشات فعال";
+          const pendingLabel = "Returning…";
+          const reactivate = node(
+            "button",
+            "orders-primary",
+            changingOrderStatuses.has(order.id) ? pendingLabel : label,
+          );
+          reactivate.type = "button";
+          reactivate.dataset.reactivateOrder = order.id;
+          reactivate.disabled = changingOrderStatuses.has(order.id);
+          reactivate.setAttribute("aria-label", `${label} · ${order.order_number}`);
+          reactivate.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            if (changingOrderStatuses.has(order.id)) return;
+            changingOrderStatuses.add(order.id);
+            reactivate.disabled = true;
+            reactivate.textContent = pendingLabel;
+            try {
+              await financeRequest(`/orders/${order.id}/reactivate`, {
+                method: "POST",
+              });
+              notifyNavbar(`سفارش ${order.order_number} به سفارشات فعال بازگردانده شد.`);
+              await loadOrders();
+            } catch (failure) {
+              notifyNavbar(failure.message, { role: "alert" });
+            } finally {
+              finishOrderStatusChange(order.id);
+            }
+          });
+          actions.append(reactivate);
           card.append(actions);
         }
         return card;

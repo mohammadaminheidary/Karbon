@@ -82,7 +82,7 @@ export function initializeOrderDialogs(onSaved) {
         <label>شماره سفارش<input id="orderNumber" maxlength="50" dir="ltr" /></label>
       </div>
       <div class="orders-items-heading"><h3>اقلام فاکتور</h3></div>
-      <div class="orders-table-scroll"><table class="orders-items-table"><thead><tr><th>ردیف</th><th>کالا</th><th>تعداد</th><th>واحد</th><th>مبلغ واحد (تومان)</th><th><span class="sr-only">حذف ردیف</span></th></tr></thead><tbody id="orderItems"></tbody></table></div>
+      <div class="orders-table-scroll"><table class="orders-items-table"><thead><tr><th>ردیف</th><th>کالا</th><th>تعداد</th><th>واحد</th><th>مبلغ واحد (تومان)</th><th>مبلغ کل (تومان)</th><th><span class="sr-only">حذف ردیف</span></th></tr></thead><tbody id="orderItems"></tbody></table></div>
       <label>توضیحات فاکتور<textarea id="orderDescription" rows="3" maxlength="5000"></textarea></label>
       <div class="orders-totals"><label>تخفیف (تومان)<input id="orderDiscount" inputmode="numeric" dir="ltr" maxlength="21" value="0" /></label><div><span>جمع اقلام</span><output id="orderSubtotal"></output></div><div><span>جمع کل نهایی</span><output id="orderTotal"></output></div></div>
     </fieldset>
@@ -345,10 +345,10 @@ export function initializeOrderDialogs(onSaved) {
       return null;
     }
     const row = node("tr", "orders-item-row");
-    row.innerHTML = `<td class="item-number"></td><td><select class="item-product" aria-label="کالا"></select></td><td><input class="item-quantity" value="1" inputmode="numeric" dir="ltr" maxlength="7" aria-label="تعداد" /></td><td class="item-unit">—</td><td><input class="item-price" inputmode="numeric" dir="ltr" maxlength="21" aria-label="مبلغ واحد (تومان)" /><output class="item-total"></output></td><td><button class="orders-icon-button item-remove" type="button" aria-label="حذف ردیف">×</button></td>`;
+    row.innerHTML = `<td class="item-number"></td><td><select class="item-product" aria-label="کالا"></select></td><td><div class="orders-quantity-control" dir="ltr"><button class="orders-quantity-button item-quantity-decrease" type="button" aria-label="کاهش تعداد">−</button><input class="item-quantity" value="1" inputmode="numeric" dir="ltr" maxlength="7" role="spinbutton" aria-label="تعداد" aria-valuemin="1" aria-valuemax="1000000" aria-valuenow="1" /><button class="orders-quantity-button item-quantity-increase" type="button" aria-label="افزایش تعداد">+</button></div></td><td class="item-unit">—</td><td><input class="item-price" inputmode="numeric" dir="ltr" maxlength="21" aria-label="مبلغ واحد (تومان)" /></td><td><output class="item-total" aria-label="مبلغ کل ردیف (تومان)"></output></td><td><button class="orders-icon-button item-remove" type="button" aria-label="حذف ردیف">×</button></td>`;
     const action = node("tr", "orders-row-action");
     const cell = node("td");
-    cell.colSpan = 6;
+    cell.colSpan = 7;
     const add = node("button", "orders-add-row", "+ افزودن ردیف");
     add.type = "button";
     cell.append(add);
@@ -366,7 +366,7 @@ export function initializeOrderDialogs(onSaved) {
       calculate();
     });
     amountInput(price, calculate);
-    quantity.addEventListener("input", calculate);
+    bindQuantity(row, quantity);
     price.addEventListener("keydown", (event) => {
       if (event.key === "Tab" && !event.shiftKey) {
         event.preventDefault();
@@ -388,6 +388,65 @@ export function initializeOrderDialogs(onSaved) {
     renumber();
     calculate();
     return row;
+  }
+  function bindQuantity(row, input) {
+    const control = row.querySelector(".orders-quantity-control");
+    const decrease = row.querySelector(".item-quantity-decrease");
+    const increase = row.querySelector(".item-quantity-increase");
+    const maximum = 1000000;
+    let lastValid = 1;
+    function sync() {
+      const value = input.value.trim() ? lastValid : null;
+      if (value === null) input.removeAttribute("aria-valuenow");
+      else input.setAttribute("aria-valuenow", String(value));
+      decrease.disabled = lastValid <= 1;
+      increase.disabled = lastValid >= maximum;
+      calculate();
+    }
+    function step(delta) {
+      if (input.matches(":disabled")) return;
+      lastValid = Math.max(1, Math.min(maximum, lastValid + delta));
+      input.value = String(lastValid);
+      input.removeAttribute("aria-invalid");
+      sync();
+    }
+    input.addEventListener("input", () => {
+      const raw = normalizeDigits(input.value).trim();
+      // A temporary empty value permits replacing the whole quantity by hand.
+      if (raw) {
+        const value = Number(raw);
+        if (
+          !/^\d+$/.test(raw) ||
+          !Number.isSafeInteger(value) ||
+          value < 1 ||
+          value > maximum
+        ) input.value = String(lastValid);
+        else lastValid = value;
+      }
+      input.removeAttribute("aria-invalid");
+      sync();
+    });
+    input.addEventListener("blur", () => {
+      if (!input.value.trim()) {
+        input.value = String(lastValid);
+        input.removeAttribute("aria-invalid");
+        sync();
+      }
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      event.preventDefault();
+      step(event.key === "ArrowUp" ? 1 : -1);
+    });
+    decrease.addEventListener("click", () => step(-1));
+    increase.addEventListener("click", () => step(1));
+    control.addEventListener("wheel", (event) => {
+      if (event.ctrlKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.deltaY) step(event.deltaY < 0 ? 1 : -1);
+    }, { passive: false });
+    sync();
   }
   function numeric(value, maximum = 1000000) {
     const raw = normalizeDigits(value).trim();
@@ -418,9 +477,6 @@ export function initializeOrderDialogs(onSaved) {
           : amountValue(row.querySelector(".item-price").value, {
               allowZero: true,
             });
-        const total = quantity * unit_price;
-        row.querySelector(".item-total").textContent =
-          `جمع ردیف: ${money(total)}`;
         return { product_id: product?.id, quantity, unit_price };
       },
     );
@@ -443,9 +499,9 @@ export function initializeOrderDialogs(onSaved) {
           allowZero: true,
         });
         row.querySelector(".item-total").textContent =
-          `جمع ردیف: ${money(quantity * price)}`;
+          money(quantity * price);
       } catch {
-        row.querySelector(".item-total").textContent = "جمع ردیف: —";
+        row.querySelector(".item-total").textContent = "—";
       }
     });
     try {

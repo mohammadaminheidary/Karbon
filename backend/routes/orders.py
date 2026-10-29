@@ -81,3 +81,9 @@ def order_details(order_id: int = Path(gt=0, le=9223372036854775807), db: Sessio
 def complete_order(order_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database)):
     with finance_errors():
         return service.complete_order(db, order_id)
+
+
+@router.post("/orders/{order_id}/reactivate")
+def reactivate_order(order_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database)):
+    with finance_errors():
+        return service.reactivate_order(db, order_id)
