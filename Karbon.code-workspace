@@ -1,0 +1,19 @@
+{
+  "folders": [
+    { "name": "Frontend", "path": "frontend" },
+    { "name": "Backend", "path": "backend" },
+    { "name": "Test Data Generator", "path": "test_data_generator" }
+  ],
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Test Data Generator: Open interface",
+        "type": "process",
+        "command": "python3",
+        "args": ["${workspaceFolder:Test Data Generator}/app.py"],
+        "problemMatcher": []
+      }
+    ]
+  }
+}
