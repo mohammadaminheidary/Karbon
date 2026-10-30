@@ -246,7 +246,7 @@ class Generator:
             actual = MetaData()
             actual.reflect(connection)
             tables = [table for table in reversed(actual.sorted_tables)
-                      if table.name not in {"users", "bank_directory"}]
+                      if table.name not in {"users", "bank_directory", "customer_id_registry"}]
             for index, table in enumerate(tables):
                 deleted = connection.execute(delete(table)).rowcount
                 if table.name != owned.name:

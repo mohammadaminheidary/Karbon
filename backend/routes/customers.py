@@ -9,6 +9,7 @@ from database import get_database
 from schemas.customer_schema import CustomerList, CustomerResponse, CustomerWrite
 from security.auth import get_current_user
 from services import customer_service as service
+from services.customer_ids import CustomerIDExhausted
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,8 @@ def customer_errors():
         yield
     except service.CustomerNotFound:
         raise HTTPException(404, "مشتری موردنظر پیدا نشد.")
+    except CustomerIDExhausted:
+        raise HTTPException(503, "تولید شناسه یکتای مشتری ممکن نشد؛ دوباره تلاش کنید.")
     except service.CustomerHasOrders:
         raise HTTPException(409, "مشتری دارای سفارش ثبت‌شده است و برای حفظ سوابق فاکتور قابل حذف نیست.")
     except service.CustomerHasTransactions as error:

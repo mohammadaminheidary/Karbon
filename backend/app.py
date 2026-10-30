@@ -32,6 +32,7 @@ from routes.documents import router as documents_router, settings_router as docu
 from services.finance_service import initialize_bank_storage
 from services.order_service import initialize_order_storage
 from services.document_service import initialize_document_storage
+from services.customer_ids import initialize_customer_ids
 from routes.faces import router as faces_router
 from routes.dashboard import router as dashboard_router
 from security.face_requests import FaceRequestMiddleware
@@ -99,6 +100,7 @@ app.add_middleware(NegotiatedGZipMiddleware, minimum_size=1024, compresslevel=1)
 Base.metadata.create_all(
     bind=engine
 )
+initialize_customer_ids(engine)
 initialize_bank_storage(engine)
 initialize_document_storage(engine)
 initialize_order_storage(engine)

@@ -922,3 +922,18 @@ dialog.customer-duplicate-dialog {
 dialog.customer-duplicate-dialog::backdrop {
   background: transparent;
 }
+
+/* The customer delete overlay must fill the viewport, overriding native
+   dialog sizing so its existing flex alignment centers the confirmation. */
+dialog#customerDeleteModal {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+dialog#customerDeleteModal::backdrop {
+  background: transparent;
+}

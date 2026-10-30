@@ -39,6 +39,7 @@ let detailsDialog,
   selectedCustomer = null,
   detailsRequest = 0;
 let deleteTimer,
+  deleteFrame,
   deleteDeadline = 0,
   deleteInFlight = false,
   deletingCustomer = null;
@@ -103,6 +104,12 @@ function createCustomerCard(customer) {
     ),
   );
   const status = statusMeta(customer.summary.status);
+  const permanentID = element("p", "text-[10px] text-persian-blue");
+  const permanentCode = element("bdi", "font-mono", customer.permanent_id);
+  permanentCode.dir = "ltr";
+  permanentCode.dataset.customerPermanentId = customer.permanent_id;
+  permanentID.append(document.createTextNode("شناسه یکتای دائمی: "), permanentCode);
+  identity.append(permanentID);
   header.append(
     identity,
     element(
@@ -278,6 +285,7 @@ function renderDetails(customer) {
   const info = element("dl", "grid gap-5 sm:grid-cols-2");
   for (const [label, value, ltr] of [
     ["کد مشتری", formatNumber(customer.customer_code)],
+    ["شناسه یکتای دائمی مشتری", customer.permanent_id, true],
     ["جنسیت", genderLabel(customer.gender)],
     ["نام", customer.first_name],
     ["نام خانوادگی", customer.last_name],
@@ -351,6 +359,7 @@ async function openDetails(id) {
 
 function cancelDelete() {
   clearTimeout(deleteTimer);
+  cancelAnimationFrame(deleteFrame);
   deleteDeadline = 0;
   if (deletingCustomer) toast("حذف لغو شد.");
   deletingCustomer = null;
@@ -373,6 +382,8 @@ function openDelete() {
 async function finalDelete() {
   if (!deletingCustomer || deleteInFlight) return;
   deleteInFlight = true;
+  cancelAnimationFrame(deleteFrame);
+  updateDeleteProgress(0);
   deleteDeadline = 0;
   get("cancelDeleteCustomerButton").disabled = true;
   const button = get("confirmDeleteCustomerButton");
@@ -408,15 +419,23 @@ async function finalDelete() {
   }
 }
 
+function updateDeleteProgress(remaining) {
+  const fraction = Math.max(0, Math.min(1, remaining / DELETE_DELAY_MS));
+  get("customerDeleteProgressFill").style.transform = `scaleX(${fraction})`;
+  get("customerDeleteProgress").setAttribute("aria-valuenow", String(Math.round(fraction * 100)));
+}
+
+function animateDeleteProgress() {
+  if (!deleteDeadline || !deletingCustomer) return;
+  updateDeleteProgress(deleteDeadline - performance.now());
+  deleteFrame = requestAnimationFrame(animateDeleteProgress);
+}
+
 function countdownTick() {
   if (!deleteDeadline || !deletingCustomer) return;
   // Use elapsed time instead of interval counts. Background tab throttling can
   // delay deletion, but must never cause DELETE before the full four seconds.
-  const remaining = Math.max(
-    0,
-    Math.ceil((deleteDeadline - performance.now()) / 1000),
-  );
-  get("customerDeleteCountdown").textContent = formatNumber(remaining);
+  const remaining = Math.max(0, deleteDeadline - performance.now());
   if (remaining === 0) {
     finalDelete();
     return;
@@ -435,6 +454,7 @@ function startDelete() {
   get("customerDeleteCountdownBox").classList.remove("hidden");
   get("customerDeleteError").classList.add("hidden");
   deleteDeadline = performance.now() + DELETE_DELAY_MS;
+  animateDeleteProgress();
   countdownTick();
 }
 
@@ -503,6 +523,7 @@ export async function initializeCustomers({ onCreated, onDeleted } = {}) {
   get("loadMoreCustomersButton").addEventListener("click", loadMoreCustomers);
   window.addEventListener("pagehide", () => {
     clearTimeout(deleteTimer);
+    cancelAnimationFrame(deleteFrame);
     deleteDeadline = 0;
   });
   window.addEventListener("pageshow", (event) => {

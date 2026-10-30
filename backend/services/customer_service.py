@@ -4,6 +4,7 @@ from sqlalchemy.orm import object_session
 from models.customer import Customer, utc_now
 from models.finance import FinancialTransaction
 from models.order import Order, OrderPayment
+from services.customer_ids import generate_customer_id
 from services.reference_codes import compact_customer_codes
 from schemas.customer_schema import CustomerSummary, normalize_text
 
@@ -99,6 +100,7 @@ def list_customers(db, search="", skip=0, limit=50, *, options_only=False, custo
             phone_pattern = "%0" + phone_pattern[5:]
         query = query.filter(or_(
             cast(Customer.customer_code, String).like(pattern, escape="\\"),
+            func.lower(Customer.permanent_id).like(pattern, escape="\\"),
             func.lower(Customer.first_name + " " + Customer.last_name).like(pattern, escape="\\"),
             exists(select(1).select_from(phones).where(phones.c.value.like(phone_pattern, escape="\\"))),
         ))
@@ -158,7 +160,9 @@ def save_customer(db, data, customer_id=None):
             raise DuplicateCustomers(matches)
         values = data.model_dump(exclude={"confirm_duplicate"})
         if customer is None:
-            customer = Customer(customer_code=next_code(db), **values)
+            registered_at = utc_now()
+            customer = Customer(customer_code=next_code(db), created_at=registered_at,
+                                permanent_id=generate_customer_id(db.connection(), registered_at), **values)
             db.add(customer)
         else:
             for key, value in values.items():

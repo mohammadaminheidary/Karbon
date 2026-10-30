@@ -2,6 +2,8 @@
 Run: python3 -m unittest discover -s backend/tests -v
 """
 import concurrent.futures
+from datetime import datetime
+import jdatetime
 from contextlib import closing
 import json
 import os
@@ -16,6 +18,7 @@ import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -120,6 +123,12 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         preview = self.request("GET", "/customers/next-code")[1]["customer_code"]
         customer = self.create(first_name="  علي  ", last_name="  رضايي ", address="  تهران  ", notes="توضیحات", last_contact_date="2026-10-06")
         self.assertEqual(customer["customer_code"], preview)
+        self.assertRegex(customer["permanent_id"], r"^[0-9]{6}-[0-9]{6}-[A-Z0-9]{4}$")
+        local = datetime.fromisoformat(customer["created_at"]).astimezone(
+            ZoneInfo(os.getenv("KARBON_TIMEZONE", "Asia/Tehran")))
+        jalali = jdatetime.date.fromgregorian(date=local.date())
+        self.assertEqual(customer["permanent_id"][:13],
+                         f"{jalali.day:02d}{jalali.month:02d}{jalali.year % 100:02d}-{local:%H%M%S}")
         self.assertEqual(customer["first_name"], "علی")
         self.assertEqual(customer["last_name"], "رضایی")
         self.assertEqual(customer["phone_numbers"], [])
@@ -131,6 +140,10 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
             self.assertEqual(row[1], "توضیحات")
             self.assertEqual(db.execute("SELECT COUNT(*) FROM users").fetchone()[0], 1)
         self.assertEqual(self.request("GET", f'/customers/{customer["id"]}')[1]["address"], "تهران")
+        self.assertEqual(self.request("GET", f'/customers/{customer["id"]}')[1]["permanent_id"], customer["permanent_id"])
+        self.assertEqual(self.request("GET", "/customers")[1]["items"][0]["permanent_id"], customer["permanent_id"])
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute("SELECT permanent_id FROM customers WHERE id=?", (customer["id"],)).fetchone()[0], customer["permanent_id"])
 
     def test_phone_normalization_edit_primary_and_delete_all(self):
         one = self.create(phone_numbers=["۰۹۱۲ ۱۲۳-۴۵۶۷"])
@@ -142,6 +155,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(status, 200)
         self.assertEqual(updated["phone_numbers"][0], "02112345678")
         self.assertEqual(updated["customer_code"], customer["customer_code"])
+        self.assertEqual(updated["permanent_id"], customer["permanent_id"])
         payload["phone_numbers"] = []
         self.assertEqual(self.request("PUT", f'/customers/{customer["id"]}', payload)[1]["phone_numbers"], [])
 
@@ -170,7 +184,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
     def test_search_pagination_and_literal_sql_input(self):
         customer = self.create(phone_numbers=["09121234567", "02112345678"])
         self.create(first_name="سارا", last_name="احمدی")
-        for query in [str(customer["customer_code"]), "علي", "رضایی", "علی رضایی", "۰۹۱۲", "02112345678", "+989121234567", "00989121234567"]:
+        for query in [str(customer["customer_code"]), customer["permanent_id"].lower(), "علي", "رضایی", "علی رضایی", "۰۹۱۲", "02112345678", "+989121234567", "00989121234567"]:
             status, result = self.request("GET", "/customers?" + urllib.parse.urlencode({"search": query}))
             self.assertEqual(status, 200)
             self.assertEqual(result["total"], 1, query)
@@ -185,6 +199,8 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
             self.assertEqual(self.request("POST", "/customers", payload)[0], 422, payload)
         self.assertEqual(self.request("GET", "/customers?limit=101")[0], 422)
         self.assertEqual(self.request("GET", "/customers/999999")[0], 404)
+        for method, path in [("POST", "/customers"), ("PUT", f'/customers/{self.create()["id"]}')]:
+            self.assertEqual(self.request(method, path, {"first_name": "x", "last_name": "y", "permanent_id": "010126-AAAA"})[0], 422)
 
     def test_jalali_contact_date_conversion_validation_edit_and_clear(self):
         for index, (jalali, gregorian) in enumerate([
@@ -215,6 +231,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(self.request("GET", f'/customers/{customer["id"]}')[0], 404)
         with closing(sqlite3.connect(self.database)) as db, db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM customers").fetchone()[0], 0)
+            self.assertIsNone(db.execute("SELECT permanent_id FROM customer_id_registry WHERE permanent_id=?", (customer["permanent_id"],)).fetchone())
         next_customer = self.create()
         self.assertEqual(next_customer["customer_code"], customer["customer_code"])
         self.assertGreater(next_customer["id"], customer["id"])
@@ -226,12 +243,23 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
             results = list(pool.map(create_unique, range(12)))
         self.assertTrue(all(status == 201 for status, _ in results), results)
         self.assertEqual(len({data["customer_code"] for _, data in results}), 12)
+        self.assertEqual(len({data["permanent_id"] for _, data in results}), 12)
+        all_ids = [row["permanent_id"] for row in self.request("GET", "/customers")[1]["items"]]
+        self.assertEqual(len(all_ids), len(set(all_ids)))
         def create_same(_):
             return self.request("POST", "/customers", {"first_name": "same", "last_name": "concurrent"})[0]
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             statuses = list(pool.map(create_same, range(4)))
         self.assertEqual(statuses.count(201), 1)
         self.assertEqual(statuses.count(409), 3)
+
+    def test_deletion_renumbers_only_display_codes(self):
+        customers = [self.create(first_name=f"Customer {index}") for index in range(4)]
+        self.assertEqual(self.request("DELETE", f'/customers/{customers[1]["id"]}')[0], 204)
+        for index, customer in enumerate([customers[0], *customers[2:]]):
+            saved = self.request("GET", f'/customers/{customer["id"]}')[1]
+            self.assertEqual(saved["customer_code"], 1001 + index)
+            self.assertEqual(saved["permanent_id"], customer["permanent_id"])
 
 
 if __name__ == "__main__":

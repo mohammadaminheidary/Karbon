@@ -35,7 +35,7 @@ class GeneratorIntegrationTests(unittest.TestCase):
         metadata = MetaData()
         metadata.reflect(self.connection)
         return {table.name: sorted((repr(tuple(row)) for row in self.connection.execute(select(table))))
-                for table in metadata.tables.values()}
+                for table in metadata.tables.values() if table.name != "customer_id_registry"}
 
     def report(self):
         # dashboard starts its own read transaction: use a savepoint-bound session.
@@ -207,6 +207,7 @@ class GeneratorIntegrationTests(unittest.TestCase):
         for quantity in (3, 7):
             before = self.snapshot()
             result = self.generator.delete()
+            self.assertEqual(self.connection.exec_driver_sql("SELECT COUNT(*) FROM customer_id_registry").scalar_one(), 0)
             self.assertEqual(result["total"], sum(len(rows) for name, rows in before.items()
                 if name not in {"users", "bank_directory", owned.name}))
             after = self.snapshot()

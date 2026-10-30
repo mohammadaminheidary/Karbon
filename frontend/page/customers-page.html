@@ -946,12 +946,23 @@
           aria-live="polite"
         >
           <p>در حال آماده‌سازی حذف...</p>
-          <p
-            id="customerDeleteCountdown"
-            class="mt-2 text-3xl font-bold text-alizarin-crimson"
-          >
-            ۴
-          </p>
+          <div class="mt-2 flex h-9 items-center">
+            <div
+              id="customerDeleteProgress"
+              role="progressbar"
+              aria-label="زمان باقی‌مانده تا حذف مشتری"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="100"
+              class="h-3 w-full overflow-hidden rounded-full bg-alizarin-crimson/10"
+            >
+              <div
+                id="customerDeleteProgressFill"
+                class="h-full w-full rounded-full bg-alizarin-crimson"
+                style="transform: scaleX(1); transform-origin: right center"
+              ></div>
+            </div>
+          </div>
         </div>
         <p
           id="customerDeleteError"

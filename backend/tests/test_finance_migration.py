@@ -34,6 +34,7 @@ with SessionLocal() as db:
 with engine.begin() as connection:
     # This fixture deliberately recreates a schema predating deleted_at.
     connection.exec_driver_sql("DROP INDEX IF EXISTS ix_finance_bank_live_date")
+    connection.exec_driver_sql("DROP INDEX IF EXISTS ux_customers_permanent_id")
     for table, fields in {"customers":["deleted_at"], "bank_accounts":["deleted_at"], "expense_categories":["display_code","deleted_at"], "financial_transactions":["transaction_number","updated_at","deleted_at"]}.items():
         for field in fields:
             connection.exec_driver_sql(f"ALTER TABLE {table} DROP COLUMN {field}")
