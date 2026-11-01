@@ -75,7 +75,9 @@ export function initializeNavbar() {
         ? "/index.html"
         : path === "/page/bank-transactions-page.html"
           ? "/page/banks-page.html"
-          : path;
+          : path === "/page/report-details-page.html"
+            ? "/page/reports-page.html"
+            : path;
     let activeLink;
     links.forEach((link) => {
       if (link.getAttribute("href") === activePath) {
@@ -86,8 +88,10 @@ export function initializeNavbar() {
     const label =
       path === "/page/bank-transactions-page.html"
         ? "تراکنش‌های حساب"
-        : activeLink?.getAttribute("aria-label") ||
-          document.title.split("|").pop().trim();
+        : path === "/page/report-details-page.html"
+          ? "جزئیات گزارش"
+          : activeLink?.getAttribute("aria-label") ||
+            document.title.split("|").pop().trim();
     title.textContent = label;
     title.title = label;
   }

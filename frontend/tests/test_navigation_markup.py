@@ -42,7 +42,8 @@ class NavigationMarkupTests(unittest.TestCase):
                 parser.feed((ROOT / path).read_text())
                 for identity in ["navbarHost", "mainNavbar", "logoutButton"]:
                     self.assertEqual(parser.ids[identity], 1)
-                expected = "/page/banks-page.html" if "bank-transactions" in path else f"/{path}"
+                expected = ("/page/banks-page.html" if "bank-transactions" in path else
+                            "/page/reports-page.html" if "report-details" in path else f"/{path}")
                 self.assertEqual(parser.active, [expected])
                 self.assertTrue(all(parser.actions), "an action button would move after JS starts")
                 self.assertEqual(len(parser.ids), sum(parser.ids.values()), "duplicate element IDs")

@@ -19,6 +19,8 @@ PAGES = {
     "page/documents-page.html": "ثبت سند",
     "page/banks-page.html": "بانک ها",
     "page/bank-transactions-page.html": "تراکنش‌های حساب",
+    "page/reports-page.html": "گزارش و خروجی",
+    "page/report-details-page.html": "جزئیات گزارش",
     "page/settings-page.html": "تنظیمات",
     "page/warehouse-page.html": "انبار",
 }
@@ -33,7 +35,8 @@ def render_page(source, path, title, template):
     actions = ACTIONS.search(current.group())
     if not actions:
         raise ValueError(f"Action markers missing: {path}")
-    active_path = "/page/banks-page.html" if "bank-transactions" in path else f"/{path}"
+    active_path = ("/page/banks-page.html" if "bank-transactions" in path else
+                   "/page/reports-page.html" if "report-details" in path else f"/{path}")
     navbar = template.replace(
         f'<a href="{active_path}" class="navbar-item"',
         f'<a href="{active_path}" aria-current="page" class="navbar-item"',

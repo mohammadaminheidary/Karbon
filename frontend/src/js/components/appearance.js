@@ -27,6 +27,16 @@
         label: "تراکنش‌های حساب",
       },
       { id: "warehouse", path: "/page/warehouse-page.html", label: "انبار" },
+      {
+        id: "reports",
+        path: "/page/reports-page.html",
+        label: "گزارش و خروجی",
+      },
+      {
+        id: "report-details",
+        path: "/page/report-details-page.html",
+        label: "جزئیات گزارش",
+      },
       { id: "settings", path: "/page/settings-page.html", label: "تنظیمات" },
       { id: "login", path: "/page/login-page.html", label: "ورود" },
     ].map(Object.freeze),

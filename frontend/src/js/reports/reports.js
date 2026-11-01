@@ -1,8 +1,7 @@
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
-import { getToken, logout } from "../auth/auth-storage.js";
+import { request, downloadBlob } from "./report-api.js";
 import { normalizeJalaliDate } from "../customers/customer-utils.js";
 
-const API = "http://127.0.0.1:8000/api/reports";
 const defaults = {
   "customers-page.html": "customers",
   "orders-page.html": "orders",
@@ -29,34 +28,6 @@ function node(tag, text, attrs = {}) {
   for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
   return el;
 }
-async function request(path, body, signal, binary = false) {
-  const token = getToken();
-  if (!token) throw new Error("برای دریافت گزارش وارد حساب شوید.");
-  const response = await fetch(API + path, {
-    method: body === undefined ? "GET" : "POST",
-    signal,
-    cache: "no-store",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (response.status === 401) {
-    logout();
-    window.location.replace("/page/login-page.html");
-    throw new Error("نشست شما پایان یافته است.");
-  }
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(
-      typeof data.detail === "string"
-        ? data.detail
-        : "دریافت گزارش انجام نشد؛ فیلترها را بررسی و دوباره تلاش کنید.",
-    );
-  }
-  return binary ? response.blob() : response.json();
-}
 
 let instance;
 export async function openReports() {
@@ -71,8 +42,8 @@ function createReports() {
     "aria-hidden": "true",
   });
   root.innerHTML = `<form class="navbar-panel-content reports-content" aria-labelledby="reportsTitle">
-    <header><div><h2 id="reportsTitle">گزارش و خروجی</h2><p>گزارش از اطلاعات ثبت‌شده در پایگاه داده</p></div><button type="button" data-dialog-close aria-label="بستن گزارش">×</button></header>
-    <div class="reports-controls"><label>ماژول<select id="reportModule"></select></label><label class="reports-search">جست‌وجو<input id="reportSearch" type="search" placeholder="جست‌وجو در اطلاعات ماژول"></label><label id="reportDeletedLabel" class="reports-check" hidden><input type="checkbox" id="reportDeleted">شامل رکوردهای حذف‌شده</label></div>
+    <header><div><h2 id="reportsTitle">گزارش جدید</h2><p>گزارش از اطلاعات ثبت‌شده در پایگاه داده</p></div><button type="button" data-dialog-close aria-label="بستن گزارش">×</button></header>
+    <div class="reports-controls"><label class="reports-search">نام گزارش<input id="reportName" maxlength="200" placeholder="نام پیش‌فرض بر اساس ماژول"></label><label>ماژول<select id="reportModule"></select></label><label class="reports-search">جست‌وجو<input id="reportSearch" type="search" placeholder="جست‌وجو در اطلاعات ماژول"></label><label id="reportDeletedLabel" class="reports-check" hidden><input type="checkbox" id="reportDeleted">شامل رکوردهای حذف‌شده</label></div>
     <details><summary>فیلترها</summary><div class="reports-controls" id="reportDateFilters"><label>ستون تاریخ<select id="reportDateField"></select></label><label>از تاریخ شمسی<input id="reportFrom" inputmode="numeric" dir="ltr" placeholder="۱۴۰۵/۰۱/۰۱"></label><label>تا تاریخ شمسی<input id="reportTo" inputmode="numeric" dir="ltr" placeholder="۱۴۰۵/۱۲/۲۹"></label></div>
     <div id="reportFilters"></div><div class="reports-controls"><button type="button" id="reportAddFilter">افزودن فیلتر</button><button type="submit" class="reports-primary">اعمال فیلترها</button><button type="button" id="reportReset">پاک کردن فیلترها</button></div></details>
     <details id="reportColumns"><summary>ستون‌های خروجی <span id="reportColumnCount"></span></summary><div class="reports-controls"><button type="button" id="reportAllColumns">انتخاب همه ستون‌ها</button><button type="button" id="reportNoColumns">پاک کردن انتخاب ستون‌ها</button></div><div class="reports-columns" id="reportColumnList"></div></details>
@@ -500,7 +471,11 @@ function createReports() {
     };
   async function download(fmt) {
     if (busy || exporting) return;
-    const body = { ...applied, columns: columns() };
+    const body = {
+      ...applied,
+      columns: columns(),
+      report_name: $("reportName").value.trim(),
+    };
     if ($("reportScope").value === "selected") {
       if (allSelected) body.excluded_ids = [...excluded];
       else body.ids = [...selected];
@@ -521,16 +496,9 @@ function createReports() {
         undefined,
         true,
       );
-      const url = URL.createObjectURL(blob),
-        a = node("a", undefined, {
-          href: url,
-          download: `karbon-${moduleName}.${fmt}`,
-        });
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      $("reportStatus").textContent = "فایل خروجی آماده شد.";
+      window.dispatchEvent(new Event("karbon:report-generated"));
+      downloadBlob(blob, `karbon-${moduleName}.${fmt}`);
+      $("reportStatus").textContent = "فایل آماده و در گزارش و خروجی ذخیره شد.";
     } catch (err) {
       error(err);
       $("reportStatus").textContent = "ساخت خروجی انجام نشد.";

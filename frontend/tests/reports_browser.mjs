@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const assert = require("node:assert/strict");
+const { readFileSync } = require("node:fs");
 const { chromium } = require(
   process.env.KARBON_PLAYWRIGHT_PATH || "playwright",
 );
@@ -65,7 +66,37 @@ try {
         `/page/${path}-page.html${path === "bank-transactions" ? "?bank_id=1" : ""}`,
     );
     await ready();
+    const originalNavbar = await page.evaluate(() => ({
+      width: document
+        .querySelector(".navbar-title-island")
+        .getBoundingClientRect().width,
+      whitespace: getComputedStyle(document.querySelector(".navbar-page-title"))
+        .whiteSpace,
+    }));
+    assert.deepEqual(
+      originalNavbar,
+      { width: 185, whitespace: "nowrap" },
+      `original navbar on ${path}`,
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(
+      await page
+        .locator(".navbar-dock")
+        .evaluate((e) => e.getBoundingClientRect().width),
+      310,
+      `original mobile navbar on ${path}`,
+    );
+    await page.setViewportSize({ width: 1440, height: 1050 });
+    await page.locator('#mainNavbar a[href="/page/reports-page.html"]').click();
+    await page.waitForURL("**/page/reports-page.html");
+    await ready();
+    assert.equal(
+      await page.locator('a[aria-current="page"]').getAttribute("href"),
+      "/page/reports-page.html",
+    );
     await preview(() => page.locator("#openReportsButton").click());
+    if ((await page.locator("#reportModule").inputValue()) !== expected)
+      await preview(() => page.locator("#reportModule").selectOption(expected));
     assert.equal(await page.locator("#reportModule").inputValue(), expected);
     assert.equal(await page.locator("#reportTable tbody tr").count(), 50);
     assert.equal(
@@ -83,9 +114,15 @@ try {
       true,
     );
   }
-  await page.goto(base + "/page/customers-page.html");
+  await page.goto(base + "/page/reports-page.html");
   await ready();
   await preview(() => page.locator("#openReportsButton").click());
+  assert.equal(await page.locator("#reportHistoryList > li").count(), 0);
+  assert.equal(
+    await page.locator("#reportHistoryTitle").textContent(),
+    "۰ گزارش",
+  );
+  await page.locator("#reportName").fill("گزارش مشتریان <ذخیره>");
   // Every supported dataset can be inspected independently in the report surface.
   const modules = await page
     .locator("#reportModule option")
@@ -188,9 +225,110 @@ try {
   await page.waitForFunction(
     () => !document.querySelector("#reportsDialog").open,
   );
+  // Saved history refreshes after generation, survives reload, and downloads
+  // the original bytes without creating a new report.
+  await page.waitForFunction(
+    () => document.querySelectorAll("#reportHistoryList > li").length === 2,
+  );
+  assert.equal(
+    await page.locator("#reportHistoryTitle").textContent(),
+    "۲ گزارش",
+  );
+  assert.equal(
+    await page.locator("#refreshReports").getAttribute("title"),
+    "بروزرسانی گزارش‌ها",
+  );
+  assert.equal(await page.locator("#refreshReports svg").count(), 1);
+  assert.deepEqual(await page.locator(".report-format").allTextContents(), [
+    "PDF",
+    "Excel",
+  ]);
+  assert.equal(
+    await page.locator("#reportHistoryList h2").first().textContent(),
+    "گزارش مشتریان <ذخیره>",
+  );
+  await page.reload();
+  await ready();
+  assert.equal(await page.locator("#reportHistoryList > li").count(), 2);
+  assert.match(
+    await page.locator(".report-history-metadata").first().textContent(),
+    /شناسه: ۲/,
+  );
+  download = page.waitForEvent("download");
+  await page.locator(".report-download").first().click();
+  await (await download).saveAs("/tmp/karbon-reports-history.pdf");
+  assert.deepEqual(
+    readFileSync("/tmp/karbon-reports-history.pdf"),
+    readFileSync("/tmp/karbon-reports-browser-selected.pdf"),
+  );
+  assert.equal(await page.locator("#reportHistoryList > li").count(), 2);
+  await page.route("**/api/reports/history?*", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "خطای آزمایشی" }),
+    }),
+  );
+  await page.locator("#refreshReports").click();
+  await page.locator("#reportHistoryError").waitFor();
+  assert.equal(await page.locator("#reportHistoryList > li").count(), 2);
+  await page.unroute("**/api/reports/history?*");
+  await page.locator("#refreshReports").click();
+  await page.waitForFunction(
+    () => document.querySelector("#reportHistoryError").hidden,
+  );
+  await page.waitForFunction(
+    () =>
+      document.querySelector("#reportHistoryList").getAttribute("aria-busy") ===
+      "false",
+  );
+  // Right-island names and action labels fit at desktop, tablet, mobile, and 125% type.
+  for (const width of [1440, 1100, 1024, 1023, 768, 640, 639, 390, 320]) {
+    await page.setViewportSize({ width, height: 1050 });
+    await page.evaluate(() =>
+      window.KarbonAppearance.updatePreferences({ fontSize: 125 }),
+    );
+    const layout = await page.evaluate(() => {
+      const dock = document
+        .querySelector(".navbar-dock")
+        .getBoundingClientRect();
+      const title = document.querySelector(".navbar-page-title");
+      const button = document.querySelector("#openReportsButton");
+      const label = button.querySelector("span");
+      return {
+        fits:
+          document.documentElement.scrollWidth <= innerWidth &&
+          dock.left >= 0 &&
+          dock.right <= innerWidth + 1,
+        titleFits: title.scrollWidth <= title.clientWidth + 1,
+        buttonFits: button.scrollWidth <= button.clientWidth + 1,
+        labelVisible: getComputedStyle(label).display !== "none",
+      };
+    });
+    assert.deepEqual(
+      layout,
+      { fits: true, titleFits: true, buttonFits: true, labelVisible: true },
+      `navbar at ${width}px`,
+    );
+  }
+  await page.evaluate(() =>
+    window.KarbonAppearance.updatePreferences({ fontSize: 100 }),
+  );
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  await page.screenshot({ path: "/tmp/karbon-report-history-desktop.png" });
   // Responsive layout and reduced motion retain usable controls and focus.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(() =>
+    window.KarbonAppearance.updatePreferences({ theme: "green" }),
+  );
+  await page.screenshot({ path: "/tmp/karbon-report-history-mobile.png" });
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+    true,
+  );
   await preview(() => page.locator("#openReportsButton").click());
   const bounds = await page.locator("#reportsDialog").boundingBox();
   assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 391);
@@ -204,9 +342,146 @@ try {
   await page.setViewportSize({ width: 1440, height: 1050 });
   await page.locator("#reportModule").focus();
   await page.screenshot({ path: "/tmp/karbon-reports-desktop.png" });
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(
+    () => !document.querySelector("#reportsDialog").open,
+  );
+  // Whole cards are native links; the download button remains independent.
+  const observer = await context.newPage();
+  await observer.goto(base + "/page/reports-page.html");
+  await observer.waitForFunction(
+    () => document.documentElement.dataset.pageState === "ready",
+  );
+  let deletions = 0;
+  page.on("request", (r) => {
+    if (r.method() === "DELETE") deletions++;
+  });
+  const cardBounds = await page
+    .locator(".report-history-entry")
+    .first()
+    .boundingBox();
+  await page.mouse.click(cardBounds.x + 10, cardBounds.y + 10);
+  await page.waitForURL("**/report-details-page.html?id=*");
+  await ready();
+  const detailsURL = page.url();
+  assert.equal(
+    await page
+      .locator(".navbar-title-island")
+      .evaluate((e) => e.getBoundingClientRect().width),
+    185,
+    "details page keeps the original navbar",
+  );
+  assert.match(
+    await page.locator("#reportDetailsMetadata").textContent(),
+    /شناسه گزارش/,
+  );
+  assert.equal(
+    await page.locator("#reportDetailsTitle").textContent(),
+    "گزارش مشتریان <ذخیره>",
+  );
+  assert.equal(await page.locator("#reportDetailsMetadata > div").count(), 7);
+  assert.equal(
+    await page.locator('a[aria-current="page"]').getAttribute("href"),
+    "/page/reports-page.html",
+  );
+  download = page.waitForEvent("download");
+  await page.locator(".report-download").click();
+  await (await download).saveAs("/tmp/karbon-report-details.pdf");
+  assert.deepEqual(
+    readFileSync("/tmp/karbon-report-details.pdf"),
+    readFileSync("/tmp/karbon-reports-browser-selected.pdf"),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  await page.screenshot({ path: "/tmp/karbon-report-details-mobile.png" });
+  await page.locator("#deleteReport").click();
+  await page.locator("#reportDeleteDialog[open]").waitFor();
+  assert.equal(
+    await page
+      .locator("#cancelDeleteReport")
+      .evaluate((e) => e === document.activeElement),
+    true,
+  );
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(
+    () => !document.querySelector("#reportDeleteDialog").open,
+  );
+  assert.equal(deletions, 0);
+  assert.equal(
+    await page
+      .locator("#deleteReport")
+      .evaluate((e) => e === document.activeElement),
+    true,
+  );
+  await page.setViewportSize({ width: 1440, height: 1050 });
+  await page.route("**/api/reports/history/*", (route) =>
+    route.request().method() === "DELETE"
+      ? route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "خطای آزمایشی حذف" }),
+        })
+      : route.continue(),
+  );
+  await page.locator("#deleteReport").click();
+  await page.locator("#confirmDeleteReport").click();
+  await page.locator("#reportDeleteError").waitFor();
+  assert.equal(
+    await page.locator("#reportDeleteDialog").evaluate((e) => e.open),
+    true,
+  );
+  await page.unroute("**/api/reports/history/*");
+  await page.screenshot({ path: "/tmp/karbon-report-details-delete.png" });
+  await page.locator("#confirmDeleteReport").evaluate((e) => {
+    e.click();
+    e.click();
+  });
+  await page.waitForURL("**/reports-page.html");
+  await ready();
+  assert.equal(
+    deletions,
+    2,
+    "one failed attempt and one successful confirmed deletion",
+  );
+  assert.equal(
+    await page.locator("#reportHistoryTitle").textContent(),
+    "۱ گزارش",
+  );
+  await observer.waitForFunction(
+    () =>
+      document.querySelector("#reportHistoryTitle").textContent === "۱ گزارش",
+  );
+  await page.locator(".report-card-link").click();
+  await ready();
+  await page.locator("#deleteReport").click();
+  await page.locator("#confirmDeleteReport").click();
+  await page.waitForURL("**/reports-page.html");
+  await ready();
+  assert.equal(
+    await page.locator("#reportHistoryTitle").textContent(),
+    "۰ گزارش",
+  );
+  assert.equal(await page.locator("#reportHistoryList > li").count(), 0);
+  await observer.waitForFunction(
+    () =>
+      document.querySelector("#reportHistoryTitle").textContent === "۰ گزارش",
+  );
+  await observer.close();
+  await page.goto(detailsURL);
+  await ready();
+  await page.locator("#reportDetailsError").waitFor();
+  assert.equal(await page.locator("#reportDetails").isVisible(), false);
+  await page.goto(base + "/page/report-details-page.html?id=invalid");
+  await ready();
+  assert.equal(await page.locator("#reportDetailsError").isVisible(), true);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: 9 module entry points, all 15 datasets, pagination, cross-page selection, select-all exclusions, real XLSX/PDF downloads, fields, Persian dates, filters, error recovery, focus, mobile and reduced motion.",
+    "PASS: Reports-only navbar width (other module navbars unchanged), visible IDs, report cards/details, confirmed deletion/cancel/error/retry, automatic counts across tabs, responsive navbar labels at 125%, icon refresh, standalone history from 9 module entry points, saved metadata and original downloads after reload, refresh error recovery, all 15 datasets, pagination, cross-page selection, select-all exclusions, real XLSX/PDF downloads, fields, Persian dates, filters, error recovery, focus, mobile and reduced motion.",
   );
 } finally {
   await browser.close();
