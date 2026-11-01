@@ -1,5 +1,4 @@
 """Run real Chromium reporting checks against 15 disposable 1,000-row datasets."""
-from http.server import ThreadingHTTPServer
 import os
 from pathlib import Path
 import subprocess
@@ -13,7 +12,7 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'backend/tests'))
 sys.path.insert(0,str(ROOT/'frontend'))
 from test_reports import ReportsIntegrationTests
-from serve_frontend import DevelopmentHandler, ProductionHandler
+from serve_frontend import DevelopmentHandler, ProductionHandler, FrontendServer
 
 production="--production" in sys.argv
 base_handler=ProductionHandler if production else DevelopmentHandler
@@ -43,7 +42,7 @@ class Handler(base_handler):
     def do_POST(self): self.proxy()
     do_PUT=do_POST
     do_DELETE=do_POST
-server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+server=FrontendServer(('127.0.0.1',0),Handler)
 thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
 try:
     env=dict(os.environ,KARBON_TEST_URL=f'http://127.0.0.1:{server.server_port}',KARBON_REPORT_TOKEN=fixture.token)

@@ -18,11 +18,28 @@ const context = await browser.newContext({
 });
 const page = await context.newPage();
 const errors = [];
+const failedRequests = [];
 page.on("pageerror", (e) => errors.push(e.message));
-const ready = () =>
-  page.waitForFunction(
-    () => document.documentElement.dataset.pageState === "ready",
-  );
+page.on("requestfailed", (r) =>
+  failedRequests.push(`${r.url()}: ${r.failure()?.errorText}`),
+);
+const ready = async () => {
+  try {
+    await page.waitForFunction(
+      () => document.documentElement.dataset.pageState === "ready",
+    );
+  } catch (error) {
+    throw new Error(
+      `Page did not become ready: ${page.url()}; ${await page
+        .locator("#pageStartupError")
+        .textContent()
+        .catch(
+          () => "",
+        )}; errors: ${JSON.stringify(errors)}; failed requests: ${JSON.stringify(failedRequests)}`,
+      { cause: error },
+    );
+  }
+};
 const settled = async () => {
   await page.waitForFunction(
     () =>
