@@ -13,7 +13,7 @@ class Product(Base):
     product_code = Column(String(32), nullable=True, unique=True)
     revision = Column(Integer, nullable=False, default=1)
     name = Column(String(150), nullable=False, unique=True)
-    unit = Column(String(30), nullable=False)
+    unit = Column(String(80), nullable=False)
     price = Column(BigInteger, nullable=False)
     # NULL means a service / item whose inventory is not tracked.
     stock = Column(Integer, nullable=True)
@@ -49,7 +49,7 @@ class OrderItem(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False)
     position = Column(Integer, nullable=False)
     product_name = Column(String(150), nullable=False)
-    unit = Column(String(30), nullable=False)
+    unit = Column(String(80), nullable=False)
     quantity = Column(Integer, nullable=False)
     unit_price = Column(BigInteger, nullable=False)
 

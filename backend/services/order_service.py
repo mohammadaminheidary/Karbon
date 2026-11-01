@@ -14,6 +14,7 @@ from services.finance_service import FinanceError, require
 from services.reference_codes import compact_transaction_numbers
 from schemas.customer_schema import normalize_text
 from security.password import verify_password
+from services.inventory_service import enabled_units, require_enabled_unit
 
 
 def initialize_order_storage(engine):
@@ -44,10 +45,12 @@ def initialize_order_storage(engine):
             BEGIN SELECT RAISE(ABORT, 'final invoice is permanent'); END""")
 
 
-def products(db, include_inactive=False):
+def products(db, include_inactive=False, for_order=False):
     query = db.query(Product).filter(Product.deleted_at.is_(None))
     if not include_inactive:
         query = query.filter(Product.active.is_(True))
+    if for_order:
+        query = query.filter(Product.unit.in_(enabled_units(db)))
     referenced = {product_id for (product_id,) in db.query(OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Order.deleted_at.is_(None)).distinct().all()}
     return [{**{column.name: getattr(item, column.name) for column in Product.__table__.columns},
              "can_delete": item.id not in referenced}
@@ -66,8 +69,9 @@ def save_product(db, data, product_id=None):
         item = require(db, Product, product_id, "کالا") if product_id is not None else Product()
         if product_id is not None and item.revision != data.revision:
             raise FinanceError("کالا یا موجودی تغییر کرده است. فهرست را بروزرسانی و دوباره ویرایش کنید.", 409)
+        unit = require_enabled_unit(db, data.unit, current=item.unit if product_id is not None else None)
         for key, value in data.model_dump(exclude={"revision"}).items():
-            setattr(item, key, value)
+            setattr(item, key, unit if key == "unit" else value)
         if product_id is not None:
             item.revision += 1
         db.add(item)
@@ -333,6 +337,7 @@ def save_order(db, data):
         quantities = Counter()
         for item in data.items:
             product = require(db, Product, item.product_id, "کالا", active=True)
+            require_enabled_unit(db, product.unit)
             catalog[product.id] = product
             quantities[product.id] += item.quantity
         for product_id, quantity in quantities.items():

@@ -24,9 +24,9 @@ def delete_invoice(data: FinanceDelete, order_id: int = Path(gt=0, le=9223372036
 
 
 @router.get("/products")
-def products(include_inactive: bool = False, db: Session = Depends(get_database)):
+def products(include_inactive: bool = False, for_order: bool = False, db: Session = Depends(get_database)):
     with finance_errors():
-        return service.products(db, include_inactive)
+        return service.products(db, include_inactive, for_order)
 
 
 @router.put("/products/{product_id}")

@@ -31,6 +31,7 @@ from routes.tasks import router as tasks_router
 from routes.documents import router as documents_router, settings_router as document_settings_router
 from services.finance_service import initialize_bank_storage
 from services.order_service import initialize_order_storage
+from services.inventory_service import initialize_unit_storage
 from services.document_service import initialize_document_storage
 from services.customer_ids import initialize_customer_ids
 from services.auth_settings import initialize_auth_storage
@@ -110,6 +111,7 @@ initialize_customer_ids(engine)
 initialize_bank_storage(engine)
 initialize_document_storage(engine)
 initialize_order_storage(engine)
+initialize_unit_storage(engine)
 
 
 # ======================================================

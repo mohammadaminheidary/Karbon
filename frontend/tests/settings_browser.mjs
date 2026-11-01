@@ -102,6 +102,7 @@ try {
     "document-accounts",
     "products",
     "inventory",
+    "units",
     "invoices",
     "appearance",
     "security",
@@ -184,6 +185,7 @@ try {
     ["categories", "دسته آزمون"],
     ["units", "واحد آزمون"],
   ]) {
+    await open(kind === "units" ? "units" : "inventory");
     await page.locator(`#inventory-${kind}-name`).fill(name);
     await submit(
       `#inventory-${kind}-form button`,
@@ -191,10 +193,13 @@ try {
     );
     await contains(`#inventory-${kind}-list`, name);
   }
-  await page.locator("#inventory-units-list button").click();
-  await page.locator("#inventory-units-list button").getByText("فعال کردن", { exact: true }).waitFor();
-  await page.locator("#inventory-units-list button").click();
-  await page.locator("#inventory-units-list button").getByText("غیرفعال کردن", { exact: true }).waitFor();
+  const unitChoice = page.getByRole("checkbox", { name: "واحد آزمون", exact: true });
+  await unitChoice.uncheck();
+  await page.waitForFunction(() => !document.querySelector('#inventory-units-list input:disabled'));
+  assert.equal(await unitChoice.isChecked(), false);
+  await unitChoice.check();
+  await page.waitForFunction(() => !document.querySelector('#inventory-units-list input:disabled'));
+  assert.equal(await unitChoice.isChecked(), true);
   // Existing expense, document and product creation/editing/deletion.
   for (const cfg of [
     {
@@ -225,7 +230,7 @@ try {
     await open(cfg.section);
     await page.locator(cfg.name).fill(cfg.title);
     if (cfg.section === "products") {
-      await page.locator("#settingsProductUnit").fill("عدد");
+      await page.locator("#settingsProductUnit").selectOption("عدد");
       await page.locator("#settingsProductPrice").fill("1200");
       await page.locator("#settingsProductStock").fill("5");
     }

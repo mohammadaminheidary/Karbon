@@ -1,4 +1,4 @@
-"""Settings-owned reference lists for purchase entry (no inventory movements)."""
+"""Settings-owned categories and central units (no inventory movements)."""
 from sqlalchemy import Boolean, CheckConstraint, Column, Integer, String, UniqueConstraint
 from database import Base
 

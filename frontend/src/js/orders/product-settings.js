@@ -11,6 +11,10 @@ import {
 } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { onPageRefresh } from "../components/data-events.js";
+import {
+  getInventoryOptions,
+  populateUnitSelect,
+} from "../warehouse/inventory-options.js";
 
 const $ = (id) => document.getElementById(id);
 let initialized = false,
@@ -19,7 +23,15 @@ let initialized = false,
   editing = null,
   saving = false,
   version = 0;
+let units = [];
 const format = (value) => new Intl.NumberFormat("en-US").format(value);
+
+function renderUnits(selected = $("settingsProductUnit").value) {
+  populateUnitSelect($("settingsProductUnit"), units, {
+    current: editing?.unit,
+    selected,
+  });
+}
 
 function reset() {
   editing = null;
@@ -27,6 +39,7 @@ function reset() {
   $("settingsProductCode").value = "تولید خودکار هنگام ثبت";
   $("saveSettingsProduct").textContent = "ثبت کالا";
   $("cancelSettingsProductEdit").hidden = true;
+  renderUnits("");
 }
 let messageFailed = false;
 function message(text, failed = false) {
@@ -35,12 +48,19 @@ function message(text, failed = false) {
 }
 async function load() {
   const current = ++version;
-  if (!listLoaded) $("settingsProductsStatus").textContent = "در حال دریافت کالاها…";
+  if (!listLoaded)
+    $("settingsProductsStatus").textContent = "در حال دریافت کالاها…";
   $("settingsProductsList").setAttribute("aria-busy", "true");
   $("refreshProducts").disabled = true;
+  $("settingsProductUnit").disabled = true;
   try {
-    const products = await financeRequest("/products?include_inactive=true");
+    const [products, options] = await Promise.all([
+      financeRequest("/products?include_inactive=true"),
+      getInventoryOptions(),
+    ]);
     if (current !== version) return;
+    units = options.units;
+    renderUnits();
     listLoaded = true;
     $("settingsProductsStatus").textContent = products.length
       ? `${formatNumber(products.length)} کالا`
@@ -81,7 +101,7 @@ async function load() {
           editing = product;
           $("settingsProductCode").value = product.product_code;
           $("settingsProductName").value = product.name;
-          $("settingsProductUnit").value = product.unit;
+          renderUnits(product.unit);
           $("settingsProductPrice").value = format(product.price);
           $("settingsProductStock").value = product.stock ?? "";
           $("settingsProductActive").value = String(product.active);
@@ -172,8 +192,15 @@ export async function initializeProductSettings() {
       message("");
       try {
         const name = $("settingsProductName").value.trim(),
-          unit = $("settingsProductUnit").value.trim();
+          unit = $("settingsProductUnit").value;
         if (!name || !unit) throw new Error("نام و واحد کالا الزامی است.");
+        if (
+          unit !== editing?.unit &&
+          !units.some((item) => item.active && item.name === unit)
+        )
+          throw new Error(
+            "واحد را از فهرست واحدهای فعال در تنظیمات انتخاب کنید.",
+          );
         const stock = normalizeDigits($("settingsProductStock").value).trim();
         if (stock && (!/^\d+$/.test(stock) || Number(stock) > 1000000000))
           throw new Error("موجودی باید عدد صحیح نامنفی باشد.");

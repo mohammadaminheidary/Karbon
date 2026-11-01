@@ -14,7 +14,7 @@ class StrictFields(BaseModel):
 
 class ProductWrite(StrictFields):
     name: str = Field(min_length=1, max_length=150)
-    unit: str = Field(min_length=1, max_length=30)
+    unit: str = Field(min_length=1, max_length=80)
     price: int = Field(strict=True, ge=0, le=LIMIT)
     stock: int | None = Field(default=None, strict=True, ge=0, le=1000000000)
     active: bool = True

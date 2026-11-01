@@ -54,6 +54,7 @@ const SETTINGS_SECTIONS =
     "banks",
     "products",
     "inventory",
+    "units",
     "invoices",
     "appearance",
     "security",
@@ -296,7 +297,7 @@ async function showSettingsSection(
   if (section === "banks") {
     await initializeBankAccounts();
   }
-  if (section === "inventory") {
+  if (section === "inventory" || section === "units") {
     await initializeInventorySettings();
   }
   if (section === "products") {

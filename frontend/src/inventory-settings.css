@@ -11,6 +11,9 @@
   border-radius: 20px;
   background: white;
 }
+.inventory-options-single {
+  grid-template-columns: minmax(0, 1fr);
+}
 .inventory-options-card h3 {
   font-size: 1rem;
   font-weight: 800;
@@ -42,6 +45,19 @@
 .inventory-option-row button {
   flex-shrink: 0;
   font-size: 0.6875rem !important;
+}
+.inventory-unit-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  cursor: pointer;
+}
+.inventory-unit-choice input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: #3927d5;
 }
 @media (max-width: 900px) {
   .inventory-options-grid {

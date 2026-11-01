@@ -36,6 +36,16 @@ try {
   await page.locator("#passwordInput").fill("test-password");
   await page.locator('button[type="submit"]').click();
   await page.waitForURL("**/index.html");
+  // Exercise the empty-selection case, including the seeded central catalog.
+  const token = await page.evaluate(() => JSON.parse(localStorage.getItem("karbon_auth")).token);
+  const headers = { Authorization: `Bearer ${token}` };
+  const options = await (await page.request.get(`${base}/api/settings/inventory-options`, { headers })).json();
+  for (const unit of options.units) {
+    const response = await page.request.put(`${base}/api/settings/inventory-options/units/${unit.id}`, {
+      headers, data: { name: unit.name, active: false },
+    });
+    assert.ok(response.ok());
+  }
   await page.locator('a[href="/page/warehouse-page.html"]').click();
   await ready();
   assert.equal(await page.locator("#buyItemsButton svg").count(), 0);
@@ -50,7 +60,7 @@ try {
     await page.locator("#purchaseOptionsStatus").textContent(),
     /تعریف نشده/,
   );
-  await page.locator(".purchase-options-help a").click();
+  await page.locator('.purchase-options-help a[href$="#inventory"]').click();
   await page.waitForURL("**/settings-page.html#inventory");
   await ready();
   await page.locator("#inventory-categories-name").fill("مواد اولیه آزمایش");
@@ -59,6 +69,7 @@ try {
     .locator("#inventory-categories-list")
     .getByText("مواد اولیه آزمایش", { exact: true })
     .waitFor();
+  await page.locator('[data-settings-target="units"]').click();
   await page.locator("#inventory-units-name").fill("متر آزمایش");
   await page.locator("#inventory-units-form button").click();
   await page
@@ -214,13 +225,10 @@ try {
   assert.equal(await page.locator(".warehouse").isVisible(), true);
   assert.equal(await page.locator("#mainNavbar").isVisible(), true);
   // Deactivated settings never appear as purchase options.
-  await page.goto(`${base}/page/settings-page.html#inventory`);
+  await page.goto(`${base}/page/settings-page.html#units`);
   await ready();
-  await page.locator("#inventory-units-list button").click();
-  await page
-    .locator("#inventory-units-list button")
-    .getByText("فعال کردن", { exact: true })
-    .waitFor();
+  await page.getByRole("checkbox", { name: "متر آزمایش", exact: true }).uncheck();
+  await page.waitForFunction(() => !document.querySelector('#inventory-units-list input:disabled'));
   await page.goto(`${base}/page/warehouse-page.html#purchase`);
   await ready();
   await panelReady();

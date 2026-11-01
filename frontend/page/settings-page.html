@@ -523,6 +523,7 @@
                     <path d="m3 8 9-5 9 5v13H3V8ZM7 21V11h10v10M7 15h10M7 18h10" /></svg
                   ><span>انبار</span>
                 </button>
+                <button type="button" id="settings-tab-units" aria-controls="settings-panel-units" data-settings-target="units" class="settings-nav-button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 13-13 5 5L8 21l-5-5ZM12 7l3 3M8 11l3 3M4 15l3 3" /></svg><span>واحد</span></button>
               </div>
               <div class="settings-nav-group">
                 <p class="settings-nav-label">برنامه</p>
@@ -791,6 +792,7 @@
                       ><span>مدیریت دسته‌بندی‌های انبار</span></span
                     ><span class="settings-card-arrow" aria-hidden="true">‹</span>
                   </button>
+                  <button type="button" data-open-settings-section="units" class="settings-category-card"><span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 13-13 5 5L8 21l-5-5ZM12 7l3 3M8 11l3 3M4 15l3 3" /></svg></span><span class="settings-category-copy"><strong>واحد</strong><span>مدیریت واحدهای مشترک برنامه</span></span><span class="settings-card-arrow" aria-hidden="true">‹</span></button>
                 </div>
               </div>
               <div class="settings-overview-group">
@@ -848,12 +850,79 @@
             </section>
 
             <section id="settings-panel-inventory" aria-labelledby="settings-tab-inventory" data-settings-panel="inventory" class="finance-surface hidden min-w-0 w-full max-w-full">
-              <div class="mb-5 flex flex-wrap items-center justify-between gap-4"><h2 class="text-xl font-black">دسته‌بندی و واحد انبار</h2><button id="refreshInventoryOptions" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button></div>
-              <p class="text-sm text-mirage/60">گزینه‌های فعال در فرم خرید کالا نمایش داده می‌شوند.</p>
+              <div class="mb-5 flex flex-wrap items-center justify-between gap-4"><h2 class="text-xl font-black">انبار</h2><button id="refreshInventoryOptions" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button></div>
+              <p class="text-sm text-mirage/60">دسته‌بندی‌های فعال در فرم خرید کالا نمایش داده می‌شوند.</p>
               <p id="inventoryOptionsStatus" role="status" class="mt-4 text-sm text-mirage/60"></p>
-              <div id="inventoryOptionsLists" class="inventory-options-grid"><article class="inventory-options-card"><h3>دسته‌بندی‌های کالا</h3><form id="inventory-categories-form"><fieldset><label for="inventory-categories-name">عنوان دسته‌بندی</label><div class="inventory-option-entry"><input id="inventory-categories-name" class="finance-field" maxlength="80" required autocomplete="off"/><button type="submit" class="finance-button bg-persian-blue text-white">افزودن</button></div></fieldset></form><ul id="inventory-categories-list" class="inventory-options-list"></ul></article><article class="inventory-options-card"><h3>واحد‌های کالا</h3><form id="inventory-units-form"><fieldset><label for="inventory-units-name">عنوان واحد</label><div class="inventory-option-entry"><input id="inventory-units-name" class="finance-field" maxlength="80" required autocomplete="off"/><button type="submit" class="finance-button bg-persian-blue text-white">افزودن</button></div></fieldset></form><ul id="inventory-units-list" class="inventory-options-list"></ul></article></div>
+              <div id="inventoryOptionsLists" class="inventory-options-grid inventory-options-single">
+                <article class="inventory-options-card">
+                  <h3>دسته‌بندی‌های کالا</h3>
+                  <form id="inventory-categories-form">
+                    <fieldset>
+                      <label for="inventory-categories-name">عنوان دسته‌بندی</label>
+                      <div class="inventory-option-entry">
+                        <input
+                          id="inventory-categories-name"
+                          class="finance-field"
+                          maxlength="80"
+                          required
+                          autocomplete="off"
+                        /><button
+                          type="submit"
+                          class="finance-button bg-persian-blue text-white"
+                        >
+                          افزودن
+                        </button>
+                      </div>
+                    </fieldset>
+                  </form>
+                  <ul id="inventory-categories-list" class="inventory-options-list"></ul>
+                </article>
+              </div>
             </section>
-
+            <section id="settings-panel-units" aria-labelledby="settings-tab-units" data-settings-panel="units" class="finance-surface hidden min-w-0 w-full max-w-full">
+              <div class="mb-5 flex flex-wrap items-center justify-between gap-4"><h2 class="text-xl font-black">واحد</h2><button id="refreshUnitOptions" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button></div>
+              <p class="text-sm text-mirage/60">واحدهای انتخاب‌شده در کالاها، خرید و سفارش‌های جدید قابل استفاده هستند. غیرفعال کردن واحد، سوابق قبلی را تغییر نمی‌دهد.</p>
+              <p id="unitOptionsStatus" role="status" class="mt-4 text-sm text-mirage/60"></p>
+              <div id="unitOptionsLists" class="inventory-options-grid inventory-options-single">
+                <article class="inventory-options-card">
+                  <h3>واحدها</h3>
+                  <label for="inventory-units-search">جستجوی واحدها</label
+                  ><input
+                    id="inventory-units-search"
+                    class="finance-field"
+                    type="search"
+                    placeholder="نام واحد…"
+                    autocomplete="off"
+                    aria-controls="inventory-units-list"
+                  />
+                  <p
+                    id="inventory-units-count"
+                    class="mt-4 text-sm text-mirage/60"
+                    role="status"
+                  ></p>
+                  <form id="inventory-units-form">
+                    <fieldset>
+                      <label for="inventory-units-name">عنوان واحد</label>
+                      <div class="inventory-option-entry">
+                        <input
+                          id="inventory-units-name"
+                          class="finance-field"
+                          maxlength="80"
+                          required
+                          autocomplete="off"
+                        /><button
+                          type="submit"
+                          class="finance-button bg-persian-blue text-white"
+                        >
+                          افزودن
+                        </button>
+                      </div>
+                    </fieldset>
+                  </form>
+                  <ul id="inventory-units-list" class="inventory-options-list"></ul>
+                </article>
+              </div>
+            </section>
 
             <section id="settings-panel-invoices" aria-labelledby="settings-tab-invoices" data-settings-panel="invoices" class="finance-surface hidden min-w-0 w-full max-w-full">
               <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
@@ -904,12 +973,14 @@
                       required
                   /></label>
                   <label
-                    >واحد<input
+                    >واحد<select
                       id="settingsProductUnit"
                       class="finance-field"
-                      maxlength="30"
-                      required
-                  /></label>
+                      aria-describedby="settingsProductUnitHint"
+                      required disabled
+                    ><option value="">در حال دریافت واحدها…</option></select>
+                    <span id="settingsProductUnitHint" class="text-sm text-mirage/60">واحدهای فعال در <a href="#units">تنظیمات واحدها</a> مدیریت می‌شوند. واحد غیرفعال فعلی فقط برای همین کالا حفظ می‌شود.</span>
+                  </label>
                   <label
                     >قیمت (تومان)<input
                       id="settingsProductPrice"

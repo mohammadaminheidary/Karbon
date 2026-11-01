@@ -687,7 +687,7 @@ export function initializeOrderDialogs(onSaved) {
     $("orderRetryLoad").hidden = true;
     try {
       const [catalog, accounts, next] = await Promise.all([
-        financeRequest("/products"),
+        financeRequest("/products?for_order=true"),
         getBanks(),
         financeRequest("/orders/next-number"),
       ]);
@@ -696,10 +696,17 @@ export function initializeOrderDialogs(onSaved) {
       banks = accounts;
       referencesReady = true;
       if (!manualNumber) $("orderNumber").value = next.order_number;
-      create.querySelectorAll(".item-product").forEach(productOptions);
+      create.querySelectorAll(".item-product").forEach((select) => {
+        productOptions(select);
+        const row = select.closest(".orders-item-row");
+        const product = products.find((p) => p.id === Number(select.value));
+        row.querySelector(".item-unit").textContent = product?.unit || "—";
+        if (!product) row.querySelector(".item-price").value = "";
+      });
+      calculate();
       $("orderLoadStatus").textContent = products.length
         ? ""
-        : "کالایی ثبت نشده است؛ ابتدا در «تنظیمات ← کالاها» کالا تعریف کنید.";
+        : "کالایی با واحد فعال موجود نیست؛ کالا و واحد آن را در بخش‌های «کالاها» و «واحد» تنظیمات فعال کنید.";
       error(create);
     } catch (err) {
       if (version === loadVersion) {
