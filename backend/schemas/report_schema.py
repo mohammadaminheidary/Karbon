@@ -11,6 +11,7 @@ class ReportFilter(BaseModel):
 
 class ReportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    report_name: str = Field(default="", max_length=200)
     columns: list[str] | None = Field(default=None, max_length=250)
     filters: list[ReportFilter] = Field(default_factory=list, max_length=30)
     search: str = Field(default="", max_length=200)

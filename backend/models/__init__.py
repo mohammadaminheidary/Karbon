@@ -1,5 +1,6 @@
 from .inventory import InventoryOption
 from .user import User
+from .generated_report import GeneratedReport
 from .task import Task
 from .document import Document, DocumentAccount
 from .member import Member

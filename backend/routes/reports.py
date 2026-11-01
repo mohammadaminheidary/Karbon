@@ -1,4 +1,4 @@
-"""Authenticated, read-only report API. Export POSTs never mutate business data."""
+"""Authenticated reporting and immutable export history; business data is read-only."""
 from pathlib import Path
 import tempfile
 from typing import Literal
@@ -13,6 +13,7 @@ from security.auth import get_current_user
 from schemas.report_schema import ReportRequest
 from services import report_service as service
 from services.report_export import export
+from services import report_history
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"], dependencies=[Depends(get_current_user)])
 
@@ -29,6 +30,35 @@ def schema(name: str, response: Response, db: Session = Depends(get_database)):
     return service.schema(db, name)
 
 
+@router.get("/history")
+def history(response: Response, offset: int = Query(default=0, ge=0),
+            limit: int = Query(default=50, ge=1, le=200),
+            db: Session = Depends(get_database), user=Depends(get_current_user)):
+    response.headers["Cache-Control"] = "no-store"
+    return report_history.listing(db, user.id, offset, limit)
+
+
+@router.get("/history/{report_id}/download")
+def saved_download(report_id: int, db: Session = Depends(get_database), user=Depends(get_current_user)):
+    report = report_history.get(db, user.id, report_id)
+    return Response(content=report.content, media_type=report_history.media_type(report.format), headers={
+        "Cache-Control": "no-store",
+        "Content-Disposition": f'attachment; filename="karbon-{report.dataset}-{report.id}.{report.format}"',
+    })
+
+
+@router.get("/history/{report_id}")
+def details(report_id: int, response: Response, db: Session = Depends(get_database), user=Depends(get_current_user)):
+    response.headers["Cache-Control"] = "no-store"
+    return report_history.metadata(report_history.get(db, user.id, report_id))
+
+
+@router.delete("/history/{report_id}", status_code=204)
+def delete_report(report_id: int, db: Session = Depends(get_database), user=Depends(get_current_user)):
+    report_history.remove(db, user.id, report_id)
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/{name}/options")
 def options(name: str, field: str, response: Response, search: str = Query(default="", max_length=200),
             offset: int = Query(default=0, ge=0), db: Session = Depends(get_database)):
@@ -43,16 +73,21 @@ def preview(name: str, request: ReportRequest, response: Response, db: Session =
 
 
 @router.post("/{name}/export/{fmt}")
-def download(name: str, fmt: Literal["pdf", "xlsx"], request: ReportRequest, db: Session = Depends(get_database)):
+def download(name: str, fmt: Literal["pdf", "xlsx"], request: ReportRequest,
+             db: Session = Depends(get_database), user=Depends(get_current_user)):
+    # Capture identity/column metadata before export releases its read snapshot.
+    user_id = user.id
+    column_count = len(service.selected(service.dataset(db, name), request))
     handle = tempfile.NamedTemporaryFile(prefix="karbon-report-", suffix=f".{fmt}", delete=False)
     path = Path(handle.name)
     handle.close()
     try:
-        export(db, name, request, fmt, path)
+        count = export(db, name, request, fmt, path)
+        report_history.save(db, user_id, name, request, fmt, path, count, column_count)
     except BaseException:
         path.unlink(missing_ok=True)
         raise
-    media = "application/pdf" if fmt == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    media = report_history.media_type(fmt)
     return FileResponse(path, media_type=media, filename=f"karbon-{name}.{fmt}",
                         headers={"Cache-Control": "no-store"},
                         background=BackgroundTask(path.unlink, missing_ok=True))
