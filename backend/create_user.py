@@ -5,11 +5,13 @@ from database import Base, engine, SessionLocal
 from models.user import User
 
 from security.password import hash_password
+from services.auth_settings import initialize_auth_storage
 
 
 
 # ساخت جدول‌ها
 Base.metadata.create_all(bind=engine)
+initialize_auth_storage(engine)
 
 
 
@@ -55,6 +57,7 @@ try:
         user.password_hash = hash_password(
             password
         )
+        user.auth_version += 1
 
         message = "Admin password updated"
 

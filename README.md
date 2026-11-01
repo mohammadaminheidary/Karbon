@@ -52,6 +52,15 @@ their local import names; use `python3 backend/run.py` from the root (or its
 absolute path), or run `python3 -m uvicorn app:app --reload` inside `backend/`.
 Do not run the app against production data merely to verify this reorganization.
 
+Settings includes grouped management tools and account security. Password changes
+require the current password, persist in SQLite, and revoke
+previous sessions while renewing the session making the change. New passwords
+must be nonempty, contain a non-space character, and fit within 72 UTF-8 bytes
+(bcrypt's limit). Username changes are currently unavailable.
+Startup adds the `users.auth_version` column automatically to existing databases.
+Sessions created before this update require one new login to obtain tokens tied
+to a stable user ID. The admin reset script also revokes previous sessions.
+
 ```sh
 npm --prefix frontend run build
 npm --prefix frontend run dev

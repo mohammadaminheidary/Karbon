@@ -1,0 +1,9 @@
+/* The existing primary token also powers Tailwind's opacity/hover utilities.
+   Status colors (success, warning, destructive) retain their semantic meaning. */
+:root {
+  --theme-strong: #1e3a8a;
+  --theme-mid: #3b82f6;
+  --theme-soft: #93c5fd;
+  --theme-light: #dbeafe;
+  --theme-tint: #eff6ff;
+}

@@ -33,6 +33,7 @@ from services.finance_service import initialize_bank_storage
 from services.order_service import initialize_order_storage
 from services.document_service import initialize_document_storage
 from services.customer_ids import initialize_customer_ids
+from services.auth_settings import initialize_auth_storage
 from routes.faces import router as faces_router
 from routes.dashboard import router as dashboard_router
 from security.face_requests import FaceRequestMiddleware
@@ -57,6 +58,10 @@ async def private_face_validation(request, error):
     if request.url.path.startswith("/api/faces"):
         # Pydantic's default error includes input values (including biometrics).
         return JSONResponse({"detail": {"code": "INVALID_INPUT", "message": "تصاویر معتبر با تعداد مناسب و رضایت ثبت چهره لازم است."}}, status_code=422)
+    if request.url.path == "/api/login" or request.url.path.startswith("/api/auth/"):
+        # Validation errors must never echo passwords or request bodies.
+        errors = [{"field": str(e["loc"][-1]), "message": e["msg"].removeprefix("Value error, ")} for e in error.errors()]
+        return JSONResponse({"detail": errors}, status_code=422)
     return await request_validation_exception_handler(request, error)
 
 
@@ -100,6 +105,7 @@ app.add_middleware(NegotiatedGZipMiddleware, minimum_size=1024, compresslevel=1)
 Base.metadata.create_all(
     bind=engine
 )
+initialize_auth_storage(engine)
 initialize_customer_ids(engine)
 initialize_bank_storage(engine)
 initialize_document_storage(engine)

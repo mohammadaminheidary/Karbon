@@ -15,11 +15,11 @@ from models.user import User
 from schemas.auth_schema import (
     LoginRequest,
     LoginResponse,
+    ChangePasswordRequest,
 )
 
 from services.auth_service import authenticate_user
-
-from security.jwt import create_access_token
+from services.auth_settings import auth_response, verify_current_password, change_credentials
 
 from security.auth import get_current_user
 
@@ -100,21 +100,7 @@ def login(
     )
 
 
-    token = create_access_token(
-        {
-            "sub": user.username,
-        }
-    )
-
-
-    return {
-        "success": True,
-        "token": token,
-        "user": {
-            "id": user.id,
-            "username": user.username,
-        },
-    }
+    return auth_response(user)
 
 
 @router.get("/auth/me")
@@ -131,3 +117,10 @@ def get_me(
             "username": current_user.username,
         },
     }
+
+
+@router.put("/auth/password", response_model=LoginResponse)
+def change_password(data: ChangePasswordRequest, db: Session = Depends(get_database),
+                    user: User = Depends(get_current_user)):
+    verify_current_password(user, data.current_password)
+    return change_credentials(db, user, password=data.new_password)

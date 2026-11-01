@@ -8,6 +8,7 @@ const initializeBankAccounts = lazyTool(() => import("../finance/bank-accounts.j
 const initializeInventorySettings = lazyTool(() => import("../warehouse/inventory-settings.js"), "initializeInventorySettings");
 const initializeProductSettings = lazyTool(() => import("../orders/product-settings.js"), "initializeProductSettings");
 const initializeInvoiceSettings = lazyTool(() => import("../orders/invoice-settings.js"), "initializeInvoiceSettings");
+const initializeSecuritySettings = lazyTool(() => import("../auth/security-settings.js"), "initializeSecuritySettings");
 const openFaceRegistration = lazyTool(() => import("../attendance/face-panel.js"), "openFaceRegistration");
 
 function lazyTool(load, name) {
@@ -197,30 +198,8 @@ function setSettingsButtonState(
   }
 
 
-  button.classList.remove(
-    "bg-persian-blue",
-    "text-white",
-    "shadow-sm",
-    "text-mirage/60",
-    "hover:bg-alabaster",
-    "hover:text-mirage"
-  );
-
-
-  if (active) {
-    button.classList.add(
-      "bg-persian-blue",
-      "text-white",
-      "shadow-sm"
-    );
-
-  } else {
-    button.classList.add(
-      "text-mirage/60",
-      "hover:bg-alabaster",
-      "hover:text-mirage"
-    );
-  }
+  if (active) button.setAttribute("aria-current", "true");
+  else button.removeAttribute("aria-current");
 }
 
 
@@ -287,6 +266,14 @@ async function showSettingsSection(
     );
   }
 
+  const selected = document.querySelector(`[data-settings-target="${section}"]`);
+  if (selected && window.matchMedia("(max-width: 800px)").matches) {
+    // Scroll only the compact navigation strip; leave the page's reading position intact.
+    const nav = getElement("settingsNavigation");
+    const delta = selected.getBoundingClientRect().left - nav.getBoundingClientRect().left;
+    nav.scrollBy({ left: delta - (nav.clientWidth - selected.clientWidth) / 2, behavior: "instant" });
+  }
+
 
   const panel = document.querySelector(`[data-settings-panel="${section}"]`);
   const version = (sectionLoads.get(section) || 0) + 1;
@@ -316,6 +303,9 @@ async function showSettingsSection(
   }
   if (section === "invoices") {
     await initializeInvoiceSettings();
+  }
+  if (section === "security") {
+    await initializeSecuritySettings();
   }
   } finally {
     if (sectionLoads.get(section) === version) panel?.setAttribute("aria-busy", "false");

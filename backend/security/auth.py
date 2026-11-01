@@ -59,17 +59,18 @@ def get_current_user(
         raise unauthorized()
 
 
-    user = (
-        db.query(User)
-        .filter(
-            User.username == username
-        )
-        .first()
-    )
+    # Username-only tokens cannot safely identify an account after a rename.
+    # Pre-upgrade sessions must log in once to acquire a stable identity.
+    if type(payload.get("uid")) is not int or type(payload.get("ver")) is not int:
+        raise unauthorized()
+    user = db.query(User).filter(User.id == payload["uid"]).first()
 
 
     if user is None:
 
+        raise unauthorized()
+
+    if payload["ver"] != user.auth_version or username != user.username:
         raise unauthorized()
 
 

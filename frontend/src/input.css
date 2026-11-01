@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./appearance.css";
 
 @font-face {
   font-family: "Vazirmatn";

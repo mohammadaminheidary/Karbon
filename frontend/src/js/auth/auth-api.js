@@ -1,6 +1,41 @@
 import { apiFetch } from "../components/api-cache.js";
 const API_URL = "http://127.0.0.1:8000/api";
 
+export class SecurityApiError extends Error {
+  constructor(message, status, field) {
+    super(message);
+    this.status = status;
+    this.field = field;
+  }
+}
+
+export async function securityRequest(token, kind, payload) {
+  const response = await fetch(`${API_URL}/auth/${kind}`, {
+    method: payload ? "PUT" : "GET",
+    cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(payload ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(payload ? { body: JSON.stringify(payload) } : {}),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail = Array.isArray(data?.detail) ? data.detail[0] : data?.detail;
+    const fallback =
+      response.status === 429
+        ? "تعداد تلاش‌ها بیش از حد مجاز است. یک دقیقه بعد دوباره تلاش کنید."
+        : "ذخیره اطلاعات انجام نشد. لطفاً دوباره تلاش کنید.";
+    const message = typeof detail === "string" ? detail : detail?.message;
+    throw new SecurityApiError(
+      message && !/[A-Za-z]/.test(message) ? message : fallback,
+      response.status,
+      detail?.field,
+    );
+  }
+  return data;
+}
+
 export async function loginUser(username, password) {
   const response = await apiFetch(`${API_URL}/login`, {
     method: "POST",
