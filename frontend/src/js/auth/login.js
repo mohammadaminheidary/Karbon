@@ -1,10 +1,7 @@
 import { loginUser } from "./auth-api.js";
 import { saveAuth } from "./auth-storage.js";
-import { showLoader } from "../components/loader.js";
 import { validateLogin } from "../utils/validator.js";
 
-// شروع Login
-console.log("login.js loaded");
 export function initLogin() {
   const form = document.getElementById("loginForm");
 
@@ -13,8 +10,21 @@ export function initLogin() {
     return;
   }
 
+  const loginButton = form.querySelector("button[type='submit']");
+  const buttonContent = loginButton.innerHTML;
+  let submitting = false;
+  function resetForm() {
+    submitting = false;
+    loginButton.disabled = false;
+    loginButton.innerHTML = buttonContent;
+    form.removeAttribute("aria-busy");
+  }
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) resetForm();
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (submitting) return;
 
     const username = document.getElementById("username").value.trim();
 
@@ -28,11 +38,13 @@ export function initLogin() {
       return;
     }
 
-    const loginButton = form.querySelector("button[type='submit']");
+    let navigating = false;
 
     try {
       // جلوگیری از چند بار کلیک
+      submitting = true;
       loginButton.disabled = true;
+      form.setAttribute("aria-busy", "true");
 
       loginButton.innerHTML = `
                 <span>
@@ -47,11 +59,9 @@ export function initLogin() {
         // ذخیره اطلاعات ورود
         saveAuth(response);
 
-        // نمایش Loading
-        await showLoader();
-
         // انتقال به صفحه اصلی
         window.location.href = "../index.html";
+        navigating = true;
       } else {
         alert(response.message);
       }
@@ -60,13 +70,8 @@ export function initLogin() {
 
       alert("خطا در اتصال به سرور");
     } finally {
-      loginButton.disabled = false;
-
-      loginButton.innerHTML = `
-                <span>
-                    ورود به حساب
-                </span>
-            `;
+      // Keep the current surface stable until the dashboard document takes over.
+      if (!navigating) resetForm();
     }
   });
 }

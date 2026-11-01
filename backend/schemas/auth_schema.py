@@ -3,6 +3,8 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
 
     username: str = Field(
         min_length=1,
@@ -40,7 +42,7 @@ class CredentialRequest(BaseModel):
 
 
 class ChangePasswordRequest(CredentialRequest):
-    new_password: str = Field(min_length=1, max_length=72)
+    new_password: str = Field(min_length=15, max_length=72)
     confirm_password: str = Field(min_length=1, max_length=72)
 
     @field_validator("new_password")

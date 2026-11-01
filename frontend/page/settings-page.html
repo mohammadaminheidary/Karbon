@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fa" dir="rtl" class="scroll-smooth">
+<html data-auth-state="pending" lang="fa" dir="rtl" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
     <script src="../src/js/components/appearance.js"></script>
@@ -1456,6 +1456,7 @@
                       <div class="settings-password-input">
                         <input
                           id="securityNewPassword"
+                          minlength="15"
                           name="securityNewPassword"
                           type="password"
                           autocomplete="new-password"
@@ -1475,7 +1476,7 @@
                       </div>
                     </div>
                     <p id="passwordHint" class="settings-field-hint">
-                      رمز عبور نمی‌تواند خالی یا فقط فاصله باشد. حداکثر ۷۲ بایت؛ حروف فارسی چند بایت هستند.
+                      رمز عبور باید حداقل ۱۵ نویسه و حداکثر ۷۲ بایت باشد؛ حروف فارسی چند بایت هستند.
                     </p>
                     <div class="settings-field">
                       <label for="securityConfirmPassword">تکرار رمز عبور جدید</label>

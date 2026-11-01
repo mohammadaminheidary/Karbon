@@ -404,3 +404,24 @@ html {
     animation: none;
   }
 }
+
+/* Protected documents fail closed before scripts and during history restoration. */
+html[data-auth-state="pending"] body {
+  visibility: hidden;
+}
+html[data-auth-state="pending"]::after {
+  content: "در حال بررسی نشست کاربری…";
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #f8fafc;
+  color: #0f172a;
+  font: 16px sans-serif;
+}
+html[data-auth-state="error"] body > * {
+  visibility: hidden;
+}
+html[data-auth-state="error"] #pageStartupError {
+  visibility: visible;
+}

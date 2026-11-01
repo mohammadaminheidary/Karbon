@@ -86,6 +86,7 @@ export async function loginUser(username, password) {
 export async function validateToken(token) {
   const response = await apiFetch(`${API_URL}/auth/me`, {
     method: "GET",
+    cache: "no-store",
 
     headers: {
       Authorization: `Bearer ${token}`,
@@ -101,4 +102,16 @@ export async function validateToken(token) {
   }
 
   return await response.json();
+}
+
+
+export async function revokeSession(token) {
+  const response = await fetch(`${API_URL}/auth/logout`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok && response.status !== 401)
+    throw new Error("خروج امن انجام نشد. دوباره تلاش کنید.");
 }

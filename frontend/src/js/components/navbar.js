@@ -1,6 +1,8 @@
 import { initializeNavigation } from "./navigation.js";
 import { getToken, logout } from "../auth/auth-storage.js";
 
+import { revokeSession } from "../auth/auth-api.js";
+
 let cleanupNavbar;
 
 export function initializeNavbar() {
@@ -10,7 +12,6 @@ export function initializeNavbar() {
   cleanupNavbar?.();
   if (!host.querySelector("#mainNavbar")) return;
   const navbar = host.querySelector("nav");
-  const pageToken = getToken();
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let pulse;
   const glass = navbar.querySelector(".navbar-glass");
@@ -18,9 +19,20 @@ export function initializeNavbar() {
   const { signal } = controller;
   host.querySelector("#logoutButton").addEventListener(
     "click",
-    () => {
-      logout();
-      window.location.replace("/page/login-page.html");
+    async () => {
+      const button = host.querySelector("#logoutButton");
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        await revokeSession(getToken());
+        logout();
+        window.location.replace("/page/login-page.html");
+      } catch (error) {
+        const { notifyNavbar } = await import("./navbar-notification.js");
+        notifyNavbar(error.message || "ارتباط با سرور برقرار نشد. دوباره تلاش کنید.");
+      } finally {
+        button.disabled = false;
+      }
     },
     { signal },
   );
@@ -120,7 +132,7 @@ export function initializeNavbar() {
 
   function startClock() {
     // A history snapshot may outlive logout or a login in another tab.
-    if (getToken() !== pageToken) {
+    if (!getToken()) {
       window.location.replace("/page/login-page.html");
       return;
     }

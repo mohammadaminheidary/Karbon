@@ -39,9 +39,9 @@ class AuthSettingsTests(unittest.TestCase):
         with closing(sqlite3.connect(self.database)) as db:
             self.assertEqual(db.execute("SELECT username, auth_version FROM users WHERE id=1").fetchone(), ("customers-test", 0))
 
-    def test_short_and_long_passwords_hash_verify_and_relogin(self):
+    def test_new_password_policy_hash_verify_and_relogin(self):
         current = "test-password"
-        for secret in ["short7!", "a password considerably longer than fifteen characters"]:
+        for secret in ["secure passphrase!", "a password considerably longer than fifteen characters"]:
             with self.subTest(length=len(secret)):
                 status, result = self.change("password", current_password=current, new_password=secret, confirm_password=secret)
                 self.assertEqual(status, 200, result)
@@ -123,7 +123,9 @@ class AuthSettingsTests(unittest.TestCase):
 
     def test_z_rate_limit_password_changes(self):
         # A verified current password clears failures from earlier test cases.
-        self.assertEqual(self.change("password", new_password="test-password", confirm_password="test-password")[0], 422)
+        status, result = self.change("password")
+        self.assertEqual(status, 200)
+        type(self).token = result["token"]
         # Last: the intentionally exhausted per-account budget lasts one minute.
         for index in range(5):
             self.assertEqual(self.change("password", current_password="wrong")[0], 403)

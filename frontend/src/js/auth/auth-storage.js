@@ -24,7 +24,8 @@ export function saveAuth(data) {
 }
 
 export function getToken() {
-  const auth = localStorage.getItem(AUTH_KEY);
+  let auth;
+  try { auth = localStorage.getItem(AUTH_KEY); } catch { return null; }
 
 
   if (!auth) {

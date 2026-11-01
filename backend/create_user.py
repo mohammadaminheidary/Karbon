@@ -28,9 +28,9 @@ password_length = len(
 )
 
 
-if password_length < 8:
+if len(password) < 15:
     raise ValueError(
-        "Password must be at least 8 bytes long"
+        "Password must be at least 15 characters long"
     )
 
 

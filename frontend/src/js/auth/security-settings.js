@@ -62,6 +62,8 @@ function payloadFor() {
   const password = byId("securityNewPassword").value;
   if (!password.trim())
     invalid("new_password", "رمز عبور جدید نمی‌تواند خالی یا فقط فاصله باشد.");
+  if ([...password].length < 15)
+    invalid("new_password", "رمز عبور جدید باید حداقل ۱۵ نویسه باشد.");
   if (new TextEncoder().encode(password).length > 72)
     invalid(
       "new_password",

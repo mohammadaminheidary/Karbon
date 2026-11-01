@@ -1,6 +1,25 @@
 // This small, dependency-free boundary runs before the page's module graph.
 // The HTML owns the shell; a failed import must never leave an endless spinner.
 (() => {
+  const protectedPage = window.location.pathname !== "/page/login-page.html";
+  if (protectedPage) {
+    document.documentElement.dataset.authState = "pending";
+    const conceal = () => { document.documentElement.dataset.authState = "pending"; };
+    const hasSession = () => {
+      try {
+        const token = JSON.parse(localStorage.getItem("karbon_auth"))?.token;
+        return typeof token === "string" && Boolean(token.trim());
+      } catch { return false; }
+    };
+    if (!hasSession()) window.location.replace("/page/login-page.html");
+    window.addEventListener("pagehide", conceal);
+    window.addEventListener("storage", (event) => {
+      if (event.key === "karbon_auth" || event.key === null) {
+        conceal();
+        window.location.replace("/page/login-page.html");
+      }
+    });
+  }
   let loaded = false;
   let leaving = false;
   let failure;
@@ -11,6 +30,8 @@
   function showFailure(text, kind = "error") {
     if (leaving) return;
     failure = { text, kind };
+    if (protectedPage && document.documentElement.dataset.authState === "pending")
+      document.documentElement.dataset.authState = "error";
     document.documentElement.dataset.pageState = "error";
     if (kind !== "timeout") clearTimeout(timeout);
     if (document.readyState === "loading") return;

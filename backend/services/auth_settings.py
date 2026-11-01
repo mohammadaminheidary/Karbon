@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from models.user import User
 from security.password import hash_password, verify_password
 from security.login_rate_limit import (
-    check_login_rate_limit, record_login_failure, clear_login_failures,
+    login_budget, record_login_failure, clear_login_failures,
 )
 
 
@@ -29,14 +29,14 @@ def auth_response(user):
 def verify_current_password(user, password):
     # Account based, independent of login attempts.
     key = f"credentials:{user.id}"
-    limited, retry = check_login_rate_limit(key)
-    if limited:
-        raise HTTPException(429, "تعداد تلاش‌ها بیش از حد مجاز است. کمی بعد دوباره تلاش کنید.",
-                            headers={"Retry-After": str(retry)})
-    if not verify_password(password, user.password_hash):
-        record_login_failure(key)
-        raise HTTPException(403, detail={"field": "current_password", "message": "رمز عبور فعلی صحیح نیست."})
-    clear_login_failures(key)
+    with login_budget((key,)) as (limited, retry):
+        if limited:
+            raise HTTPException(429, "تعداد تلاش‌ها بیش از حد مجاز است. کمی بعد دوباره تلاش کنید.",
+                                headers={"Retry-After": str(retry)})
+        if not verify_password(password, user.password_hash):
+            record_login_failure(key)
+            raise HTTPException(403, detail={"field": "current_password", "message": "رمز عبور فعلی صحیح نیست."})
+        clear_login_failures(key)
 
 
 def change_credentials(db, user, *, password):

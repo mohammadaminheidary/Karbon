@@ -55,6 +55,31 @@ app = FastAPI(
 )
 
 
+class PrivateResponseMiddleware:
+    """Set privacy headers without converting buffered responses to streams."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def private_send(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                if scope["path"].startswith("/api/"):
+                    headers = [(k, v) for k, v in headers if k.lower() not in {b"cache-control", b"pragma"}]
+                    headers.extend([(b"cache-control", b"no-store"), (b"pragma", b"no-cache")])
+                headers.append((b"x-content-type-options", b"nosniff"))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, private_send)
+
+
+app.add_middleware(PrivateResponseMiddleware)
+
+
 @app.exception_handler(RequestValidationError)
 async def private_face_validation(request, error):
     if request.url.path.startswith("/api/faces"):
