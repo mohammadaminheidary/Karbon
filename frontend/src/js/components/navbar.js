@@ -24,6 +24,29 @@ export function initializeNavbar() {
     },
     { signal },
   );
+  const reportsButton = host.querySelector("#openReportsButton");
+  let openingReports = false;
+  reportsButton?.addEventListener(
+    "click",
+    async () => {
+      if (openingReports) return;
+      openingReports = true;
+      reportsButton.setAttribute("aria-busy", "true");
+      try {
+        const { openReports } = await import("../reports/reports.js");
+        await openReports();
+      } catch (error) {
+        const { notifyNavbar } = await import("./navbar-notification.js");
+        notifyNavbar(
+          error.message || "بارگذاری گزارش انجام نشد. دوباره تلاش کنید.",
+        );
+      } finally {
+        openingReports = false;
+        reportsButton.removeAttribute("aria-busy");
+      }
+    },
+    { signal },
+  );
   const resetNavigation = initializeNavigation(navbar, { signal });
   const links = [...navbar.querySelectorAll("a")];
   const title = host.querySelector(".navbar-page-title");

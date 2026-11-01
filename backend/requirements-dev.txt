@@ -1,0 +1,3 @@
+-r requirements.txt
+# Used only to verify PDF attachments, Unicode output and selected export data.
+pypdf>=5,<7

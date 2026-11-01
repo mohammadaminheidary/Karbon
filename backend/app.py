@@ -37,6 +37,7 @@ from services.customer_ids import initialize_customer_ids
 from services.auth_settings import initialize_auth_storage
 from routes.faces import router as faces_router
 from routes.dashboard import router as dashboard_router
+from routes.reports import router as reports_router
 from security.face_requests import FaceRequestMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
@@ -169,6 +170,7 @@ app.include_router(documents_router)
 app.include_router(document_settings_router)
 app.include_router(faces_router)
 app.include_router(dashboard_router)
+app.include_router(reports_router)
 
 
 # ======================================================
