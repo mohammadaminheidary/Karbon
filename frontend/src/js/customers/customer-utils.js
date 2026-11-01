@@ -108,7 +108,7 @@ export function createSummary(summary, { compact = false } = {}) {
       element(
         "dt",
         compact
-          ? "text-[10px] leading-4 text-mirage/50"
+          ? "text-[0.625rem] leading-4 text-mirage/50"
           : "text-xs text-mirage/50",
         label,
       ),

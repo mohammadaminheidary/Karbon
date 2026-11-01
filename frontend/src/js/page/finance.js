@@ -167,7 +167,7 @@ async function loadCalendar({ scroll = false } = {}) {
           button.append(
             node(
               "p",
-              `mt-2 text-[11px] font-bold ${color}`,
+              `mt-2 text-[0.6875rem] font-bold ${color}`,
               `${label}: ${new Intl.NumberFormat("fa-IR").format(day[key])}`,
             ),
           );

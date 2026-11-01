@@ -18,14 +18,14 @@
 
 .orders-stat dt {
   color: rgb(15 23 42 / 60%);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
 .orders-stat dd {
   margin: 12px 0 0;
   color: var(--color-persian-blue);
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 900;
   line-height: 1.2;
 }
@@ -41,7 +41,7 @@
   border-radius: 18px;
   background: var(--color-persian-blue);
   color: white;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   box-shadow: 0 1px 3px rgb(15 23 42 / 10%);
 }
@@ -89,7 +89,7 @@
   border-bottom: 0;
   border-radius: 16px 16px 0 0;
   color: rgb(15 23 42 / 55%);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   cursor: pointer;
 }
@@ -169,7 +169,7 @@
   .orders-tab {
     flex: 1;
     padding-inline: 10px;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 }
 
@@ -180,7 +180,7 @@
     transform 160ms;
 }
 .orders-create:not(:disabled):hover {
-  background: #19368f;
+  background: var(--theme-strong);
 }
 .orders-create:not(:disabled):active {
   transform: scale(0.96);
@@ -250,7 +250,7 @@
   border-bottom: 1px solid rgb(182 192 198 / 25%);
 }
 .orders-dialog-header h2 {
-  font-size: 19px;
+  font-size: 1.1875rem;
   font-weight: 900;
 }
 .orders-dialog-body {
@@ -264,12 +264,12 @@
 }
 .orders-dialog-body h3 {
   font-weight: 800;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .orders-dialog-body label {
   display: block;
   color: rgb(15 23 42 / 70%);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 .orders-dialog-body input:not([type="checkbox"]),
@@ -284,7 +284,7 @@
   padding: 11px 12px;
   background: rgb(255 255 255 / 72%);
   color: var(--color-mirage);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 400;
   transition:
     border-color 160ms,
@@ -301,7 +301,7 @@
   outline: none;
   border-color: var(--color-persian-blue);
   background: white;
-  box-shadow: 0 0 0 3px rgb(30 64 175 / 10%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-persian-blue) 10%, transparent);
 }
 .orders-dialog-body [aria-invalid="true"] {
   border-color: var(--color-alizarin-crimson) !important;
@@ -321,7 +321,7 @@
 .orders-add-row {
   border-radius: 12px;
   padding: 11px 18px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -332,7 +332,7 @@
 .orders-primary {
   background: var(--color-persian-blue);
   color: white;
-  box-shadow: 0 4px 12px rgb(30 64 175 / 14%);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-persian-blue) 14%, transparent);
 }
 .orders-secondary {
   border: 1px solid rgb(182 192 198 / 45%);
@@ -347,16 +347,16 @@
   height: 36px;
   padding: 0;
   background: rgb(182 192 198 / 12%);
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 .orders-primary:hover {
-  background: #19368f;
-  box-shadow: 0 6px 18px rgb(30 64 175 / 20%);
+  background: var(--theme-strong);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-persian-blue) 20%, transparent);
 }
 .orders-secondary:hover,
 .orders-icon-button:hover,
 .orders-add-row:hover {
-  background: rgb(30 64 175 / 8%);
+  background: color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
 }
 .orders-primary:active,
 .orders-secondary:active,
@@ -401,12 +401,12 @@
   width: 100%;
   padding: 12px;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 .orders-customer-option:hover,
 .orders-customer-option:focus {
-  background: rgb(30 64 175 / 8%);
+  background: color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
   outline: none;
 }
 .orders-customer-details {
@@ -416,17 +416,17 @@
   padding: 18px;
   margin-top: 16px;
   border-radius: 16px;
-  background: rgb(30 64 175 / 4%);
-  border: 1px solid rgb(30 64 175 / 8%);
+  background: color-mix(in srgb, var(--color-persian-blue) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
 }
 .orders-customer-details dt,
 .orders-record-totals dt {
   color: rgb(15 23 42 / 50%);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .orders-customer-details dd {
   margin-top: 5px;
-  font-size: 12px;
+  font-size: 0.75rem;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -453,8 +453,8 @@
 }
 .orders-items-table th {
   padding: 12px 10px;
-  background: rgb(30 64 175 / 4%);
-  font-size: 11px;
+  background: color-mix(in srgb, var(--color-persian-blue) 4%, transparent);
+  font-size: 0.6875rem;
   text-align: start;
   color: rgb(15 23 42 / 55%);
 }
@@ -490,7 +490,7 @@
   width: 28px;
   border-radius: 8px;
   color: var(--color-persian-blue);
-  font-size: 20px;
+  font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -501,7 +501,7 @@
   right: 4px;
 }
 .orders-quantity-button:hover:not(:disabled) {
-  background: rgb(30 64 175 / 8%);
+  background: color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
 }
 .orders-quantity-button:disabled {
   opacity: 0.4;
@@ -512,14 +512,14 @@
 }
 .item-number,
 .item-unit {
-  font-size: 12px;
+  font-size: 0.75rem;
   padding-top: 22px !important;
   white-space: nowrap;
 }
 .item-total {
   display: block;
   color: rgb(15 23 42 / 50%);
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-top: 12px;
   white-space: nowrap;
 }
@@ -530,8 +530,8 @@
 .orders-add-row {
   padding: 6px 10px;
   color: var(--color-persian-blue);
-  background: rgb(30 64 175 / 4%);
-  font-size: 11px;
+  background: color-mix(in srgb, var(--color-persian-blue) 4%, transparent);
+  font-size: 0.6875rem;
 }
 .orders-totals {
   display: grid;
@@ -541,19 +541,19 @@
   margin-top: 20px;
   padding: 18px;
   border-radius: 16px;
-  background: rgb(30 64 175 / 4%);
+  background: color-mix(in srgb, var(--color-persian-blue) 4%, transparent);
 }
 .orders-totals span,
 .orders-payment-top span {
   display: block;
   color: rgb(15 23 42 / 55%);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .orders-totals output,
 .orders-payment-top output {
   display: block;
   margin-top: 8px;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 900;
   color: var(--color-persian-blue);
   overflow-wrap: anywhere;
@@ -569,7 +569,7 @@
 #orderLoadStatus,
 #orderSearchStatus,
 #paymentStatus {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: rgb(15 23 42 / 60%);
   line-height: 1.9;
   margin-top: 8px;
@@ -578,7 +578,7 @@
 .orders-error {
   padding: 12px;
   margin-top: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--color-alizarin-crimson);
   background: rgb(220 38 38 / 5%);
   border-radius: 12px;
@@ -599,8 +599,8 @@
     box-shadow 160ms;
 }
 .orders-method:has(input[type="checkbox"]:checked) {
-  border-color: rgb(30 64 175 / 45%);
-  box-shadow: 0 0 0 2px rgb(30 64 175 / 5%);
+  border-color: color-mix(in srgb, var(--color-persian-blue) 45%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-persian-blue) 5%, transparent);
 }
 .orders-method-choice {
   display: flex !important;
@@ -616,7 +616,7 @@
 }
 .orders-method-icon {
   color: var(--color-persian-blue);
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 .orders-method-fields {
   margin-top: 12px;
@@ -636,7 +636,7 @@
   border-radius: 16px;
   background: rgb(22 163 74 / 7%);
   color: var(--color-eucalyptus);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .orders-panel {
   padding: 20px;
@@ -644,7 +644,7 @@
 .orders-list-status {
   text-align: center;
   padding: 24px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: rgb(15 23 42 / 50%);
 }
 .orders-record {
@@ -654,7 +654,7 @@
   margin-bottom: 16px;
 }
 .orders-record h3 {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 800;
 }
 .orders-record-totals {
@@ -665,7 +665,7 @@
 }
 .orders-record-totals dd {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
@@ -712,7 +712,7 @@
     flex: 1;
     padding-inline: 10px;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
   .orders-record-totals {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -744,7 +744,7 @@
   background: #e9eef5;
 }
 #finalInvoiceStatus {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: #475569;
   margin-bottom: 14px;
 }
@@ -812,7 +812,7 @@
     box-shadow 160ms;
 }
 .orders-record:hover {
-  border-color: rgb(30 64 175 / 35%);
+  border-color: color-mix(in srgb, var(--color-persian-blue) 35%, transparent);
   box-shadow: 0 4px 16px rgb(15 23 42 / 5%);
 }
 .orders-card-open {
@@ -858,19 +858,19 @@
 }
 .orders-detail-section td {
   border-bottom: 1px solid rgb(182 192 198 / 20%);
-  font-size: 12px;
+  font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
 .orders-detail-description {
   margin-top: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.9;
 }
 #orderDetailsStatus {
   color: rgb(15 23 42 / 60%);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 @media (prefers-reduced-motion: reduce) {
   .orders-record {

@@ -2,6 +2,7 @@
 <html lang="fa" dir="rtl" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
+    <script src="../src/js/components/appearance.js"></script>
     <script src="../src/js/components/page-bootstrap.js"></script>
     <style>@view-transition { navigation: auto; }</style>
 
@@ -1252,18 +1253,60 @@
               </div>
             </section>
             <!-- Appearance -->
-            <section id="settings-panel-appearance" aria-labelledby="settings-tab-appearance"
-              data-settings-panel="appearance"
+            <section id="settings-panel-appearance" aria-labelledby="settings-tab-appearance" data-settings-panel="appearance"
               class="hidden min-w-0 w-full max-w-full"
             >
-              <div
-                class="rounded-2xl border border-french-gray/30 bg-white p-8 shadow-sm"
-              >
-                <h2 class="text-lg font-black text-mirage">تنظیمات ظاهر</h2>
-
-                <p class="mt-2 text-sm text-mirage/45">
-                  تنظیمات این بخش بعداً پیاده‌سازی می‌شود.
-                </p>
+              <div class="settings-section-heading">
+                <div>
+                  <h2>تنظیمات ظاهر</h2>
+                  <p>رنگ و اندازه نوشته‌ها را مطابق سلیقه خود تنظیم کنید. تغییرات در این مرورگر ذخیره می‌شود.</p>
+                </div>
+              </div>
+              <fieldset class="appearance-section">
+                <legend>رنگ برنامه</legend>
+                <p class="appearance-description">رنگ انتخابی در تمام صفحات اعمال می‌شود.</p>
+                <div class="appearance-swatches" role="group" aria-label="رنگ برنامه">
+                  <button type="button" class="appearance-swatch" data-appearance-theme="blue" aria-pressed="true">
+                    <span class="appearance-swatch-color" style="--swatch: #1e40af" aria-hidden="true">✓</span><span>آبی</span>
+                  </button>
+                  <button type="button" class="appearance-swatch" data-appearance-theme="red" aria-pressed="false">
+                    <span class="appearance-swatch-color" style="--swatch: #b91c1c" aria-hidden="true">✓</span><span>قرمز</span>
+                  </button>
+                  <button type="button" class="appearance-swatch" data-appearance-theme="green" aria-pressed="false">
+                    <span class="appearance-swatch-color" style="--swatch: #15803d" aria-hidden="true">✓</span><span>سبز</span>
+                  </button>
+                  <button type="button" class="appearance-swatch" data-appearance-theme="black" aria-pressed="false">
+                    <span class="appearance-swatch-color" style="--swatch: #18181b" aria-hidden="true">✓</span><span>مشکی</span>
+                  </button>
+                </div>
+              </fieldset>
+              <div id="appearanceFontControls" class="appearance-section">
+                <div class="appearance-font-heading">
+                  <label for="appearanceFontSize">اندازه عمومی قلم</label>
+                </div>
+                <p id="appearanceFontHint" class="appearance-description">برای همه صفحات؛ اندازه اختصاصی هر صفحه بر این تنظیم اولویت دارد.</p>
+                <div class="appearance-slider-row">
+                  <input id="appearanceFontSize" type="range" min="85" max="125" step="5" value="100" dir="ltr" aria-describedby="appearanceFontHint" />
+                  <output id="appearanceFontValue" for="appearanceFontSize">۱۰۰٪</output>
+                  <button id="appearancePageMenuButton" type="button" class="appearance-menu-button" aria-label="اندازه قلم هر صفحه" aria-expanded="false" aria-controls="appearancePageMenu">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                  </button>
+                </div>
+                <div class="appearance-scale-labels" aria-hidden="true"><span>کوچک‌تر</span><span>بزرگ‌تر</span></div>
+                <div id="appearancePageMenu" class="appearance-page-menu" role="region" aria-labelledby="appearancePageMenuTitle" hidden>
+                  <h3 id="appearancePageMenuTitle">اندازه قلم هر صفحه</h3>
+                  <p class="appearance-description">با بازنشانی، صفحه دوباره از اندازه عمومی پیروی می‌کند.</p>
+                  <div id="appearancePageList" class="appearance-page-list"></div>
+                </div>
+              </div>
+              <div class="appearance-preview">
+                <strong>پیش‌نمایش نوشته‌ها</strong>
+                <p>مدیریت کسب و کار با کربن؛ اندازه نوشته‌ها بلافاصله تغییر می‌کند.</p>
+                <span>نمایش این صفحه تابع اندازه اختصاصی تنظیمات است، اگر آن را انتخاب کرده باشید.</span>
+              </div>
+              <p id="appearanceMessage" class="appearance-description" role="status" aria-live="polite"></p>
+              <div class="settings-form-footer">
+                <button id="appearanceResetDefaults" type="button" class="settings-secondary-button">بازنشانی تنظیمات ظاهر به پیش‌فرض</button>
               </div>
             </section>
 

@@ -65,7 +65,7 @@ function renderCard(item) {
     ),
     node(
       "span",
-      "max-w-full break-words rounded-full bg-persian-blue/5 px-2.5 py-1 text-[10px] font-bold text-persian-blue",
+      "max-w-full break-words rounded-full bg-persian-blue/5 px-2.5 py-1 text-[0.625rem] font-bold text-persian-blue",
       item.document_type,
     ),
   );
@@ -81,7 +81,7 @@ function renderCard(item) {
     content,
     node(
       "p",
-      "mt-2 border-t border-french-gray/25 pt-2 text-[10px] text-mirage/35 group-hover:text-persian-blue",
+      "mt-2 border-t border-french-gray/25 pt-2 text-[0.625rem] text-mirage/35 group-hover:text-persian-blue",
       "برای مشاهده جزئیات روی کارت کلیک کنید!",
     ),
   );

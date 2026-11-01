@@ -720,7 +720,7 @@ export class Chart {
       "text-anchor": "middle",
       class: "dash-donut-value",
     });
-    this.donutValue.style.fontSize = `${Math.min(25, radius * 0.5)}px`;
+    this.donutValue.style.fontSize = `${Math.min(25, radius * 0.5) / 16}rem`;
     this.donutLabelLimit = Math.max(
       8,
       Math.floor(((radius - thickness / 2) * 2) / 5.5),

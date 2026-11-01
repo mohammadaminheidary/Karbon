@@ -67,7 +67,7 @@ body.bottom-curtain-open .navbar-items {
   visibility: hidden;
 }
 .bottom-curtain h2 {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 900;
 }
 @media (max-width: 767px) {

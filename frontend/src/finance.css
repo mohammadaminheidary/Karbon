@@ -5,7 +5,7 @@
   min-height: 44px;
   border-radius: 12px;
   padding: 10px 18px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   cursor: pointer;
 }
@@ -22,14 +22,14 @@
   border: 1px solid #b6c0c680;
   border-radius: 12px;
   background: white;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .finance-surface .finance-field:focus {
-  outline: 2px solid #1e40af;
+  outline: 2px solid var(--color-persian-blue);
   outline-offset: 2px;
 }
 .finance-surface label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 .bank-account {
@@ -49,7 +49,7 @@
   transform: translateY(-3px);
 }
 .bank-account:focus-visible {
-  outline: 2px solid #1e40af;
+  outline: 2px solid var(--color-persian-blue);
   outline-offset: 4px;
 }
 .bank-settings-list {
@@ -102,7 +102,7 @@
   position: absolute;
   width: 240px;
   height: 240px;
-  border: 1px solid rgb(30 64 175 / 8%);
+  border: 1px solid color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
   border-radius: 50%;
   left: -110px;
   top: 40px;
@@ -125,7 +125,7 @@
   border-radius: 16px;
   background: white;
   color: #0f172a;
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 .bank-logo img {
   max-width: 100%;
@@ -166,7 +166,7 @@
 }
 .bank-card-number {
   position: relative;
-  font-size: clamp(18px, 2vw, 23px);
+  font-size: clamp(1.125rem, calc(2vw * var(--app-font-scale, 1)), 1.4375rem);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-align: left;
@@ -176,7 +176,7 @@
 .bank-sheba {
   position: relative;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.01em;
   color: rgb(15 23 42 / 55%);
   text-align: left;
@@ -215,7 +215,7 @@
   color: #64748b;
 }
 #chartPeriods button[aria-pressed="true"] {
-  background: #1e40af;
+  background: var(--color-persian-blue);
   color: white;
 }
 
@@ -230,7 +230,7 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 .ledger-date-tabs {
@@ -246,17 +246,17 @@
   border-radius: 10px;
   background: white;
   color: #64748b;
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
   transition:
     background 0.18s,
     color 0.18s;
 }
 .ledger-date-tabs button[aria-pressed="true"] {
-  background: #1e40af;
-  border-color: #1e40af;
+  background: var(--color-persian-blue);
+  border-color: var(--color-persian-blue);
   color: white;
-  box-shadow: 0 3px 8px #1e40af25;
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--color-persian-blue) 14.51%, transparent);
 }
 .ledger-filter-fields {
   display: grid;
@@ -274,7 +274,7 @@
   background: white;
 }
 .ledger-search-input span {
-  font-size: 27px;
+  font-size: 1.6875rem;
   color: #64748b;
 }
 .finance-surface .ledger-search-input input {

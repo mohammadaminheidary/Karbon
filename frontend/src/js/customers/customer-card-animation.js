@@ -25,7 +25,7 @@ export async function disintegrateCustomerCard(card) {
   wrapper.inert = true;
   wrapper.append(dust);
   const animations = [];
-  const palette = ["#b6c0c6", "#94a3b8", "#1e40af"];
+  const palette = ["#b6c0c6", "#94a3b8", "var(--color-persian-blue)"];
   try {
     // Let the existing dialogs finish closing before the card dissolves.
     animations.push(

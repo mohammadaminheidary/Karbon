@@ -108,7 +108,7 @@ function createCalendarDay(dateKey) {
   ]) {
     const count = node(
       "p",
-      `mt-2 text-[11px] font-bold ${color}`,
+      `mt-2 text-[0.6875rem] font-bold ${color}`,
       `${label}: —`,
     );
     count.dataset[`calendar${status}`] = "true";

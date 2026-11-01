@@ -12,18 +12,18 @@
 }
 .tasks-stat {
   padding: 20px;
-  border: 1px solid rgb(30 64 175 / 15%);
+  border: 1px solid color-mix(in srgb, var(--color-persian-blue) 15%, transparent);
   border-radius: 16px;
-  background: rgb(30 64 175 / 5%);
+  background: color-mix(in srgb, var(--color-persian-blue) 5%, transparent);
 }
 .tasks-stat h2 {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: rgb(15 23 42 / 60%);
 }
 .tasks-stat p {
   margin-top: 12px;
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 900;
   color: var(--color-persian-blue);
 }
@@ -42,7 +42,7 @@
 }
 .tasks-heading h2,
 .task-curtain h2 {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 900;
 }
 .tasks-column {
@@ -75,15 +75,15 @@
   margin-bottom: 18px;
 }
 .tasks-column h3 {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 800;
 }
 .tasks-column > header span {
   border-radius: 10px;
   padding: 2px 10px;
-  background: rgb(30 64 175 / 8%);
+  background: color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
   color: var(--color-persian-blue);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .tasks-column[data-status="in_progress"] > header span {
   background: rgb(245 158 11 / 12%);
@@ -114,7 +114,7 @@
 }
 .task-card:hover,
 .task-card:focus-visible {
-  border-color: rgb(30 64 175 / 30%);
+  border-color: color-mix(in srgb, var(--color-persian-blue) 30%, transparent);
   box-shadow: 0 6px 20px rgb(15 23 42 / 8%);
 }
 .task-card:focus-visible {
@@ -122,7 +122,7 @@
   outline-offset: 3px;
 }
 .task-card h4 {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 800;
   overflow-wrap: anywhere;
 }
@@ -134,14 +134,14 @@
   margin-block: 10px 16px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.9;
   color: rgb(15 23 42 / 65%);
 }
 .task-card time {
   display: block;
   margin-block: 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: rgb(15 23 42 / 55%);
 }
 .task-card[draggable="true"] {
@@ -157,13 +157,13 @@
 }
 .tasks-column.is-drag-over {
   border-color: var(--color-persian-blue);
-  background: rgb(30 64 175 / 8%);
+  background: color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
 }
 .tasks-empty,
 #tasksStatus {
   padding: 20px 8px;
   text-align: center;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: rgb(15 23 42 / 50%);
 }
 #tasksError,
@@ -174,7 +174,7 @@
   border-radius: 12px;
   background: rgb(220 38 38 / 8%);
   color: var(--color-alizarin-crimson);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .tasks-surface.task-form-open,
 .tasks-surface.task-details-open {
@@ -193,7 +193,7 @@
   gap: 12px;
 }
 .task-details h2 {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 900;
   overflow-wrap: anywhere;
 }
@@ -208,23 +208,23 @@
   background: rgb(255 255 255 / 45%);
 }
 .task-details dt {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: rgb(15 23 42 / 55%);
 }
 .task-details dd {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
 }
 .task-details h3 {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 800;
 }
 .task-full-description {
   margin-block: 12px 24px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 2;
 }
 .task-details > footer {
@@ -241,7 +241,7 @@
 }
 .task-delete-confirmation p {
   margin-bottom: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 @media (max-width: 767px) {
   .tasks-container {
@@ -254,10 +254,10 @@
     padding: 14px 10px;
   }
   .tasks-stat h2 {
-    font-size: 12px;
+    font-size: 0.75rem;
   }
   .tasks-stat p {
-    font-size: 24px;
+    font-size: 1.5rem;
   }
   .tasks-board {
     grid-template-columns: minmax(0, 1fr);

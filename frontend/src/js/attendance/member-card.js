@@ -78,7 +78,7 @@ function getMemberStatus(member) {
 function createStatItem(label, value, valueClass = "text-mirage") {
   const item = createElement("div", "rounded-xl bg-alabaster px-3 py-3");
 
-  const title = createElement("p", "text-[11px] font-medium text-mirage/40");
+  const title = createElement("p", "text-[0.6875rem] font-medium text-mirage/40");
 
   title.textContent = label;
 
@@ -151,7 +151,7 @@ export function createMemberCard(member) {
       "rounded-lg",
       "px-3",
       "py-1.5",
-      "text-[11px]",
+      "text-[0.6875rem]",
       "font-black",
       statusConfig.badgeClass,
     ].join(" "),
@@ -187,7 +187,7 @@ export function createMemberCard(member) {
 
   const todayTitle = createElement(
     "p",
-    "text-[10px] font-medium text-mirage/40",
+    "text-[0.625rem] font-medium text-mirage/40",
   );
 
   todayTitle.textContent = "وضعیت امروز";
@@ -205,7 +205,7 @@ export function createMemberCard(member) {
 
   const timeTitle = createElement(
     "p",
-    "text-[10px] font-medium text-mirage/40",
+    "text-[0.625rem] font-medium text-mirage/40",
   );
 
   timeTitle.textContent = "ساعت ثبت";

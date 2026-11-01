@@ -61,6 +61,13 @@ Startup adds the `users.auth_version` column automatically to existing databases
 Sessions created before this update require one new login to obtain tokens tied
 to a stable user ID. The admin reset script also revokes previous sessions.
 
+Settings → Appearance offers blue (default), red, green and black accents and
+an application font scale from 85% to 125%. The three-dot control beside the
+font slider opens individual page sliders; Reset restores that page's inheritance
+from the global size. Preferences are saved in this browser's local storage,
+applied before each page paints, and synchronized between open tabs. They remain
+after logout and browser restarts; clearing site data restores the defaults.
+
 ```sh
 npm --prefix frontend run build
 npm --prefix frontend run dev

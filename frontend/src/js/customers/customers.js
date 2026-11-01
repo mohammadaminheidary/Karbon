@@ -99,12 +99,12 @@ function createCustomerCard(customer) {
     ),
     element(
       "p",
-      "text-[10px] text-mirage/45",
+      "text-[0.625rem] text-mirage/45",
       `کد مشتری: ${formatNumber(customer.customer_code)}`,
     ),
   );
   const status = statusMeta(customer.summary.status);
-  const permanentID = element("p", "text-[10px] text-persian-blue");
+  const permanentID = element("p", "text-[0.625rem] text-persian-blue");
   const permanentCode = element("bdi", "font-mono", customer.permanent_id);
   permanentCode.dir = "ltr";
   permanentCode.dataset.customerPermanentId = customer.permanent_id;
@@ -114,7 +114,7 @@ function createCustomerCard(customer) {
     identity,
     element(
       "span",
-      `rounded-full px-2.5 py-1 text-[10px] font-bold ${status.classes}`,
+      `rounded-full px-2.5 py-1 text-[0.625rem] font-bold ${status.classes}`,
       status.label,
     ),
   );
@@ -142,7 +142,7 @@ function createCustomerCard(customer) {
     createSummary(customer.summary, { compact: true }),
     element(
       "p",
-      "mt-2 text-[10px] text-mirage/35 group-hover:text-persian-blue",
+      "mt-2 text-[0.625rem] text-mirage/35 group-hover:text-persian-blue",
       "برای مشاهده جزئیات روی کارت کلیک کنید!",
     ),
   );

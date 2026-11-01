@@ -30,15 +30,15 @@ html:has(body.documents-surface) {
     background 250ms ease;
 }
 .document-switch[aria-checked="true"] {
-  background: rgb(30 64 175 / 12%);
-  box-shadow: inset 0 0 0 1px rgb(30 64 175 / 10%);
+  background: color-mix(in srgb, var(--color-persian-blue) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-persian-blue) 10%, transparent);
 }
 .document-switch[aria-checked="true"] span {
   transform: translateX(22px);
   background: var(--color-persian-blue);
 }
 .document-switch:focus-visible {
-  outline: 3px solid rgb(30 64 175 / 35%);
+  outline: 3px solid color-mix(in srgb, var(--color-persian-blue) 35%, transparent);
   outline-offset: 4px;
 }
 .document-filter-panel {
@@ -136,10 +136,10 @@ html:has(body.documents-surface) {
   border-radius: 12px;
   background: rgb(220 38 38 / 8%);
   color: var(--color-alizarin-crimson);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .documents-surface .task-curtain h2 {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 900;
 }
 .documents-surface .document-registration-panel {
@@ -179,7 +179,7 @@ html:has(body.documents-surface) {
   z-index: 1;
   padding: 12px;
   background: #eef2f7;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   border-bottom: 1px solid #b6c0c680;
 }
@@ -198,13 +198,13 @@ html:has(body.documents-surface) {
   width: 100%;
   min-height: 48px;
   padding: 12px 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   background: transparent;
 }
 .document-entry-table :is(input, select):focus {
   outline: 2px solid var(--color-persian-blue);
   outline-offset: -2px;
-  background: rgb(30 64 175 / 3%);
+  background: color-mix(in srgb, var(--color-persian-blue) 3%, transparent);
 }
 .document-entry-table th:first-child {
   width: 23%;
@@ -231,7 +231,7 @@ html:has(body.documents-surface) {
   padding: 16px;
   border-radius: 12px;
   background: white;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .document-form-totals strong {
   margin-inline-start: 10px;
@@ -242,7 +242,7 @@ html:has(body.documents-surface) {
 }
 .document-details-table td {
   padding: 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
 }
 @media (max-width: 600px) {

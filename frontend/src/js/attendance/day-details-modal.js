@@ -119,7 +119,7 @@ function ensureModal() {
 
   const headerText = createElement("div");
 
-  const eyebrow = createElement("p", "text-[11px] font-bold text-mirage/35");
+  const eyebrow = createElement("p", "text-[0.6875rem] font-bold text-mirage/35");
 
   eyebrow.textContent = "جزئیات حضور و غیاب";
 
@@ -382,7 +382,7 @@ function createMemberRow(member, type) {
     .filter(Boolean)
     .join(" ");
 
-  const phone = createElement("p", "mt-1 text-[11px] text-mirage/40");
+  const phone = createElement("p", "mt-1 text-[0.6875rem] text-mirage/40");
 
   phone.textContent = member.phone || "بدون شماره تماس";
 
@@ -396,7 +396,7 @@ function createMemberRow(member, type) {
       "rounded-lg",
       "px-2.5",
       "py-1.5",
-      "text-[10px]",
+      "text-[0.625rem]",
       "font-black",
 
       type === "present"
@@ -407,7 +407,7 @@ function createMemberRow(member, type) {
 
   status.textContent = type === "present" ? "حاضر" : "غایب";
 
-  const time = createElement("p", "mt-2 text-[11px] font-bold text-mirage/45");
+  const time = createElement("p", "mt-2 text-[0.6875rem] font-bold text-mirage/45");
 
   time.textContent = formatTime(member.recorded_time);
 

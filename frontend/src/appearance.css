@@ -7,3 +7,70 @@
   --theme-light: #dbeafe;
   --theme-tint: #eff6ff;
 }
+:root[data-theme="red"] {
+  --color-persian-blue: #b91c1c;
+  --theme-strong: #991b1b;
+  --theme-mid: #ef4444;
+  --theme-soft: #fca5a5;
+  --theme-light: #fee2e2;
+  --theme-tint: #fef2f2;
+}
+:root[data-theme="green"] {
+  --color-persian-blue: #15803d;
+  --theme-strong: #166534;
+  --theme-mid: #22c55e;
+  --theme-soft: #86efac;
+  --theme-light: #dcfce7;
+  --theme-tint: #f0fdf4;
+}
+:root[data-theme="black"] {
+  --color-persian-blue: #18181b;
+  --theme-strong: #09090b;
+  --theme-mid: #52525b;
+  --theme-soft: #a1a1aa;
+  --theme-light: #e4e4e7;
+  --theme-tint: #f4f4f5;
+}
+
+/* The blue login keeps its established artwork; alternate accents use a matching
+   dark surface and the same theme tokens as authenticated pages. */
+:root[data-theme]:not([data-theme="blue"]) body:has(#loginForm) {
+  background-image: linear-gradient(145deg, var(--theme-strong), #09090b);
+}
+:root[data-theme]:not([data-theme="blue"]) #loginForm {
+  border-color: var(--theme-soft);
+  background: rgb(9 9 11 / 65%);
+  box-shadow: 0 25px 70px -20px rgb(0 0 0 / 75%);
+}
+:root[data-theme]:not([data-theme="blue"]) #loginForm input {
+  background: rgb(9 9 11 / 65%);
+  border-color: var(--theme-soft);
+  caret-color: var(--theme-soft);
+}
+:root[data-theme]:not([data-theme="blue"]) #loginForm input:focus {
+  border-color: var(--theme-mid);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-mid) 25%, transparent);
+}
+:root[data-theme]:not([data-theme="blue"]) #loginForm button[type="submit"] {
+  background: var(--color-persian-blue);
+  box-shadow: 0 10px 25px -8px
+    color-mix(in srgb, var(--color-persian-blue) 70%, transparent);
+}
+:root[data-theme]:not([data-theme="blue"])
+  #loginForm
+  button[type="submit"]:hover {
+  background: var(--theme-strong);
+}
+:root[data-theme]:not([data-theme="blue"]) #loginForm button:focus-visible {
+  outline: 2px solid var(--theme-soft);
+  outline-offset: 3px;
+  --tw-ring-color: var(--theme-mid);
+}
+:root[data-theme]:not([data-theme="blue"]) #loginForm input:focus + span,
+:root[data-theme]:not([data-theme="blue"]) #toggleEye:hover {
+  color: var(--theme-soft);
+}
+:root[data-theme]:not([data-theme="blue"]) #loginForm ::selection {
+  background: var(--color-persian-blue);
+  color: white;
+}

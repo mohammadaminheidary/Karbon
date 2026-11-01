@@ -2,6 +2,7 @@ import { notifyNavbar } from "../components/navbar-notification.js";
 import { startPage } from "../components/page-ready.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { onPageRefresh } from "../components/data-events.js";
+import { initializeAppearanceSettings } from "../components/appearance-settings.js";
 const initializeDocumentAccounts = lazyTool(() => import("../documents/account-settings.js"), "initializeDocumentAccounts");
 const initializeExpenseSettings = lazyTool(() => import("../finance/expense-settings.js"), "initializeExpenseSettings");
 const initializeBankAccounts = lazyTool(() => import("../finance/bank-accounts.js"), "initializeBankAccounts");
@@ -509,7 +510,7 @@ function createMemberRow(
   const id =
     createElement(
       "p",
-      "mt-1 text-[11px] text-mirage/35"
+      "mt-1 text-[0.6875rem] text-mirage/35"
     );
 
 
@@ -1735,6 +1736,8 @@ async function initSettingsPage() {
   setupEvents();
 
   setupSettingsNavigation();
+
+  initializeAppearanceSettings();
 
   onPageRefresh(loadMembers, {
     isVisible: () => document.querySelector('[data-settings-panel="members"]').getClientRects().length > 0,

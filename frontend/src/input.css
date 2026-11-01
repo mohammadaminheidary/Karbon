@@ -106,7 +106,7 @@ html {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   padding-inline: 8px;
 }
@@ -117,7 +117,7 @@ html {
   height: 24px;
   justify-self: center;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 24px;
   font-variant-numeric: tabular-nums;
   contain: size layout style;
@@ -140,7 +140,7 @@ html {
   justify-content: center;
   padding-inline: 8px;
   color: var(--color-persian-blue);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   white-space: nowrap;
   opacity: 0;
@@ -237,10 +237,10 @@ html {
   background: linear-gradient(
     150deg,
     rgb(255 255 255 / 85%),
-    rgb(30 64 175 / 13%)
+    color-mix(in srgb, var(--color-persian-blue) 13%, transparent)
   );
   box-shadow:
-    0 2px 8px rgb(30 64 175 / 10%),
+    0 2px 8px color-mix(in srgb, var(--color-persian-blue) 10%, transparent),
     inset 0 1px 0 rgb(255 255 255 / 90%);
 }
 
@@ -280,7 +280,7 @@ html {
   background: rgb(15 23 42 / 92%);
   box-shadow: 0 4px 12px rgb(15 23 42 / 12%);
   color: white;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
   white-space: nowrap;
   pointer-events: none;
@@ -360,11 +360,11 @@ html {
     width: 100%;
   }
   .navbar-page-title {
-    font-size: 12px;
+    font-size: 0.75rem;
     padding-inline: 4px;
   }
   .navbar-clock {
-    font-size: 10.5px;
+    font-size: 0.65625rem;
   }
   .navbar-item:nth-child(6n + 1) .navbar-tooltip {
     right: 0;
