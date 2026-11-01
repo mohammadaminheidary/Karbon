@@ -1,11 +1,58 @@
 # Database-driven reports
 
-The chart icon in the shared navbar opens **گزارش و خروجی** through the existing
-`NavbarPanelDialog` expansion. It starts on the current page's dataset and also
-provides a central dataset selector. Customers, orders, order items/payments,
-financial transactions, bank accounts/directory, expense categories, products,
-inventory reference lists, documents/accounts, members, attendance and tasks are
-supported (15 datasets).
+The chart icon in the shared navbar navigates to the standalone **گزارش و خروجی**
+page (`/page/reports-page.html`). Its right-side **گزارش جدید** action opens the
+existing `NavbarPanelDialog` slide-up export panel. Customers, orders, order
+items/payments, financial transactions, bank accounts/directory, expense
+categories, products, inventory reference lists, documents/accounts, members,
+attendance and tasks are supported (15 datasets).
+
+## Saved history
+
+Every successful export is stored automatically, before its download response,
+in the internal `generated_reports` SQLite table. Startup creates this table
+without changing business tables or deleting existing history. The generated
+file and metadata commit in one transaction; a generation/storage failure
+leaves no partial entry. Each account sees only its own reports, newest first,
+with pagination and authenticated downloads. History is excluded from the
+reportable dataset allowlist. Names are optional and default to the dataset
+title; date/time is displayed in the Persian calendar and Tehran timezone.
+
+History preserves the original PDF/XLSX bytes, selected query parameters,
+record/column counts and size. A later download never re-runs the query, and
+remains unchanged after source data edits. Files live inside the configured
+SQLite database, so database backups include report history; storage grows
+with the generated files. List queries omit file content. The page refreshes
+after generation, on browser history restoration, and when a tab becomes
+visible; manual refresh also supports retry after connection failures.
+
+Report cards link to `/page/report-details-page.html?id=…`, which displays the
+saved metadata and provides the original download and a delete action. Deletion
+uses the shared `CurtainDialog` confirmation with cancel focus, a pending guard,
+and an inline retryable error. Only the report owner can read its details or
+delete it; successful deletion removes that report and its stored file without
+changing business data. The list header shows the total report count, updated
+after generation/deletion and synchronized between tabs through the existing
+data-change mechanism. Refresh uses an accessible icon and tooltip.
+
+Report IDs are positive integers, unique across all active reports and all
+accounts. The database primary key enforces uniqueness. After rendering finishes,
+allocation reserves SQLite's writer with `BEGIN IMMEDIATE`, finds the smallest
+unused positive ID, and saves the file and metadata in the same transaction.
+Deletion uses the same write reservation; its ID is released only at commit.
+Failed operations roll back without reserving an unused ID or releasing an
+active one. Existing IDs and files are preserved without a schema migration.
+Cards and details display the assigned ID. The history tests exercise gap reuse,
+concurrent generation/deletion, cross-account uniqueness, and rollback behavior.
+
+The larger right navbar and its label-wrapping rules are scoped to the
+`.reports-page` body on the list page. Shared navbar CSS retains its original
+width, layout, and styling, including on the report details page. Browser checks
+verify unchanged desktop/mobile navbars on the other business modules.
+
+Exports made by older versions were temporary downloads and were deleted
+from the server after delivery. There is no existing server archive to migrate
+or recover; files already downloaded to a user's device remain there.
 
 There is currently no production table or inventory-movement table. Warehouse
 reporting uses the actual `products` and `inventory_options` records; it does not
@@ -30,8 +77,9 @@ movement, category relationship on products, or other business data is invented.
   Suggestions use real distinct values; foreign-key suggestions also search
   existing related names. Null and empty-string filters are distinct.
 - Soft-deleted records are excluded by default and explicitly opt-in. Related
-  historical records remain readable. No table, index, trigger or migration is
-  created by reporting.
+  historical records remain readable. Reporting never alters business tables,
+  indexes or triggers. Its only additional storage is the internal
+  generated-report history table.
 - Selection persists across pages. “Select all” means every matching result,
   including unloaded pages; individual exclusions remain supported. Changing
   applied filters or datasets clears selection. Column changes preserve it.
@@ -65,7 +113,8 @@ backups, and contain no authentication or biometric data.
 Preview pages contain 50 records (API maximum 200). Results are fetched in batches
 of 200 into a spool with a 1 MiB memory threshold. The read snapshot/connection is
 released before font shaping and file compression, allowing concurrent edits.
-Files are generated in unique temporary paths, deleted after the response, and
+Files are generated in unique temporary paths, saved to history after successful
+generation, then the temporary copies are deleted after the response. Files are
 sent with `Cache-Control: no-store`. Errors also delete temporary output files.
 The export limit is 50,000 records per file with an actionable filter message.
 PDF's renderer necessarily retains its page content while constructing the PDF;
@@ -79,7 +128,7 @@ npm --prefix frontend run build
 
 # The PDF parser is needed only by the integration tests.
 python3 -m pip install -r backend/requirements-dev.txt
-python3 -m unittest discover -s backend/tests -p test_reports.py -v
+python3 -m unittest discover -s backend/tests -p 'test_report*.py' -v
 python3 -m unittest discover -s backend/tests -v
 npm --prefix frontend test
 python3 -m unittest discover -s frontend/tests -v
@@ -105,7 +154,10 @@ file creation. These are synthetic development measurements, not production
 latency guarantees. PDF rendering was visually reviewed with Poppler; exported
 Excel values, types, style/RTL XML and a rendered range were inspected. Chromium
 checks run against both development and built production assets and cover nine
-module entry points, all 15 datasets, cross-page selection,
+module navigation to the history page, all 15 datasets, cross-page selection,
 select-all exclusions, real file downloads, Persian date filtering, error/retry,
-focus restoration, a 390px viewport and reduced motion. No native Excel desktop
-application was used during verification.
+history metadata and unchanged downloads after reload, history refresh error/retry,
+focus restoration, card details, confirmed deletion/cancel/error/retry, cross-tab
+count updates, navbar labels at 320–1440px and 125% text, theme changes and
+reduced motion. No native
+Excel desktop application was used during verification.

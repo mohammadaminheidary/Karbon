@@ -95,9 +95,12 @@ remains `http://127.0.0.1:8000/api`.
 See [the current performance audit](docs/performance/2026-10-29-followup.md) for
 reproducible synthetic benchmarks and the limits of their results.
 
-The navbar's **گزارش و خروجی** opens database-driven reports for the current
-module, with a central selector for all 15 existing business datasets. It supports
-field selection, filters, cross-page record selection and Persian RTL PDF/XLSX
-exports without changing the database schema. Install the updated backend
-requirements before using exports. See [reporting and verification](docs/reports/README.md)
-for supported data, precision preservation, limits and isolated test commands.
+The navbar's **گزارش و خروجی** opens a standalone page of saved PDF/XLSX
+reports. **گزارش جدید** in its right navbar island opens the existing slide-up
+export panel, with a central selector for all 15 business datasets. Completed
+exports are saved automatically to the authenticated user's history, including
+the original file, name, generation date, format, row/column counts and size.
+Later downloads preserve the original data even after business records change.
+Install the updated backend requirements before using exports. See
+[reporting and verification](docs/reports/README.md) for supported data,
+precision preservation, history storage and isolated test commands.
