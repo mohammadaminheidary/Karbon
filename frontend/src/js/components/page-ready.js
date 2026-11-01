@@ -1,3 +1,5 @@
+import { startConnectionMonitor } from "./connection.js";
+
 // Page setup may await auth and data after the document's load event. Track
 // that work explicitly so failures and tests cannot mistake HTML for readiness.
 export async function startPage(initialize) {
@@ -7,6 +9,7 @@ export async function startPage(initialize) {
         document.addEventListener("DOMContentLoaded", resolve, { once: true }),
       );
     }
+    startConnectionMonitor();
     const result = await initialize();
     const failure = document.getElementById("pageStartupError");
     if (

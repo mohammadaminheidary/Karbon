@@ -1,4 +1,5 @@
 import { getToken, logout } from "../auth/auth-storage.js";
+import { connectionFetch as fetch } from "../components/connection.js";
 import { invalidateApiCache } from "../components/api-cache.js";
 import { publishDataChange } from "../components/data-events.js";
 
@@ -38,7 +39,7 @@ export async function faceRequest(
         ...(body ? { "Content-Type": "application/json" } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
-    });
+    }, timeout);
     data =
       response.status === 204
         ? null

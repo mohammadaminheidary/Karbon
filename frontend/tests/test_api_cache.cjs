@@ -8,6 +8,7 @@ const source = fs
     path.join(__dirname, "../src/js/components/api-cache.js"),
     "utf8",
   )
+  .replace(/^import .*;\n/gm, "")
   .replace(/^export /gm, "");
 const url = "http://localhost/api/customers?limit=12&skip=0";
 const headers = { Authorization: "Bearer account-one" };

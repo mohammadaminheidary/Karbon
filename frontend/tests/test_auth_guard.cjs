@@ -90,3 +90,25 @@ test("history restoration validates again and an outstanding check cannot reveal
   assert.equal(stale.document.documentElement.dataset.authState, "pending");
   assert.equal(stale.redirects.length, 1);
 });
+
+test("connection recovery revalidates the session without reloading the document", async () => {
+  let calls = 0;
+  const f = fixture(async () => { calls++; return { success: true }; });
+  await f.protect();
+  f.listeners["karbon:connection-restored"]();
+  await f.protect();
+  assert.equal(calls, 2);
+  assert.equal(f.redirects.length, 0);
+  assert.equal(f.document.documentElement.dataset.authState, "authenticated");
+});
+
+test("a session revoked during an outage still redirects on recovery", async () => {
+  let valid = true;
+  const f = fixture(async () => valid ? { success: true } : null);
+  await f.protect();
+  valid = false;
+  f.listeners["karbon:connection-restored"]();
+  assert.equal(await f.protect(), false);
+  assert.equal(f.logouts(), 1);
+  assert.deepEqual(f.redirects, ["/page/login-page.html"]);
+});

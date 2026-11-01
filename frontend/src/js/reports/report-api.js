@@ -1,4 +1,5 @@
 import { getToken, logout } from "../auth/auth-storage.js";
+import { connectionFetch as fetch } from "../components/connection.js";
 import { publishDataChange } from "../components/data-events.js";
 
 const API = "http://127.0.0.1:8000/api/reports";
@@ -20,7 +21,7 @@ export async function request(
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  }, 120000); // Export generation can legitimately take longer than ordinary reads.
   if (response.status === 401) {
     logout();
     window.location.replace("/page/login-page.html");

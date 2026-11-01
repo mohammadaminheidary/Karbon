@@ -4,7 +4,6 @@ import { getToken, logout } from "../auth/auth-storage.js";
 let installed = false;
 let pending;
 let expiryTimer;
-let validationFailed = false;
 function state(value) {
   document.documentElement.dataset.authState = value;
 }
@@ -23,6 +22,7 @@ export function protectPage() {
       if (!document.hidden) void protectPage();
     });
     window.addEventListener("focus", () => { void protectPage(); });
+    window.addEventListener("karbon:connection-restored", () => { void protectPage(); });
   }
   if (pending) return pending;
   pending = validateSession().finally(() => { pending = undefined; });
@@ -47,11 +47,6 @@ async function validateSession() {
       redirectToLogin();
       return false;
     }
-    // Initializers stop on validation failure; resume them through a clean retry.
-    if (validationFailed) {
-      window.location.reload();
-      return false;
-    }
     clearTimeout(expiryTimer);
     try {
       const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
@@ -69,7 +64,6 @@ async function validateSession() {
   } catch (error) {
     if (getToken() !== token) { redirectToLogin(); return false; }
     console.error("Authentication validation failed:", error);
-    validationFailed = true;
     state("error");
     window.dispatchEvent(new CustomEvent("karbon:startup-error", {
       detail: "ارتباط با سرور برقرار نشد. پس از برقراری ارتباط دوباره تلاش کنید.",

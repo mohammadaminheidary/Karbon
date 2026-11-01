@@ -1,4 +1,5 @@
 import { apiFetch } from "../components/api-cache.js";
+import { connectionFetch as fetch } from "../components/connection.js";
 const API_URL = "http://127.0.0.1:8000/api";
 
 export class SecurityApiError extends Error {

@@ -77,7 +77,7 @@ class FixtureHandler(SimpleHTTPRequestHandler):
         # environment can run beside the user's normal app without logging out
         # their session or changing any production JavaScript configuration.
         path = urlsplit(self.path).path
-        if path in ["/src/js/auth/auth-api.js", "/src/js/customers/customer-api.js", "/src/js/finance/finance-api.js", "/src/js/members/members-api.js", "/src/js/attendance/attendance-api.js", "/src/js/attendance/face-api.js", "/src/js/tasks/tasks-api.js"]:
+        if path in ["/src/js/components/connection.js", "/src/js/reports/report-api.js", "/src/js/auth/auth-api.js", "/src/js/customers/customer-api.js", "/src/js/finance/finance-api.js", "/src/js/members/members-api.js", "/src/js/attendance/attendance-api.js", "/src/js/attendance/face-api.js", "/src/js/tasks/tasks-api.js"]:
             content = (ROOT / path.lstrip("/")).read_text().replace(
                 "http://127.0.0.1:8000/api",
                 f"http://127.0.0.1:{args.backend_port if args.direct_api else args.frontend_port}/api",

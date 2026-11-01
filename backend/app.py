@@ -173,6 +173,12 @@ app.add_middleware(
 # Routers
 # ======================================================
 
+@app.get("/api/health", include_in_schema=False)
+async def health():
+    """Cheap, unauthenticated reachability check; no database or session work."""
+    return {"status": "ok"}
+
+
 app.include_router(
     auth_router
 )

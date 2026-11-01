@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./appearance.css";
+@import "./connection.css";
 @import "./reports.css";
 
 @font-face {

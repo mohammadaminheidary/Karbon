@@ -1,3 +1,5 @@
+import { connectionFetch as fetch } from "./connection.js";
+
 const storageKey = "karbon-api-cache-v1";
 const revisionKey = "karbon-data-change";
 const maxAge = 30000;
@@ -184,7 +186,6 @@ export async function apiFetch(input, options = {}) {
     const controller = new AbortController();
     request = { key, controller, consumers: new Set() };
     const current = request;
-    const timeout = setTimeout(() => controller.abort(), 15000);
     request.promise = (async () => {
       try {
         const response = await fetch(input, {
@@ -224,7 +225,6 @@ export async function apiFetch(input, options = {}) {
         }
         return snapshot;
       } finally {
-        clearTimeout(timeout);
         if (pending.get(key) === current) pending.delete(key);
       }
     })();
