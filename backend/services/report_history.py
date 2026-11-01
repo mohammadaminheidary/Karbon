@@ -2,7 +2,7 @@
 from datetime import timezone
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from models.generated_report import GeneratedReport
 from services import report_service
@@ -16,6 +16,21 @@ def save(db, user_id, name, request, fmt, path, record_count, column_count):
         size_bytes=len(content), parameters=request.model_dump(mode="json"), content=content,
     )
     try:
+        # Export has finished its read snapshot. Reserve SQLite's writer before
+        # choosing an ID so simultaneous workers cannot claim the same gap.
+        db.rollback()
+        db.execute(text("BEGIN IMMEDIATE"))
+        report.id = db.scalar(text("""
+            SELECT MIN(candidate)
+            FROM (
+                SELECT 1 AS candidate
+                UNION ALL
+                SELECT id + 1 FROM generated_reports
+            ) AS candidates
+            WHERE NOT EXISTS (
+                SELECT 1 FROM generated_reports WHERE id = candidates.candidate
+            )
+        """))
         db.add(report)
         db.commit()
     except BaseException:
@@ -40,9 +55,17 @@ def metadata(r):
 
 
 def remove(db, user_id, report_id):
-    report = get(db, user_id, report_id)
-    db.delete(report)
-    db.commit()
+    try:
+        # Deletion and allocation share the same database-level write lock.
+        # A deleted ID becomes available only when this transaction commits.
+        db.rollback()
+        db.execute(text("BEGIN IMMEDIATE"))
+        report = get(db, user_id, report_id)
+        db.delete(report)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
 
 
 def get(db, user_id, report_id):

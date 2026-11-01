@@ -1,11 +1,13 @@
 """Durable report history on a disposable database, including immutable bytes and ownership."""
 from contextlib import closing
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 import json
 import os
 import sqlite3
 import subprocess
 import sys
+from threading import Barrier
 import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -139,7 +141,98 @@ class ReportHistoryTests(unittest.TestCase):
                 db.execute("DROP TRIGGER fail_report_history")
         self.assertEqual(self.binary("/reports/customers/export/xlsx", {"columns": ["id"]})[0], 200)
         self.assertEqual(self.request("GET", "/reports/history")[1]["total"], 1)
+        self.assertEqual(self.request("GET", "/reports/history")[1]["items"][0]["id"], 1)
 
+    def generate(self, name, token=None):
+        status, raw, _ = self.binary("/reports/customers/export/xlsx", {
+            "columns": ["id"], "ids": [self.customer["id"]], "report_name": name,
+        }, token=token)
+        self.assertEqual(status, 200, raw)
+
+    def test_reuse_lowest_available_id_and_preserve_existing_reports(self):
+        for i in range(4):
+            self.generate(f"original-{i}")
+        history = self.request("GET", "/reports/history")[1]["items"]
+        self.assertEqual(sorted(r["id"] for r in history), [1, 2, 3, 4])
+        original = self.binary("/reports/history/3/download")[1]
+        for report_id in [2, 4]:
+            self.assertEqual(self.request("DELETE", f"/reports/history/{report_id}")[0], 204)
+        self.generate("reuses-2")
+        self.generate("reuses-4")
+        by_name = {r["name"]: r["id"] for r in self.request("GET", "/reports/history")[1]["items"]}
+        self.assertEqual(by_name["reuses-2"], 2)
+        self.assertEqual(by_name["reuses-4"], 4)
+        self.assertEqual(self.request("DELETE", "/reports/history/1")[0], 204)
+        self.generate("reuses-1")
+        self.assertEqual(self.request("GET", "/reports/history")[1]["items"][0]["id"], 1)
+        self.assertEqual(self.binary("/reports/history/3/download")[1], original)
+        with closing(sqlite3.connect(self.database)) as db:
+            with self.assertRaises(sqlite3.IntegrityError):
+                db.execute("INSERT INTO generated_reports SELECT * FROM generated_reports WHERE id=3")
+
+    def test_existing_sparse_ids_and_other_accounts_are_never_renumbered_or_reused(self):
+        self.generate("existing")
+        original = self.binary("/reports/history/1/download")[1]
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE generated_reports SET id=17 WHERE id=1")
+            db.execute("INSERT OR IGNORE INTO users(username,password_hash,auth_version) SELECT 'report-other',password_hash,0 FROM users WHERE username='customers-test'")
+        other = self.request("POST", "/login", {"username": "report-other", "password": "test-password"}, authenticated=False)[1]["token"]
+        self.generate("other-account", token=other)
+        self.generate("current-account")
+        reports = {r["name"]: r["id"] for r in self.request("GET", "/reports/history")[1]["items"]}
+        self.assertEqual(reports, {"existing": 17, "current-account": 2})
+        self.assertEqual(self.binary("/reports/history/17/download")[1], original)
+        status, content, _ = self.binary("/reports/history", token=other)
+        self.assertEqual(json.loads(content)["items"][0]["id"], 1)
+
+    def test_concurrent_generations_and_deletions_cannot_duplicate_active_ids(self):
+        barrier = Barrier(8)
+        def generate(i):
+            barrier.wait(timeout=10)
+            self.generate(f"concurrent-{i}")
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(generate, range(8)))
+        history = self.request("GET", "/reports/history")[1]
+        self.assertEqual(sorted(r["id"] for r in history["items"]), list(range(1, 9)))
+        self.assertEqual(len({r["name"] for r in history["items"]}), 8)
+
+        barrier = Barrier(8)
+        def change(i):
+            barrier.wait(timeout=10)
+            if i < 3:
+                self.assertEqual(self.request("DELETE", f"/reports/history/{2 + i*2}")[0], 204)
+            else:
+                self.generate(f"mixed-{i}")
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(change, range(8)))
+        history = self.request("GET", "/reports/history")[1]
+        active_ids = {r["id"] for r in history["items"]}
+        self.assertEqual(history["total"], 10)
+        self.assertEqual(len(active_ids), 10)
+        next_id = next(i for i in range(1, 12) if i not in active_ids)
+        self.generate("after-race")
+        self.assertEqual(self.request("GET", "/reports/history")[1]["items"][0]["id"], next_id)
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute("SELECT count(*),count(DISTINCT id) FROM generated_reports").fetchone(), (11, 11))
+
+    def test_failed_deletion_does_not_release_an_active_id(self):
+        self.generate("keep-until-deleted")
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("CREATE TRIGGER fail_report_delete BEFORE DELETE ON generated_reports BEGIN SELECT RAISE(ABORT, 'test delete failure'); END")
+        try:
+            req = Request(self.base + "/reports/history/1", method="DELETE", headers={"Authorization": "Bearer " + self.token})
+            with self.assertRaises(HTTPError) as error:
+                urlopen(req, timeout=10)
+            self.assertEqual(error.exception.code, 500)
+            error.exception.close()
+            self.generate("uses-2")
+            self.assertEqual(sorted(r["id"] for r in self.request("GET", "/reports/history")[1]["items"]), [1, 2])
+        finally:
+            with closing(sqlite3.connect(self.database)) as db, db:
+                db.execute("DROP TRIGGER fail_report_delete")
+        self.assertEqual(self.request("DELETE", "/reports/history/1")[0], 204)
+        self.generate("uses-1-after-commit")
+        self.assertEqual(self.request("GET", "/reports/history")[1]["items"][0]["id"], 1)
 
 
 if __name__ == "__main__":
