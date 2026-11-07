@@ -150,7 +150,11 @@ try {
     "#units",
   );
   await page.locator("#settingsProductName").fill(`کالای ${name}`);
+  await page
+    .locator("#settingsProductCategory")
+    .selectOption(String(initial.categories.find((item) => item.active).id));
   await page.locator("#settingsProductUnit").selectOption(name);
+  await page.locator("#settingsProductStock").fill("10");
   await page.locator("#settingsProductPrice").fill("1000");
   const saved = page.waitForResponse(
     (r) => r.url().endsWith("/api/products") && r.request().method() === "POST",
@@ -265,18 +269,40 @@ try {
     { name: `دسته ${name}` },
     201,
   );
+  const currentProduct = (
+    await api("GET", "/products?include_inactive=true")
+  ).find((item) => item.id === product.id);
+  await api(
+    "PUT",
+    `/products/${product.id}`,
+    Object.fromEntries(
+      [
+        "name",
+        "unit",
+        "price",
+        "stock",
+        "active",
+        "revision",
+        "category_id",
+      ].map((key) => [
+        key,
+        key === "category_id" ? category.id : currentProduct[key],
+      ]),
+    ),
+  );
   await page.goto(base + "/page/warehouse-page.html#purchase");
   await ready();
   await page.waitForFunction(() =>
     document.querySelector('#purchaseEntryPage[aria-busy="false"]'),
   );
+  await page.locator("#purchaseCategory").selectOption(String(category.id));
   assert.equal(
     await page
-      .locator("#purchaseUnit option")
-      .allTextContents()
-      .then((a) => a.includes(name)),
-    false,
+      .locator(`#purchaseItemName option[value="${product.id}"]`)
+      .count(),
+    0,
   );
+  assert.equal(await page.locator("#purchaseUnit").inputValue(), "");
   const options = await api("GET", "/settings/inventory-options");
   for (const u of options.units.filter((u) => u.active))
     await api("PUT", `/settings/inventory-options/units/${u.id}`, {
@@ -287,7 +313,11 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('#purchaseEntryPage[aria-busy="false"]'),
   );
-  assert.equal(await page.locator("#purchaseUnit").isDisabled(), true);
+  assert.equal(await page.locator("#purchaseItemName").isDisabled(), true);
+  assert.equal(
+    await page.locator("#purchaseUnit").evaluate((el) => el.readOnly),
+    true,
+  );
   await page.goto(base + "/page/settings-page.html#products");
   await ready();
   await page.waitForFunction(() =>
@@ -302,13 +332,12 @@ try {
   });
   await page.goto(base + "/page/warehouse-page.html#purchase");
   await ready();
-  await page.locator("#purchaseUnit:enabled").waitFor();
-  await page.locator("#purchaseUnit").selectOption(String(unit.id));
-  assert.equal(
-    await page.locator("#purchaseUnit option:checked").textContent(),
-    name,
+  await page.waitForFunction(() =>
+    document.querySelector('#purchaseEntryPage[aria-busy="false"]'),
   );
   await page.locator("#purchaseCategory").selectOption(String(category.id));
+  await page.locator("#purchaseItemName").selectOption(String(product.id));
+  assert.equal(await page.locator("#purchaseUnit").inputValue(), name);
   await page.goto(base + "/page/settings-page.html#units");
   await ready();
   await optionsReady();

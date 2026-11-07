@@ -13,6 +13,7 @@
     <title>Karbon | انبار</title>
     <link rel="stylesheet" href="../src/output.css" />
     <link rel="stylesheet" href="../src/orders.css" />
+    <link rel="stylesheet" href="../src/documents.css" />
     <link rel="stylesheet" href="../src/warehouse.css" />
     <script
       type="module"
@@ -542,7 +543,7 @@
         tabindex="-1"
         hidden
       >
-        <form id="purchaseEntryForm">
+        <form id="purchaseEntryForm" novalidate>
           <header class="purchase-heading">
             <div>
               <p class="warehouse-eyebrow">انبار</p>
@@ -556,10 +557,14 @@
             <label for="purchaseDate"
               >تاریخ<input
                 id="purchaseDate"
-                readonly
-                aria-readonly="true"
+                name="purchaseDate"
+                placeholder="1405/08/10"
+                maxlength="10"
+                inputmode="numeric"
+                aria-describedby="purchaseDateHint"
+                required
                 dir="ltr"
-            /></label>
+            /><span id="purchaseDateHint">تاریخ شمسی؛ قابل ویرایش</span></label>
             <label for="purchaseInvoiceNumber"
               >شماره فاکتور خرید<input
                 id="purchaseInvoiceNumber"
@@ -568,60 +573,30 @@
                 dir="ltr"
             /></label>
           </div>
-          <div class="purchase-fields">
-            <label class="purchase-item-name" for="purchaseItemName"
-              >نام کالا<input
-                id="purchaseItemName"
-                name="itemName"
-                maxlength="150"
-                autocomplete="off"
-                required
-            /></label>
-            <label for="purchaseCategory"
-              >دسته‌بندی<select
-                id="purchaseCategory"
-                name="category"
-                required
-                disabled
-              >
-                <option value="">در حال دریافت…</option>
-              </select></label
-            >
-            <label for="purchaseUnit"
-              >واحد<select id="purchaseUnit" name="unit" required disabled>
-                <option value="">در حال دریافت…</option>
-              </select></label
-            >
-            <label for="purchaseQuantity"
-              >مقدار<input
-                id="purchaseQuantity"
-                name="quantity"
-                inputmode="decimal"
-                dir="ltr"
-                maxlength="16"
-                required
-            /></label>
-            <label for="purchasePrice"
-              >قیمت خرید (تومان)<input
-                id="purchasePrice"
-                name="price"
-                inputmode="numeric"
-                dir="ltr"
-                maxlength="21"
-                required
-            /></label>
+          <div class="document-sheet purchase-sheet" tabindex="0" role="region" aria-label="ردیف‌های خرید">
+            <table class="document-entry-table purchase-entry-table">
+              <colgroup><col class="purchase-category-column" /><col class="purchase-product-column" /><col class="purchase-quantity-column" /><col class="purchase-unit-column" /><col class="purchase-price-column" /><col class="purchase-total-column" /><col class="purchase-remove-column" /></colgroup>
+              <thead><tr>
+                <th scope="col">دسته‌بندی</th>
+                <th scope="col">نام کالا</th>
+                <th scope="col">مقدار</th>
+                <th scope="col">واحد</th>
+                <th scope="col">قیمت خرید (تومان)</th>
+                <th scope="col">قیمت کل (تومان)</th>
+                <th scope="col"><span class="sr-only">حذف ردیف</span></th>
+              </tr></thead>
+              <tbody id="purchaseRows"></tbody>
+            </table>
           </div>
-          <div class="purchase-options-help">
-            <a href="/page/settings-page.html#inventory"
-              >تنظیمات دسته‌بندی ←</a
-            ><a href="/page/settings-page.html#units">تنظیمات واحد ←</a
-            ><button
-              type="button"
-              id="reloadPurchaseOptions"
-              class="purchase-back"
-            >
-              بروزرسانی گزینه‌ها
-            </button>
+          <div class="purchase-row-actions">
+            <button type="button" id="addPurchaseRow" class="finance-button border border-persian-blue/25 text-persian-blue" disabled>+ افزودن ردیف</button>
+            <button type="button" id="reloadPurchaseOptions" class="purchase-back">بروزرسانی فهرست</button>
+          </div>
+          <p class="purchase-guidance">دسته‌بندی‌ها را در <a href="/page/settings-page.html#inventory">تنظیمات انبار</a> و کالاها و واحد آن‌ها را در <a href="/page/settings-page.html#products">تنظیمات کالاها</a> تعریف یا ویرایش کنید.</p>
+          <div class="document-form-totals purchase-summary" aria-live="polite" aria-atomic="true">
+            <p>جمع مقدار<strong id="purchaseQuantityTotal">۰</strong></p>
+            <p>تعداد ردیف‌ها<strong id="purchaseRowCount">۱</strong></p>
+            <p>جمع فاکتور<strong id="purchaseInvoiceTotal">۰ تومان</strong></p>
           </div>
           <p
             id="purchaseOptionsStatus"
@@ -629,10 +604,8 @@
             role="status"
           ></p>
           <footer class="purchase-footer">
-            <p>
-              این فرم برای ورود اطلاعات است؛ ثبت نهایی خرید و تغییر موجودی هنوز
-              فعال نیست.
-            </p>
+            <p>پس از ثبت خرید، مقدار هر ردیف به موجودی کالای آن افزوده می‌شود.</p>
+            <button type="submit" id="savePurchaseEntry" class="purchase-back purchase-save" disabled>ثبت خرید</button>
             <button type="button" id="newPurchaseEntry" class="purchase-back">
               فرم جدید
             </button>

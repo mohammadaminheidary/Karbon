@@ -20,12 +20,10 @@ await page.addInitScript(() => {
   window.layoutShifts = [];
   new PerformanceObserver((list) =>
     window.layoutShifts.push(
-      ...list
-        .getEntries()
-        .map((e) => ({
-          value: e.value,
-          sources: e.sources.map((s) => s.node?.className),
-        })),
+      ...list.getEntries().map((e) => ({
+        value: e.value,
+        sources: e.sources.map((s) => s.node?.className),
+      })),
     ),
   ).observe({ type: "layout-shift", buffered: true });
   const original = Element.prototype.animate;
@@ -168,7 +166,9 @@ try {
       "false",
   );
   await page.unroute("**/api/settings/inventory-options");
-  await page.locator("#purchaseItemName").fill("خرید آزمایش");
+  await page.locator("#purchaseCategory").selectOption({ label: "عمومی" });
+  await page.locator("#purchaseItemName").selectOption({ label: "چاپ کارت" });
+  const selectedProduct = await page.locator("#purchaseItemName").inputValue();
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(
@@ -216,7 +216,7 @@ try {
   await settled("purchaseEntryPage");
   assert.equal(
     await page.locator("#purchaseItemName").inputValue(),
-    "خرید آزمایش",
+    selectedProduct,
   );
   await page.locator("#closePurchaseEntry").click();
   await page.waitForFunction(
