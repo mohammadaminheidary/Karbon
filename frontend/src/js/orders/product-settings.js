@@ -14,6 +14,7 @@ import { onPageRefresh } from "../components/data-events.js";
 import {
   getInventoryOptions,
   populateUnitSelect,
+  populateCategorySelect,
 } from "../warehouse/inventory-options.js";
 
 const $ = (id) => document.getElementById(id);
@@ -24,11 +25,19 @@ let initialized = false,
   saving = false,
   version = 0;
 let units = [];
+let categories = [];
 const format = (value) => new Intl.NumberFormat("en-US").format(value);
 
 function renderUnits(selected = $("settingsProductUnit").value) {
   populateUnitSelect($("settingsProductUnit"), units, {
     current: editing?.unit,
+    selected,
+  });
+}
+
+function renderCategories(selected = $("settingsProductCategory").value) {
+  populateCategorySelect($("settingsProductCategory"), categories, {
+    current: editing?.category_id,
     selected,
   });
 }
@@ -40,6 +49,7 @@ function reset() {
   $("saveSettingsProduct").textContent = "ثبت کالا";
   $("cancelSettingsProductEdit").hidden = true;
   renderUnits("");
+  renderCategories("");
 }
 let messageFailed = false;
 function message(text, failed = false) {
@@ -53,6 +63,7 @@ async function load() {
   $("settingsProductsList").setAttribute("aria-busy", "true");
   $("refreshProducts").disabled = true;
   $("settingsProductUnit").disabled = true;
+  $("settingsProductCategory").disabled = true;
   try {
     const [products, options] = await Promise.all([
       financeRequest("/products?include_inactive=true"),
@@ -60,7 +71,9 @@ async function load() {
     ]);
     if (current !== version) return;
     units = options.units;
+    categories = options.categories;
     renderUnits();
+    renderCategories();
     listLoaded = true;
     $("settingsProductsStatus").textContent = products.length
       ? `${formatNumber(products.length)} کالا`
@@ -68,7 +81,7 @@ async function load() {
     if (editing && !products.some((product) => product.id === editing.id))
       reset();
     if (messageFailed) message("");
-    const signature = JSON.stringify(products);
+    const signature = JSON.stringify([products, categories]);
     if (signature === renderedProducts) return true;
     $("settingsProductsList").replaceChildren(
       ...products.map((product) => {
@@ -87,7 +100,7 @@ async function load() {
           node(
             "p",
             "mt-2 text-xs text-mirage/60",
-            `${product.unit} · ${money(product.price)} · موجودی ${product.stock == null ? "بدون کنترل" : formatNumber(product.stock)} · ${product.active ? "فعال" : "غیرفعال"}`,
+            `${categories.find((item) => item.id === product.category_id)?.name || "بدون دسته‌بندی"} · ${product.unit} · ${money(product.price)} · موجودی ${product.stock == null ? "بدون کنترل" : formatNumber(product.stock)} · ${product.active ? "فعال" : "غیرفعال"}`,
           ),
         );
         const edit = node(
@@ -102,6 +115,7 @@ async function load() {
           $("settingsProductCode").value = product.product_code;
           $("settingsProductName").value = product.name;
           renderUnits(product.unit);
+          renderCategories(product.category_id);
           $("settingsProductPrice").value = format(product.price);
           $("settingsProductStock").value = product.stock ?? "";
           $("settingsProductActive").value = String(product.active);
@@ -120,13 +134,13 @@ async function load() {
         remove.disabled = product.can_delete === false;
         remove.classList.toggle("finance-delete-blocked", remove.disabled);
         remove.title = remove.disabled
-          ? "کالای استفاده‌شده در سفارش حذف‌نشده قابل حذف نیست؛ می‌توانید آن را غیرفعال کنید."
+          ? "کالای استفاده‌شده در خرید یا سفارش حذف‌نشده قابل حذف نیست؛ می‌توانید آن را غیرفعال کنید."
           : "حذف کالا بدون سابقه سفارش";
         remove.addEventListener("click", () => {
           if (saving || remove.disabled) return;
           confirmFinanceDelete({
             path: `/products/${product.id}`,
-            description: `کالا «${product.product_code} · ${product.name}» حذف شود؟ این عملیات قابل بازگشت نیست. کالاهای استفاده‌شده در سفارش حذف‌نشده قابل حذف نیستند.`,
+            description: `کالا «${product.product_code} · ${product.name}» حذف شود؟ این عملیات قابل بازگشت نیست. کالاهای استفاده‌شده در خرید یا سفارش حذف‌نشده قابل حذف نیستند.`,
             onDeleted: async () => {
               if (editing?.id === product.id) reset();
               document
@@ -147,7 +161,7 @@ async function load() {
             node(
               "p",
               "mt-2 text-xs text-mirage/60",
-              "این کالا در سفارش حذف‌نشده استفاده شده؛ برای خارج کردن از فهرست سفارش، آن را غیرفعال کنید.",
+              "این کالا در خرید یا سفارش حذف‌نشده استفاده شده؛ برای خارج کردن از فهرست، آن را غیرفعال کنید.",
             ),
           );
         }
@@ -193,7 +207,17 @@ export async function initializeProductSettings() {
       try {
         const name = $("settingsProductName").value.trim(),
           unit = $("settingsProductUnit").value;
-        if (!name || !unit) throw new Error("نام و واحد کالا الزامی است.");
+        const categoryId = Number($("settingsProductCategory").value);
+        if (!name || !unit || !categoryId)
+          throw new Error("نام، دسته‌بندی و واحد کالا الزامی است.");
+        if (
+          !categories.some(
+            (item) =>
+              item.id === categoryId &&
+              (item.active || item.id === editing?.category_id),
+          )
+        )
+          throw new Error("دسته‌بندی را از تنظیمات انتخاب کنید.");
         if (
           unit !== editing?.unit &&
           !units.some((item) => item.active && item.name === unit)
@@ -207,6 +231,7 @@ export async function initializeProductSettings() {
         const body = {
           name,
           unit,
+          category_id: categoryId,
           price: amountValue($("settingsProductPrice").value, {
             allowZero: true,
           }),

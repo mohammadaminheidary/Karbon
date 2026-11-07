@@ -49,6 +49,7 @@ async function scenario(metadata) {
     "cancelSettingsProductEdit",
     "settingsProductPrice",
     "settingsProductUnit",
+    "settingsProductCategory",
   ];
   const els = Object.fromEntries(ids.map((id) => [id, new Element()]));
   let notification;
@@ -83,8 +84,9 @@ async function scenario(metadata) {
     bindStrictAmount() {},
     onPageRefresh() {},
     refreshData: (callback) => callback,
-    getInventoryOptions: async () => ({ units: [] }),
+    getInventoryOptions: async () => ({ units: [], categories: [] }),
     populateUnitSelect() {},
+    populateCategorySelect() {},
     financeRequest: async () => {
       if (fail) throw new Error("fixture refresh failure");
       return products;

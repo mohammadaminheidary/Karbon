@@ -9,6 +9,35 @@ export const saveInventoryOption = (kind, data, id) =>
     body: data,
   });
 
+export function populateCategorySelect(
+  field,
+  categories,
+  { current = null, selected = field.value } = {},
+) {
+  const available = categories.filter(
+    (item) => item.active || item.id === current,
+  );
+  field.replaceChildren(
+    new Option(
+      available.length
+        ? "انتخاب دسته‌بندی"
+        : "ابتدا دسته‌بندی را در تنظیمات تعریف کنید",
+      "",
+    ),
+    ...available.map(
+      (item) =>
+        new Option(
+          `${item.name}${item.active ? "" : " (غیرفعال؛ دسته‌بندی فعلی کالا)"}`,
+          String(item.id),
+        ),
+    ),
+  );
+  field.value = available.some((item) => String(item.id) === String(selected))
+    ? String(selected)
+    : "";
+  field.disabled = available.length === 0;
+}
+
 // The original unit is offered only while editing its owning record. It stays
 // visible when disabled, but is never offered to a new record.
 export function populateUnitSelect(
