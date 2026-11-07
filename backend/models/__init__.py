@@ -1,4 +1,4 @@
-from .inventory import InventoryOption
+from .inventory import InventoryOption, Purchase, PurchaseItem
 from .user import User
 from .generated_report import GeneratedReport
 from .task import Task

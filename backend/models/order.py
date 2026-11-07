@@ -14,6 +14,7 @@ class Product(Base):
     revision = Column(Integer, nullable=False, default=1)
     name = Column(String(150), nullable=False, unique=True)
     unit = Column(String(80), nullable=False)
+    category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=True)
     price = Column(BigInteger, nullable=False)
     # NULL means a service / item whose inventory is not tracked.
     stock = Column(Integer, nullable=True)

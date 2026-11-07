@@ -42,8 +42,8 @@ owned = Table("karbon_test_data_records", metadata,
     Column("record_id", Integer, primary_key=True),
     Column("batch_id", String(36), nullable=False, index=True),
     Column("digest", String(64), nullable=False))
-MODELS = [Customer, BankAccount, ExpenseCategory, DocumentAccount, Product,
-          InventoryOption, Member, Attendance, Task, Document, Order,
+MODELS = [Customer, BankAccount, ExpenseCategory, DocumentAccount, InventoryOption,
+          Product, Member, Attendance, Task, Document, Order,
           OrderItem, FinancialTransaction, OrderPayment]
 TABLES = {model.__tablename__: model.__table__ for model in MODELS}
 CHUNK = 250
@@ -129,12 +129,12 @@ class Generator:
                        first_name="آزمایشی", last_name="کاربن", opening_balance=count * 1000000)
             category = add(ExpenseCategory, title=CategoryWrite(title=f"مواد اولیه {label}").title, display_code=category_code)
             doc_account = add(DocumentAccount, code=f"T-{batch}", title=f"خرید مواد اولیه {label}", kind="expense")
-            for kind, name in [("categories", "مواد اولیه"), ("units", "عدد")]:
-                add(InventoryOption, kind=kind, name=f"{name} {label}")
+            inventory_category = add(InventoryOption, kind="categories", name=f"مواد اولیه {label}")
+            add(InventoryOption, kind="units", name=f"عدد {label}")
             catalog = []
             for index in range(min(30, count)):
                 fields = ProductWrite(name=f"{['چاپ کارت', 'بسته بندی', 'کاتالوگ', 'بنر'][index % 4]} {label} {index + 1}",
-                                      unit="عدد", price=rng.randrange(10, 100) * 1000, stock=count * 10)
+                                      unit="عدد", category_id=inventory_category["id"], price=rng.randrange(10, 100) * 1000, stock=count * 10)
                 catalog.append(add(Product, product_code=f"T-{batch[:16]}-{index + 1}", **fields.model_dump()))
             members = [add(Member, first_name="علی", last_name=f"اپراتور آزمایشی {batch[:8]} {index}")
                        for index in range(min(10, count))]

@@ -1,6 +1,7 @@
-"""Settings-owned categories and central units (no inventory movements)."""
-from sqlalchemy import Boolean, CheckConstraint, Column, Integer, String, UniqueConstraint
+"""Settings-owned reference lists and immutable purchase receipts."""
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from database import Base
+from models.finance import utc_now
 
 
 class InventoryOption(Base):
@@ -14,3 +15,46 @@ class InventoryOption(Base):
     kind = Column(String(12), nullable=False)
     name = Column(String(80), nullable=False)
     active = Column(Boolean, nullable=False, default=True)
+
+
+class Purchase(Base):
+    __tablename__ = "purchases"
+    __table_args__ = (
+        CheckConstraint("quantity > 0 AND quantity <= 1000000"),
+        CheckConstraint("purchase_price >= 0 AND quantity * purchase_price <= 999999999999"),
+        {"sqlite_autoincrement": True},
+    )
+    id = Column(Integer, primary_key=True)
+    request_id = Column(String(36), nullable=False, unique=True)
+    request_fingerprint = Column(String(64), nullable=False)
+    invoice_number = Column(String(32), nullable=False, unique=True)
+    purchase_date = Column(Date, nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=False)
+    category_name = Column(String(80), nullable=False)
+    product_name = Column(String(150), nullable=False)
+    unit = Column(String(80), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    purchase_price = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class PurchaseItem(Base):
+    __tablename__ = "purchase_items"
+    __table_args__ = (
+        UniqueConstraint("purchase_id", "position"),
+        CheckConstraint("position > 0 AND position <= 100"),
+        CheckConstraint("quantity > 0 AND quantity <= 1000000"),
+        CheckConstraint("purchase_price >= 0 AND quantity * purchase_price <= 999999999999"),
+        {"sqlite_autoincrement": True},
+    )
+    id = Column(Integer, primary_key=True)
+    purchase_id = Column(Integer, ForeignKey("purchases.id", ondelete="RESTRICT"), nullable=False, index=True)
+    position = Column(Integer, nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=False)
+    category_name = Column(String(80), nullable=False)
+    product_name = Column(String(150), nullable=False)
+    unit = Column(String(80), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    purchase_price = Column(BigInteger, nullable=False)

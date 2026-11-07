@@ -15,6 +15,8 @@ class StrictFields(BaseModel):
 class ProductWrite(StrictFields):
     name: str = Field(min_length=1, max_length=150)
     unit: str = Field(min_length=1, max_length=80)
+    # Omitted by older clients; the service retains/assigns the Settings category.
+    category_id: int | None = Field(default=None, strict=True, gt=0, le=9223372036854775807)
     price: int = Field(strict=True, ge=0, le=LIMIT)
     stock: int | None = Field(default=None, strict=True, ge=0, le=1000000000)
     active: bool = True

@@ -102,6 +102,7 @@ from models.user import User
 from models.member import Member
 from models.customer import Customer
 from models.order import Product
+from models.inventory import InventoryOption
 from models.finance import BankAccount, ExpenseCategory, FinancialTransaction
 from datetime import datetime, timedelta
 from config import APP_TIMEZONE
@@ -117,7 +118,8 @@ with SessionLocal() as db:
     for index in range({args.customers}):
         db.add(Customer(customer_code=1001 + index, first_name=f"مشتری {{index + 1}}", last_name="آزمایشی", gender="male" if index % 2 else "female", phone_numbers=[f"0912{{index + 1:07d}}"], address="آدرس محیط آزمایشی"))
     if {args.orders!r}:
-        db.add_all([Product(product_code="P-000001", name="چاپ کارت", unit="بسته", price=100000, stock=20), Product(product_code="P-000002", name="طراحی", unit="ساعت", price=50000, stock=None)])
+        category_id = db.query(InventoryOption.id).filter_by(kind="categories", name="عمومی").scalar()
+        db.add_all([Product(product_code="P-000001", name="چاپ کارت", unit="بسته", category_id=category_id, price=100000, stock=20), Product(product_code="P-000002", name="طراحی", unit="ساعت", category_id=category_id, price=50000, stock=None)])
     if {args.finance!r} and not {args.bank_ledger}:
         db.add(BankAccount(name="بانک محیط آزمایش", account_number="123456789", opening_balance=1000000))
         db.add(ExpenseCategory(title="مواد اولیه آزمایشی"))

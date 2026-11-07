@@ -15,6 +15,8 @@ from services.reference_codes import compact_transaction_numbers
 from schemas.customer_schema import normalize_text
 from security.password import verify_password
 from services.inventory_service import enabled_units, require_enabled_unit
+from services.inventory_service import require_category
+from models.inventory import Purchase, PurchaseItem
 
 
 def initialize_order_storage(engine):
@@ -52,6 +54,8 @@ def products(db, include_inactive=False, for_order=False):
     if for_order:
         query = query.filter(Product.unit.in_(enabled_units(db)))
     referenced = {product_id for (product_id,) in db.query(OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Order.deleted_at.is_(None)).distinct().all()}
+    referenced.update(product_id for (product_id,) in db.query(Purchase.product_id).distinct().all())
+    referenced.update(product_id for (product_id,) in db.query(PurchaseItem.product_id).distinct().all())
     return [{**{column.name: getattr(item, column.name) for column in Product.__table__.columns},
              "can_delete": item.id not in referenced}
             for item in query.order_by(Product.id).all()]
@@ -70,8 +74,9 @@ def save_product(db, data, product_id=None):
         if product_id is not None and item.revision != data.revision:
             raise FinanceError("کالا یا موجودی تغییر کرده است. فهرست را بروزرسانی و دوباره ویرایش کنید.", 409)
         unit = require_enabled_unit(db, data.unit, current=item.unit if product_id is not None else None)
+        category = require_category(db, data.category_id, current=item.category_id if product_id is not None else None)
         for key, value in data.model_dump(exclude={"revision"}).items():
-            setattr(item, key, unit if key == "unit" else value)
+            setattr(item, key, unit if key == "unit" else category.id if key == "category_id" else value)
         if product_id is not None:
             item.revision += 1
         db.add(item)
@@ -99,6 +104,8 @@ def delete_product(db, product_id, data, user):
         if product.deleted_at is not None:
             db.commit()
             return {"id": product_id, "deleted": True}
+        if db.query(Purchase.id).filter_by(product_id=product.id).first() or db.query(PurchaseItem.id).filter_by(product_id=product.id).first():
+            raise FinanceError("این کالا در خرید ثبت‌شده استفاده شده و قابل حذف نیست. می‌توانید آن را غیرفعال کنید.", 409)
         if db.query(OrderItem.id).join(Order, Order.id == OrderItem.order_id).filter(
                 OrderItem.product_id == product.id, Order.deleted_at.is_(None)).first():
             raise FinanceError("این کالا در سفارش ثبت‌شده استفاده شده و قابل حذف نیست. می‌توانید آن را غیرفعال کنید.", 409)

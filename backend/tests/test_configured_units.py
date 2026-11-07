@@ -16,6 +16,7 @@ class ConfiguredUnitTests(unittest.TestCase):
         with closing(sqlite3.connect(self.database)) as db, db:
             db.execute("DELETE FROM inventory_options")
             db.executemany("INSERT INTO inventory_options (kind,name,active) VALUES ('units',?,1)", [("عدد",), ("ساعت",), ("بسته",)])
+            db.execute("INSERT INTO inventory_options (kind,name,active) VALUES ('categories','عمومی',1)")
         orders.OrdersIntegrationTests.setUp(self)
 
     def unit(self, name="عدد"):
