@@ -31,7 +31,9 @@ class PrivateFilesTests(unittest.TestCase):
         cls.thread.join(timeout=5)
 
     def test_private_paths_block_get_and_head(self):
-        for path in ("/.git/config", "/backend/requirements.txt", "/data/karbon.db", "/face.key", "/backup.db-wal", "/src/%2e%2e/backend/requirements.txt", "/%2eenv"):
+        for path in ("/.git/config", "/backend/requirements.txt", "/data/karbon.db", "/face.key", "/backup.db-wal",
+                     "/backup/karbon-backup-20261122-000000.zip", "/.karbon.db.karbon-recovery/key.json",
+                     "/src/%2e%2e/backend/requirements.txt", "/%2eenv"):
             for method in ("GET", "HEAD"):
                 with self.subTest(path=path, method=method):
                     with self.assertRaises(HTTPError) as error:

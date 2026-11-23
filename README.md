@@ -42,8 +42,8 @@ on those ports are reused and remain running when this launcher stops.
   build tools, static development server and frontend/browser tests.
 - `docs/`: shared domain guides, dependency map, verification report and existing artifacts.
 
-Database, environment and encryption settings are unchanged: the default database
-is `~/.karbon/karbon.db`, JWT configuration loads from `~/.karbon/.env`, and the
+The default database is `~/.karbon/karbon.db`. JWT configuration loads from
+`~/.karbon/.env`, and the
 face encryption key remains beside the selected database unless overridden.
 `KARBON_DATABASE_PATH`, `KARBON_TIMEZONE`, `KARBON_JWT_SECRET`, `KARBON_FACE_KEY`
 and `KARBON_FACE_KEY_PATH` retain their behavior. Relative database/key overrides
@@ -67,6 +67,16 @@ font slider opens individual page sliders; Reset restores that page's inheritanc
 from the global size. Preferences are saved in this browser's local storage,
 applied before each page paints, and synchronized between open tabs. They remain
 after logout and browser restarts; clearing site data restores the defaults.
+
+Settings → Backup is available to the `admin` account. It creates AES-encrypted
+ZIP files in `backup/` beside `start.py`. Keep the passphrase separately from
+the ZIP. The archive contains the complete configured SQLite database, including
+saved reports, the application timezone, and the original key when face data
+is present. The limits are 512 MiB for the SQLite snapshot and 513 MiB for the ZIP.
+After upload and validation, confirm restoration within 30 minutes. Karbon
+creates a safety backup using the upload passphrase, then restores the data and
+requires users to sign in again. The folder shortcut requires a local browser
+and a desktop file manager. Downloads are also available for remote sessions.
 
 ```sh
 npm --prefix frontend run build

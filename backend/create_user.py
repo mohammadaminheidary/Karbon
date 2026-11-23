@@ -1,4 +1,5 @@
 from getpass import getpass
+from config import ADMIN_USERNAME
 
 from database import Base, engine, SessionLocal
 
@@ -6,12 +7,7 @@ from models.user import User
 
 from security.password import hash_password
 from services.auth_settings import initialize_auth_storage
-
-
-
-# ساخت جدول‌ها
-Base.metadata.create_all(bind=engine)
-initialize_auth_storage(engine)
+from services.database_maintenance import database_access
 
 
 
@@ -40,14 +36,14 @@ if password_length > 72:
     )
 
 
-db = SessionLocal()
+with database_access(), SessionLocal() as db:
 
-
-try:
+    Base.metadata.create_all(bind=engine)
+    initialize_auth_storage(engine)
 
     user = (
         db.query(User)
-        .filter(User.username == "admin")
+        .filter(User.username == ADMIN_USERNAME)
         .first()
     )
 
@@ -65,7 +61,7 @@ try:
 
         user = User(
 
-            username="admin",
+            username=ADMIN_USERNAME,
 
             password_hash=hash_password(
                 password
@@ -79,11 +75,6 @@ try:
 
 
     db.commit()
-
-
-finally:
-
-    db.close()
 
 
 print(message)

@@ -3,6 +3,7 @@ from sqlalchemy import inspect, text, update
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
+from config import recovery_settings
 from models.user import User
 from security.password import hash_password, verify_password
 from security.login_rate_limit import (
@@ -21,7 +22,8 @@ def auth_response(user):
 
     return {
         "success": True,
-        "token": create_access_token({"sub": user.username, "uid": user.id, "ver": user.auth_version}),
+        "token": create_access_token({"sub": user.username, "uid": user.id, "ver": user.auth_version,
+                                      "restore": recovery_settings().generation}),
         "user": {"id": user.id, "username": user.username},
     }
 

@@ -1,0 +1,202 @@
+"""Jalali business periods and the SQLite invariants shared by write paths."""
+from datetime import date, datetime, timedelta
+
+import jdatetime
+from sqlalchemy import func, select, text
+from sqlalchemy.orm import Session
+
+from config import app_timezone
+from models.document import Document
+from models.finance import FinancialTransaction
+from models.fiscal_year import FiscalBankOpening, FiscalExport, FiscalSnapshot, FiscalYear, InventoryChange, InventoryHistory
+from models.inventory import Purchase
+from models.order import Order, Product
+
+
+class FiscalPeriodError(Exception):
+    pass
+
+
+DATED_TABLES = (
+    ("orders", "invoice_date"), ("financial_transactions", "transaction_date"),
+    ("documents", "date"), ("purchases", "purchase_date"),
+)
+DATED_CHILDREN = (
+    ("order_items", "order_id", "orders", "invoice_date"),
+    ("order_payments", "transaction_id", "financial_transactions", "transaction_date"),
+    ("purchase_items", "purchase_id", "purchases", "purchase_date"),
+)
+OPENING_TABLES = ("fiscal_bank_openings", "fiscal_customer_openings",
+                  "fiscal_invoice_openings", "fiscal_inventory_openings")
+LOCK_ACTIONS = {"INSERT": ("NEW",), "UPDATE": ("OLD", "NEW"), "DELETE": ("OLD",)}
+
+
+def jalali(day):
+    return jdatetime.date.fromgregorian(date=day).strftime("%Y/%m/%d")
+
+
+def year_of(day):
+    return jdatetime.date.fromgregorian(date=day).year
+
+
+def year_dates(year):
+    return (jdatetime.date(year, 1, 1).togregorian(),
+            jdatetime.date(year + 1, 1, 1).togregorian() - timedelta(days=1))
+
+
+def business_today():
+    return datetime.now(app_timezone()).date()
+
+
+def active_period(db):
+    return db.scalar(active_value(FiscalYear))
+
+
+def active_value(column):
+    return open_years(column).limit(1)
+
+
+def open_years(column):
+    # Reopening leaves the unused successor in place. The earliest open row
+    # is the single active period, even after more than one step backward.
+    return select(column).where(FiscalYear.closed_at.is_(None)).order_by(FiscalYear.year)
+
+
+def effective_day(period, today=None):
+    today = today or business_today()
+    return min(max(today, period.start_date), period.end_date) if period else today
+
+
+def ensure_open(db, *dates):
+    if not dates:
+        return
+    start, parked = db.execute(select(active_value(FiscalYear.start_date).scalar_subquery(),
+        open_years(FiscalYear.start_date).offset(1).limit(1).scalar_subquery())).one()
+    if start and any(day < start for day in dates):
+        raise FiscalPeriodError(f"تاریخ ثبت یا ویرایش نباید پیش از شروع سال مالی فعال ({jalali(start)}) باشد.")
+    if parked and any(day >= parked for day in dates):
+        raise FiscalPeriodError("ثبت یا ویرایش عملیات سال بعد پس از فعال‌سازی دوباره آن ممکن است.")
+
+
+def in_active_period(column):
+    return column.between(
+        func.coalesce(active_value(FiscalYear.start_date).scalar_subquery(), date.min),
+        func.coalesce(active_value(FiscalYear.end_date).scalar_subquery(), date.max),
+    )
+
+
+def bank_openings(db, year):
+    return dict(db.execute(select(FiscalBankOpening.bank_id, FiscalBankOpening.balance)
+                           .where(FiscalBankOpening.year == year)).all())
+
+
+def stock_change(db, product, day, delta, tracked=None):
+    history = db.get(InventoryHistory, 1)
+    db.add(InventoryChange(product_id=product.id, business_date=max(day, history.available_from),
+                           delta=delta, tracked=tracked, name=product.name,
+                           product_code=product.product_code, unit=product.unit))
+
+
+def locked_date_sql(column):
+    years = "FROM fiscal_years WHERE closed_at IS NULL ORDER BY year"
+    return (f"(COALESCE({column} < (SELECT start_date {years} LIMIT 1), 0)"
+            f" OR COALESCE({column} >= (SELECT start_date {years} LIMIT 1 OFFSET 1), 0))")
+
+
+def install_guards(connection):
+    # Allocations use the receipt date, even when they reference an archived sale.
+    dates = [(table, f"{{row}}.{column}") for table, column in DATED_TABLES]
+    dates.extend((table, f"(SELECT {column} FROM {parent} WHERE id={{row}}.{foreign_key})")
+                 for table, foreign_key, parent, column in DATED_CHILDREN)
+    for table, column in dates:
+        for action, rows in LOCK_ACTIONS.items():
+            check = " OR ".join(locked_date_sql(column.format(row=row)) for row in rows)
+            connection.exec_driver_sql(f"""
+                CREATE TRIGGER IF NOT EXISTS fiscal_lock_{table}_{action.lower()}
+                BEFORE {action} ON {table} WHEN {check}
+                BEGIN SELECT RAISE(ABORT, 'closed fiscal period or inactive successor'); END
+            """)
+    for table in ("fiscal_snapshots", "fiscal_exports", *OPENING_TABLES):
+        changes = ("UPDATE OF year, version, closed_at, digest, backup_filename, data"
+                   if table == "fiscal_snapshots" else "UPDATE")
+        for action, event in (("update", changes), ("delete", "DELETE")):
+            # Opening rows are derived from the previous year's snapshot.
+            # They can be discarded once that year has been reopened.
+            condition = ("WHEN EXISTS (SELECT 1 FROM fiscal_years WHERE year = OLD.year - 1 AND closed_at IS NOT NULL)"
+                         if action == "delete" and table in OPENING_TABLES else "")
+            connection.exec_driver_sql(f"""
+                CREATE TRIGGER IF NOT EXISTS fiscal_freeze_{table}_{action}
+                BEFORE {event} ON {table} {condition}
+                BEGIN SELECT RAISE(ABORT, 'immutable fiscal record'); END
+            """)
+    connection.exec_driver_sql("""
+        CREATE TRIGGER IF NOT EXISTS fiscal_freeze_closed_year
+        BEFORE UPDATE OF year, start_date, end_date ON fiscal_years
+        BEGIN SELECT RAISE(ABORT, 'closed fiscal period'); END
+    """)
+
+
+def upgrade_snapshot_versions(connection):
+    columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(fiscal_snapshots)")}
+    if "version" in columns:
+        return
+    connection.exec_driver_sql("DROP INDEX IF EXISTS ux_fiscal_year_active")
+    connection.exec_driver_sql("DROP TRIGGER IF EXISTS fiscal_freeze_closed_year")
+    for table, *_ in (*DATED_TABLES, *DATED_CHILDREN):
+        for action in LOCK_ACTIONS:
+            connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS fiscal_lock_{table}_{action.lower()}")
+    for table in OPENING_TABLES:
+        connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS fiscal_freeze_{table}_delete")
+    # Rebuild the two archive tables together. The old export FK follows the
+    # renamed parent until both old tables are dropped, with FKs still enabled.
+    connection.exec_driver_sql("ALTER TABLE fiscal_exports RENAME TO fiscal_exports_v1")
+    connection.exec_driver_sql("ALTER TABLE fiscal_snapshots RENAME TO fiscal_snapshots_v1")
+    FiscalSnapshot.__table__.create(connection)
+    FiscalExport.__table__.create(connection)
+    connection.exec_driver_sql("""
+        INSERT INTO fiscal_snapshots (year, version, closed_at, export_status, digest, backup_filename, data)
+        SELECT s.year, 1, y.closed_at, COALESCE(y.export_status, 'pending'), s.digest, s.backup_filename, s.data
+        FROM fiscal_snapshots_v1 AS s JOIN fiscal_years AS y ON y.year = s.year
+    """)
+    connection.exec_driver_sql("""
+        INSERT INTO fiscal_exports (year, version, kind, content)
+        SELECT year, 1, kind, content FROM fiscal_exports_v1
+    """)
+    connection.exec_driver_sql("DROP TABLE fiscal_exports_v1")
+    connection.exec_driver_sql("DROP TABLE fiscal_snapshots_v1")
+
+
+def initialize_fiscal_storage(engine, zone=None):
+    with Session(engine) as db:
+        db.execute(text("BEGIN IMMEDIATE"))
+        upgrade_snapshot_versions(db.connection())
+        if active_period(db):
+            install_guards(db.connection())
+        if db.get(InventoryHistory, 1) is None:
+            today = datetime.now(zone or app_timezone()).date()
+            # The previous application kept a single mutable stock count. If
+            # already affected by later business dates, it cannot be unwound.
+            last_sale = db.scalar(select(func.max(Order.invoice_date)).where(Order.deleted_at.is_(None)))
+            last_purchase = db.scalar(select(func.max(Purchase.purchase_date)))
+            available_from = max(filter(None, (today, last_sale, last_purchase)))
+            db.add(InventoryHistory(id=1, available_from=available_from))
+            for product in db.scalars(select(Product).where(Product.deleted_at.is_(None))):
+                db.add(InventoryChange(product_id=product.id, business_date=available_from,
+                                       delta=product.stock or 0, tracked=product.stock is not None,
+                                       name=product.name, product_code=product.product_code, unit=product.unit))
+        db.commit()
+
+
+def observed_years(db):
+    """Business records determine the first open year on a legacy database."""
+    earliest = latest = year_of(business_today())
+    for column, deleted in ((Order.invoice_date, Order.deleted_at),
+                            (FinancialTransaction.transaction_date, FinancialTransaction.deleted_at),
+                            (Document.date, Document.deleted_at), (Purchase.purchase_date, None)):
+        query = select(func.min(column), func.max(column))
+        if deleted is not None:
+            query = query.where(deleted.is_(None))
+        first, last = db.execute(query).one()
+        if first is not None:
+            earliest, latest = min(earliest, year_of(first)), max(latest, year_of(last))
+    return earliest, latest

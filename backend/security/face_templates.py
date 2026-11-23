@@ -5,13 +5,16 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from config import DATABASE_PATH
+from config import DATABASE_PATH, recovery_settings
 
 
-def template_cipher(*, create=False):
+def template_key(*, create=False):
+    restored = recovery_settings().face_key
+    if restored:
+        return restored
     configured = os.getenv("KARBON_FACE_KEY")
     if configured:
-        return Fernet(configured.encode("ascii"))
+        return configured.encode("ascii")
 
     path = Path(os.getenv("KARBON_FACE_KEY_PATH", str(DATABASE_PATH.parent / "face.key"))).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -28,7 +31,11 @@ def template_cipher(*, create=False):
     file_mode = path.lstat().st_mode
     if not stat.S_ISREG(file_mode) or stat.S_IMODE(file_mode) & 0o077:
         raise ValueError("Face key must be a private regular file (0600)")
-    return Fernet(path.read_bytes())
+    return path.read_bytes()
+
+
+def template_cipher(*, create=False):
+    return Fernet(template_key(create=create))
 
 
 def encrypt_template(member_id, features):

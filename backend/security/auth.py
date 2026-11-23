@@ -5,6 +5,7 @@ from fastapi.security import (
 )
 from sqlalchemy.orm import Session
 
+from config import ADMIN_USERNAME, recovery_settings
 from database import get_database
 from models.user import User
 from security.jwt import decode_access_token
@@ -61,7 +62,8 @@ def get_current_user(
 
     # Username-only tokens cannot safely identify an account after a rename.
     # Pre-upgrade sessions must log in once to acquire a stable identity.
-    if type(payload.get("uid")) is not int or type(payload.get("ver")) is not int:
+    if (type(payload.get("uid")) is not int or type(payload.get("ver")) is not int
+            or payload.get("restore", "") != recovery_settings().generation):
         raise unauthorized()
     user = db.query(User).filter(User.id == payload["uid"]).first()
 
@@ -74,4 +76,10 @@ def get_current_user(
         raise unauthorized()
 
 
+    return user
+
+
+def require_admin(user: User = Depends(get_current_user)):
+    if user.username != ADMIN_USERNAME:
+        raise HTTPException(403, "این عملیات فقط برای مدیر سیستم مجاز است.")
     return user

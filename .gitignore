@@ -10,6 +10,10 @@ frontend/src/output.css
 backend/karbon.db
 backend/karbon.db.bak
 face.key
+/backup/
+*.karbon-recovery/
+*.karbon-access
+*.karbon-maintenance
 # Build output
 dist/
 build/

@@ -21,7 +21,7 @@ class DevelopmentHandler(SimpleHTTPRequestHandler):
         # server, including installations using a database inside the checkout.
         private_suffixes = {".db", ".db-wal", ".db-shm", ".key", ".sqlite", ".sqlite3", ".bak"}
         if (not target.is_relative_to(root)
-                or any(part.startswith(".") or part in {"backend", "data"} for part in (*path.parts[1:], *relative_parts))
+                or any(part.startswith(".") or part in {"backend", "data", "backup"} for part in (*path.parts[1:], *relative_parts))
                 or path.suffix.lower() in private_suffixes
                 or target.suffix.lower() in private_suffixes):
             self.send_error(404)

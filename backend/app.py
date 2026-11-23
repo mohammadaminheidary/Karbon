@@ -38,6 +38,10 @@ from services.auth_settings import initialize_auth_storage
 from routes.faces import router as faces_router
 from routes.dashboard import router as dashboard_router
 from routes.reports import router as reports_router
+from routes.backup import router as backup_router
+from services.database_maintenance import DatabaseMaintenanceMiddleware, database_access
+from services.fiscal_period import initialize_fiscal_storage
+from config import KARBON_VERSION
 from security.face_requests import FaceRequestMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
@@ -51,7 +55,7 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI(
     title="Karbon API",
-    version="1.0.0",
+    version=KARBON_VERSION,
 )
 
 
@@ -82,6 +86,8 @@ app.add_middleware(PrivateResponseMiddleware)
 
 @app.exception_handler(RequestValidationError)
 async def private_face_validation(request, error):
+    if request.url.path.startswith("/api/settings/backup"):
+        return JSONResponse({"detail": "اطلاعات درخواست پشتیبان نامعتبر است."}, status_code=422)
     if request.url.path.startswith("/api/faces"):
         # Pydantic's default error includes input values (including biometrics).
         return JSONResponse({"detail": {"code": "INVALID_INPUT", "message": "تصاویر معتبر با تعداد مناسب و رضایت ثبت چهره لازم است."}}, status_code=422)
@@ -118,6 +124,7 @@ class NegotiatedGZipMiddleware(GZipMiddleware):
 
 
 app.add_middleware(FaceRequestMiddleware)
+app.add_middleware(DatabaseMaintenanceMiddleware)
 # Large JSON lists compress well at level 1 without the CPU cost of level 9.
 # Small auth, error, and face-status responses bypass compression entirely.
 app.add_middleware(NegotiatedGZipMiddleware, minimum_size=1024, compresslevel=1)
@@ -129,16 +136,16 @@ app.add_middleware(NegotiatedGZipMiddleware, minimum_size=1024, compresslevel=1)
 
 # تمام Modelها قبل از create_all
 # از طریق import models لود شده‌اند.
-Base.metadata.create_all(
-    bind=engine
-)
-initialize_auth_storage(engine)
-initialize_customer_ids(engine)
-initialize_bank_storage(engine)
-initialize_document_storage(engine)
-initialize_purchase_storage(engine)
-initialize_order_storage(engine)
-initialize_unit_storage(engine)
+with database_access():
+    Base.metadata.create_all(bind=engine)
+    initialize_auth_storage(engine)
+    initialize_customer_ids(engine)
+    initialize_bank_storage(engine)
+    initialize_document_storage(engine)
+    initialize_purchase_storage(engine)
+    initialize_order_storage(engine)
+    initialize_unit_storage(engine)
+    initialize_fiscal_storage(engine)
 
 
 # ======================================================
@@ -166,6 +173,7 @@ app.add_middleware(
     allow_headers=[
         "Content-Type",
         "Authorization",
+        "X-Karbon-Backup-Passphrase",
     ],
 )
 
@@ -204,6 +212,7 @@ app.include_router(document_settings_router)
 app.include_router(faces_router)
 app.include_router(dashboard_router)
 app.include_router(reports_router)
+app.include_router(backup_router)
 
 
 # ======================================================

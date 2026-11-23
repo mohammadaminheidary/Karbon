@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.dialects.sqlite import insert
 
 from config import (
-    APP_TIMEZONE,
+    app_timezone,
 )
 
 from models.attendance import (
@@ -97,7 +97,7 @@ class InvalidAttendanceStatusError(
 
 def get_local_now():
     return datetime.now(
-        APP_TIMEZONE
+        app_timezone()
     )
 
 
