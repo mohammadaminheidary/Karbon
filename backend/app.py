@@ -26,12 +26,12 @@ from routes.attendance import (
 from routes.customers import router as customers_router
 from routes.finance import router as finance_router
 from routes.orders import router as orders_router
-from routes.inventory import router as inventory_settings_router, purchase_router
+from routes.inventory import router as inventory_settings_router, brand_router, purchase_router
 from routes.tasks import router as tasks_router
 from routes.documents import router as documents_router, settings_router as document_settings_router
 from services.finance_service import initialize_bank_storage
 from services.order_service import initialize_order_storage
-from services.inventory_service import initialize_unit_storage, initialize_purchase_storage
+from services.inventory_service import initialize_brand_storage, initialize_category_storage, initialize_unit_storage, initialize_purchase_storage
 from services.document_service import initialize_document_storage
 from services.customer_ids import initialize_customer_ids
 from services.auth_settings import initialize_auth_storage
@@ -142,6 +142,8 @@ with database_access():
     initialize_customer_ids(engine)
     initialize_bank_storage(engine)
     initialize_document_storage(engine)
+    initialize_category_storage(engine)
+    initialize_brand_storage(engine)
     initialize_purchase_storage(engine)
     initialize_order_storage(engine)
     initialize_unit_storage(engine)
@@ -205,6 +207,7 @@ app.include_router(customers_router)
 app.include_router(finance_router)
 app.include_router(orders_router)
 app.include_router(inventory_settings_router)
+app.include_router(brand_router)
 app.include_router(purchase_router)
 app.include_router(tasks_router)
 app.include_router(documents_router)

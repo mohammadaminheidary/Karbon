@@ -23,7 +23,7 @@ import test_customers as customers
 
 TABLES = ["customers", "bank_directory", "bank_accounts", "expense_categories", "products",
           "documents", "document_accounts", "financial_transactions", "orders", "order_items",
-          "order_payments", "inventory_options", "members", "attendance", "tasks"]
+          "order_payments", "inventory_options", "brands", "purchases", "purchase_items", "members", "attendance", "tasks"]
 
 
 class ReportsIntegrationTests(unittest.TestCase):
@@ -56,7 +56,8 @@ class ReportsIntegrationTests(unittest.TestCase):
             insert("bank_accounts", [dict(id=i,name=f"حساب {i}",account_number=f"00123400000000000000{i}",opening_balance=987654321098765432,
                 bank=f"bank-{i}",active=1,card_number=f"001234567890{i:04d}",created_at=now,updated_at=now) for i in range(1,1001)])
             insert("expense_categories", [dict(id=i,title=f"هزینه {i}",active=1,display_code=i) for i in range(1,1001)])
-            insert("products", [dict(id=i,name=f"کالا {i}",product_code=f"P-{i}",unit="عدد",price=123456,stock=None if i%2 else 10,active=1,revision=1) for i in range(1,1001)])
+            insert("brands", [dict(id=i, name=f"برند {i}") for i in range(1,1001)])
+            insert("products", [dict(id=i,name=f"کالا {i}",product_code=f"P-{i}",unit="عدد",price=123456,stock=None if i%2 else 10,active=1,revision=1,requires_brand=1,brand_id=i) for i in range(1,1001)])
             insert("documents", [dict(id=i,number=str(i),description="سند فارسی",date="2026-10-31",document_type="دریافت",created_at=now,revision=1) for i in range(1,1001)])
             insert("document_accounts", [dict(id=i,code=f"D-{i}",title=f"حساب سند {i}",kind="income",active=1) for i in range(1,1001)])
             insert("financial_transactions", [dict(id=i,transaction_number=i,request_id=f"finance-{i}",kind="income",customer_id=i,bank_id=i,
@@ -65,9 +66,15 @@ class ReportsIntegrationTests(unittest.TestCase):
             insert("orders", [dict(id=i,request_id=f"order-{i}",request_fingerprint=f"fingerprint-{i}",invoice_code=f"I-{i}",order_number=f"O-{i}",
                 customer_id=i,invoice_date="2026-10-31",payment_date="2026-11-01",description=None,subtotal=200000,discount=0,
                 status="active" if i%2 else "completed",created_at=now,invoice_snapshot=json.dumps({"مشتری":"علی", "null":None,"list":[1,False,""]},ensure_ascii=False)) for i in range(1,1001)])
-            insert("order_items", [dict(id=i,order_id=i,product_id=i,position=0,product_name=f"کالا {i}",unit="عدد",quantity=2,unit_price=100000) for i in range(1,1001)])
+            insert("order_items", [dict(id=i,order_id=i,product_id=i,position=0,product_name=f"کالا {i}",brand_name=f"برند {i}",unit="عدد",quantity=2,unit_price=100000) for i in range(1,1001)])
             insert("order_payments", [dict(id=i,order_id=i,transaction_id=i,method="cash") for i in range(1,1001)])
             insert("inventory_options", [dict(id=i,kind="categories" if i%2 else "units",name=f"گزینه {i}",active=1) for i in range(1,1001)])
+            receipt_rows = [dict(product_id=i, category_id=1, category_name="گزینه 1", product_name=f"کالا {i}",
+                                 brand_name=f"برند {i}", unit="عدد", quantity=1, purchase_price=100) for i in range(1,1001)]
+            insert("purchases", [dict(id=i, request_id=f"purchase-{i}", request_fingerprint=f"fingerprint-{i}",
+                                     invoice_number=f"PUR-{i}", purchase_date="2026-10-31", created_at=now, **row)
+                                 for i, row in enumerate(receipt_rows, 1)])
+            insert("purchase_items", [dict(id=i, purchase_id=i, position=1, **row) for i, row in enumerate(receipt_rows, 1)])
             insert("members", [dict(id=i,first_name="عضو",last_name=str(i),phone="09120000000",national_id=f"001234{i:04d}",created_at=now,updated_at=now) for i in range(1,1001)])
             insert("attendance", [dict(id=i,member_id=i,date="2026-10-31",status="present" if i%2 else "absent",recorded_time="12:34:56.123456",created_at=now,updated_at=now) for i in range(1,1001)])
             insert("tasks", [dict(id=i,date="2026-10-31",title=f"کار {i}",description="شرح",status="todo" if i%2 else "completed",created_at=now) for i in range(1,1001)])

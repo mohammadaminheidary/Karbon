@@ -1,20 +1,26 @@
 """Orders own invoice data; payments reference the existing financial ledger."""
 from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, String, Text, JSON
+from sqlalchemy.orm import relationship
 from database import Base
 from models.finance import utc_now
 
 CASH_ACCOUNT_NUMBER = "KARBON-CASH"
+PRODUCT_BRAND_CHECK = "(requires_brand = 0 AND brand_id IS NULL) OR (requires_brand = 1 AND brand_id IS NOT NULL)"
 
 
 class Product(Base):
     __tablename__ = "products"
-    __table_args__ = (CheckConstraint("price >= 0 AND price <= 999999999999"), CheckConstraint("stock IS NULL OR stock >= 0"), {"sqlite_autoincrement": True})
+    __table_args__ = (CheckConstraint("price >= 0 AND price <= 999999999999"), CheckConstraint("stock IS NULL OR stock >= 0"),
+                      CheckConstraint(PRODUCT_BRAND_CHECK), {"sqlite_autoincrement": True})
     id = Column(Integer, primary_key=True)
     product_code = Column(String(32), nullable=True, unique=True)
     revision = Column(Integer, nullable=False, default=1)
     name = Column(String(150), nullable=False, unique=True)
     unit = Column(String(80), nullable=False)
     category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=True)
+    requires_brand = Column(Boolean, nullable=False, default=False, server_default="0")
+    brand_id = Column(Integer, ForeignKey("brands.id", ondelete="RESTRICT"), index=True)
+    brand = relationship("Brand")
     price = Column(BigInteger, nullable=False)
     # NULL means a service / item whose inventory is not tracked.
     stock = Column(Integer, nullable=True)
@@ -48,8 +54,10 @@ class OrderItem(Base):
     id = Column(Integer, primary_key=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False)
+    category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=True)
     position = Column(Integer, nullable=False)
     product_name = Column(String(150), nullable=False)
+    brand_name = Column(String(80), nullable=True)
     unit = Column(String(80), nullable=False)
     quantity = Column(Integer, nullable=False)
     unit_price = Column(BigInteger, nullable=False)

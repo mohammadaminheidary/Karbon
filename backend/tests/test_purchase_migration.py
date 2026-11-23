@@ -12,6 +12,40 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PurchaseMigrationTests(unittest.TestCase):
+    def test_flat_catalog_upgrades_in_place_and_retains_hierarchy_on_restart(self):
+        with tempfile.TemporaryDirectory(prefix="karbon-category-migration-") as directory:
+            database = str(Path(directory) / "old.db")
+            with closing(sqlite3.connect(database)) as db, db:
+                db.executescript("""
+                    CREATE TABLE inventory_options (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, kind VARCHAR(12) NOT NULL,
+                        name VARCHAR(80) NOT NULL, active BOOLEAN NOT NULL, UNIQUE (kind, name),
+                        CHECK (kind IN ('categories', 'units')));
+                    INSERT INTO inventory_options VALUES (7, 'categories', 'UPVC', 1);
+                    INSERT INTO inventory_options VALUES (8, 'units', 'عدد', 1);
+                    CREATE TABLE products (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name VARCHAR(150) NOT NULL UNIQUE, unit VARCHAR(30) NOT NULL,
+                        price BIGINT NOT NULL, stock INTEGER, active BOOLEAN NOT NULL,
+                        category_id INTEGER REFERENCES inventory_options(id) ON DELETE RESTRICT);
+                    INSERT INTO products VALUES (1, 'پنجره', 'عدد', 5000, 12, 1, 7);
+                """)
+            env = dict(os.environ, KARBON_DATABASE_PATH=database, KARBON_JWT_SECRET="category-migration-test-only")
+
+            def restart():
+                result = subprocess.run([sys.executable, "-c", "import app"], cwd=ROOT / "backend", env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+            restart()
+            with closing(sqlite3.connect(database)) as db, db:
+                self.assertEqual(db.execute("SELECT id,name,active,parent_id FROM inventory_options WHERE id IN (7,8)").fetchall(),
+                                 [(7, "UPVC", 1, None), (8, "عدد", 1, None)])
+                self.assertEqual(db.execute("SELECT category_id,stock FROM products").fetchone(), (7, 12))
+                db.execute("INSERT INTO inventory_options (kind,name,active,parent_id) VALUES ('categories','Door',1,7)")
+            restart()
+            with closing(sqlite3.connect(database)) as db:
+                self.assertEqual(db.execute("SELECT parent_id FROM inventory_options WHERE name='Door'").fetchall(), [(7,)])
+                self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
     def test_single_item_receipts_upgrade_without_stock_replay_and_keep_retry_ids(self):
         with tempfile.TemporaryDirectory(prefix="karbon-purchase-rows-migration-") as directory:
             database = str(Path(directory) / "old.db")
@@ -79,6 +113,7 @@ with SessionLocal() as db:
             with closing(sqlite3.connect(database)) as db, db:
                 product = db.execute("SELECT name,unit,price,stock,category_id FROM products").fetchone()
                 self.assertEqual(product[:4], ("کالای قدیمی", "رول قدیمی", 5000, 12))
+                self.assertEqual(db.execute("SELECT requires_brand,brand_id FROM products").fetchone(), (0, None))
                 self.assertEqual(db.execute("SELECT kind,name FROM inventory_options WHERE id=?", (product[4],)).fetchone(), ("categories", "عمومی"))
                 db.execute("UPDATE inventory_options SET name='دسته‌بندی قدیمی',active=0 WHERE id=?", (product[4],))
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM purchases").fetchone()[0], 0)
@@ -86,4 +121,11 @@ with SessionLocal() as db:
             with closing(sqlite3.connect(database)) as db:
                 self.assertEqual(db.execute("SELECT name,unit,price,stock,category_id FROM products").fetchone(), product)
                 self.assertEqual(db.execute("SELECT name,active FROM inventory_options WHERE id=?", (product[4],)).fetchone(), ("دسته‌بندی قدیمی", 0))
+                db.execute("PRAGMA foreign_keys=ON")
+                with self.assertRaises(sqlite3.IntegrityError):
+                    db.execute("UPDATE products SET requires_brand=1 WHERE id=1")
+                brand_id = db.execute("INSERT INTO brands (name) VALUES ('Brand')").lastrowid
+                db.execute("UPDATE products SET requires_brand=1, brand_id=? WHERE id=1", (brand_id,))
+                with self.assertRaises(sqlite3.IntegrityError):
+                    db.execute("DELETE FROM brands WHERE id=?", (brand_id,))
                 self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])

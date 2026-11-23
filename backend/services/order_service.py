@@ -6,17 +6,17 @@ from uuid import uuid5
 import jdatetime
 from sqlalchemy import String, cast, func, or_, text
 from sqlalchemy.orm import Session
-from config import APP_TIMEZONE
+from config import app_timezone
 from models.customer import Customer
 from models.finance import BankAccount, FinancialTransaction
 from models.order import CASH_ACCOUNT_NUMBER, Product, Order, OrderItem, OrderPayment
 from services.finance_service import FinanceError, require
+from services.fiscal_period import active_period, effective_day, ensure_open, in_active_period, jalali, stock_change
 from services.reference_codes import compact_transaction_numbers
 from schemas.customer_schema import normalize_text
 from security.password import verify_password
-from services.inventory_service import enabled_units, require_enabled_unit
-from services.inventory_service import require_category
-from models.inventory import Purchase, PurchaseItem
+from services.inventory_service import category_path, enabled_units, require_category, require_enabled_unit, with_category_names
+from models.inventory import Brand, Purchase, PurchaseItem
 
 
 def initialize_order_storage(engine):
@@ -56,9 +56,15 @@ def products(db, include_inactive=False, for_order=False):
     referenced = {product_id for (product_id,) in db.query(OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Order.deleted_at.is_(None)).distinct().all()}
     referenced.update(product_id for (product_id,) in db.query(Purchase.product_id).distinct().all())
     referenced.update(product_id for (product_id,) in db.query(PurchaseItem.product_id).distinct().all())
-    return [{**{column.name: getattr(item, column.name) for column in Product.__table__.columns},
-             "can_delete": item.id not in referenced}
-            for item in query.order_by(Product.id).all()]
+    query = with_category_names(query, Product.category_id).outerjoin(Product.brand).add_columns(Brand.name)
+    return [{**product_data(item, name, parent_name, brand_name), "can_delete": item.id not in referenced}
+            for item, name, parent_name, brand_name in query.order_by(Product.id)]
+
+
+def product_data(item, name, parent_name, brand_name):
+    return {**{column.name: getattr(item, column.name) for column in Product.__table__.columns},
+            "category_path": category_path(name, parent_name), "brand_name": brand_name}
+
 
 
 def save_product(db, data, product_id=None):
@@ -71,12 +77,26 @@ def save_product(db, data, product_id=None):
         if duplicate.first():
             raise FinanceError("کالایی با این نام قبلاً ثبت شده است.", 409)
         item = require(db, Product, product_id, "کالا") if product_id is not None else Product()
+        previous_stock = item.stock
         if product_id is not None and item.revision != data.revision:
             raise FinanceError("کالا یا موجودی تغییر کرده است. فهرست را بروزرسانی و دوباره ویرایش کنید.", 409)
         unit = require_enabled_unit(db, data.unit, current=item.unit if product_id is not None else None)
-        category = require_category(db, data.category_id, current=item.category_id if product_id is not None else None)
-        for key, value in data.model_dump(exclude={"revision"}).items():
-            setattr(item, key, unit if key == "unit" else category.id if key == "category_id" else value)
+        category, parent = require_category(db, data.category_id, current=item.category_id if product_id is not None else None)
+        # Legacy edits omit both fields and keep the product's saved brand.
+        if product_id is not None and data.model_fields_set.isdisjoint({"requires_brand", "brand_id"}):
+            brand = item.brand
+        else:
+            brand = db.get(Brand, data.brand_id) if data.requires_brand and data.brand_id is not None else None
+            if data.requires_brand and brand is None:
+                raise FinanceError("برند کالا را از تنظیمات انتخاب کنید.", 422)
+            item.requires_brand = data.requires_brand
+            item.brand_id = brand.id if brand else None
+        for key, value in data.model_dump(exclude={"revision", "unit", "category_id", "requires_brand", "brand_id", "price"}).items():
+            setattr(item, key, value)
+        if product_id is None or "price" in data.model_fields_set:
+            item.price = data.price
+        item.unit = unit
+        item.category_id = category.id
         if product_id is not None:
             item.revision += 1
         db.add(item)
@@ -84,7 +104,10 @@ def save_product(db, data, product_id=None):
         if product_id is None:
             item.product_code = f"P-{item.id:06d}"
             db.flush()
-        result = {column.name: getattr(item, column.name) for column in Product.__table__.columns}
+        if item.stock is not None or previous_stock is not None:
+            stock_change(db, item, effective_day(active_period(db)), (item.stock or 0) - (previous_stock or 0),
+                         tracked=item.stock is not None)
+        result = product_data(item, category.name, parent.name if parent else None, brand.name if brand else None)
         db.commit()
         return result
     except Exception:
@@ -116,6 +139,8 @@ def delete_product(db, product_id, data, user):
             product.revision += 1
         else:
             db.delete(product)
+        if product.stock is not None:
+            stock_change(db, product, effective_day(active_period(db)), -product.stock, tracked=False)
         db.commit()
         return {"id": product_id, "deleted": True}
     except Exception:
@@ -134,11 +159,14 @@ def serialize(db, order, *, loaded=None):
     if loaded is None:
         customer = db.get(Customer, order.customer_id)
         items = db.query(OrderItem).filter(OrderItem.order_id == order.id).order_by(OrderItem.position).all()
-        payments = db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(OrderPayment.order_id == order.id).all()
+        payments = db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(
+            OrderPayment.order_id == order.id, FinancialTransaction.deleted_at.is_(None)).order_by(OrderPayment.id).all()
     else:
         customer, items, payments = loaded
     paid = sum(transaction.amount for _, transaction in payments)
     total = order.subtotal - order.discount
+    category_paths = {item["id"]: item["category_path"] for item in (order.invoice_snapshot or {}).get("items", [])
+                      if "category_path" in item}
     return {
         **{column.name: getattr(order, column.name) for column in Order.__table__.columns if column.name not in {"request_fingerprint", "invoice_snapshot", "deleted_at"}},
         "jalali_date": jdatetime.date.fromgregorian(date=order.invoice_date).strftime("%Y/%m/%d"),
@@ -146,8 +174,11 @@ def serialize(db, order, *, loaded=None):
         "customer_name": order.invoice_snapshot["customer"]["name"] if order.invoice_snapshot else f"{customer.first_name} {customer.last_name}",
         "total": total, "paid": paid, "remaining": total - paid,
         "payment_status": "settled" if paid == total else "partial" if paid else "unpaid",
-        "items": [{**{column.name: getattr(item, column.name) for column in OrderItem.__table__.columns}, "total": item.quantity * item.unit_price} for item in items],
-        "payments": [{"method": payment.method, "transaction_id": transaction.id, "bank_id": transaction.bank_id, "amount": transaction.amount} for payment, transaction in payments],
+        "items": [{**{column.name: getattr(item, column.name) for column in OrderItem.__table__.columns},
+                   "category_path": category_paths.get(item.id), "total": item.quantity * item.unit_price} for item in items],
+        "payments": [{"method": payment.method, "transaction_id": transaction.id, "bank_id": transaction.bank_id,
+                      "amount": transaction.amount, "jalali_date": jalali(transaction.transaction_date),
+                      "tracking_number": transaction.tracking_number} for payment, transaction in payments],
     }
 
 
@@ -156,8 +187,13 @@ def build_invoice(db, order):
     customer = db.get(Customer, order.customer_id)
     data["customer"] = {"code": customer.customer_code, "name": f"{customer.first_name} {customer.last_name}",
                         "phone_numbers": list(customer.phone_numbers), "address": customer.address}
+    paths = {item_id: category_path(name, parent_name)
+             for item_id, name, parent_name in with_category_names(
+                 db.query(OrderItem.id).filter(OrderItem.order_id == order.id), OrderItem.category_id,
+             )}
     for item in data["items"]:
         item["product_code"] = db.get(Product, item["product_id"]).product_code
+        item["category_path"] = paths[item["id"]]
     for payment in data["payments"]:
         bank = db.get(BankAccount, payment["bank_id"])
         payment["account_name"] = bank.name
@@ -363,14 +399,15 @@ def save_order(db, data):
                       description=data.description, subtotal=sum(item.quantity * item.unit_price for item in data.items), discount=data.discount)
         db.add(order)
         db.flush()
-        now = datetime.now(APP_TIMEZONE)
+        now = datetime.now(app_timezone())
         code_date = jdatetime.date.fromgregorian(date=now.date()).strftime("%Y%m%d")
         order.invoice_code = f"{code_date}-{now:%H%M%S}-{base36(order.id)}"
         for position, item in enumerate(data.items, 1):
             product = catalog[item.product_id]
             db.add(OrderItem(order_id=order.id, product_id=product.id, position=position, product_name=product.name,
-                             unit=product.unit, quantity=item.quantity, unit_price=item.unit_price))
-        now = datetime.now(APP_TIMEZONE)
+                             brand_name=product.brand.name if product.brand else None,
+                             category_id=product.category_id, unit=product.unit, quantity=item.quantity, unit_price=item.unit_price))
+        now = datetime.now(app_timezone())
         number = db.query(FinancialTransaction.id).filter(FinancialTransaction.deleted_at.is_(None)).count()
         for index, payment in enumerate(data.payments, 1):
             bank = cash_account(db) if payment.method == "cash" else require(db, BankAccount, payment.bank_id, "حساب بانکی", active=True)

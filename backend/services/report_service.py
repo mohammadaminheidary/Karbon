@@ -11,12 +11,14 @@ import json
 from fastapi import HTTPException
 from sqlalchemy import (MetaData, Table, select, func, or_, cast, String,
                         Date, DateTime, Time, Boolean, Integer, Numeric, JSON)
+from config import recovery_settings
 
 TABLES = {
     "customers": "مشتریان", "orders": "سفارش‌ها", "order_items": "اقلام سفارش",
     "order_payments": "پرداخت‌های سفارش", "financial_transactions": "تراکنش‌های مالی",
     "bank_accounts": "حساب‌های بانکی", "bank_directory": "فهرست بانک‌ها",
     "expense_categories": "دسته‌بندی هزینه‌ها", "products": "کالاها و موجودی",
+    "brands": "برندها", "purchases": "خریدها", "purchase_items": "اقلام خرید",
     "inventory_options": "دسته‌بندی‌ها و واحدهای انبار", "documents": "اسناد",
     "document_accounts": "حساب‌های اسناد", "members": "اعضا",
     "attendance": "حضور و غیاب", "tasks": "کارهای روزانه",
@@ -32,6 +34,10 @@ LABELS = dict(
     discount="تخفیف", status="وضعیت", invoice_snapshot="اطلاعات ثبت‌شده فاکتور", revision="نسخه",
     order_id="شناسه سفارش", product_id="شناسه کالا", position="ترتیب", product_name="نام کالا",
     unit="واحد", quantity="تعداد", unit_price="قیمت واحد", transaction_id="شناسه تراکنش",
+    category_id="شناسه دسته‌بندی کالا", parent_id="شناسه دستهٔ اصلی",
+    brand_id="شناسه برند", brand_name="برند", requires_brand="نیاز به برند",
+    purchase_id="شناسه خرید", purchase_date="تاریخ خرید", purchase_price="قیمت خرید",
+    invoice_number="شماره فاکتور خرید", category_name="نام دسته‌بندی", category_parent_name="نام دستهٔ اصلی",
     method="روش پرداخت", code="کد", name="نام", logo_url="نشانی نشان", active="فعال",
     account_number="شماره حساب", opening_balance="مانده افتتاحیه", bank="بانک", card_number="شماره کارت",
     sheba_number="شماره شبا", title="عنوان", display_code="کد نمایشی", transaction_number="شماره تراکنش",
@@ -78,8 +84,12 @@ class Dataset:
     descriptors: list
 
 
-@lru_cache(maxsize=8)
 def catalog(engine):
+    return _catalog(engine, recovery_settings().generation)
+
+
+@lru_cache(maxsize=8)
+def _catalog(engine, generation):
     metadata = MetaData()
     # Resolve FKs only inside our allowlist. Never reflect unrelated private tables.
     metadata.reflect(bind=engine, only=lambda name, _: name in TABLES)
@@ -92,7 +102,7 @@ def catalog(engine):
         def add(key, col, label, foreign_key=None):
             columns[key] = col
             descriptors.append(dict(name=key, label=label, type=type_name(col),
-                                    database_type=str(col.type), nullable=col.nullable,
+                                    database_type=str(col.type), nullable=getattr(col, "nullable", True),
                                     foreign_key=foreign_key, related="." in key))
         for col in table.c:
             fk = next(iter(col.foreign_keys), None)
@@ -100,13 +110,21 @@ def catalog(engine):
                 str(fk.target_fullname) if fk else None)
         for fk in sorted(table.foreign_keys, key=lambda item: item.parent.name):
             target = fk.column.table
-            if target.name not in TABLES or target is table:
+            if target.name not in TABLES:
                 continue
             alias = target.alias(f"related_{fk.parent.name}")
             source = source.outerjoin(alias, fk.parent == alias.c[fk.column.name])
             for col in alias.c:
                 add(f"{fk.parent.name}.{col.name}", col,
-                    f"{LABELS.get(fk.parent.name, fk.parent.name)} · {LABELS.get(col.name, col.name)}")
+                    LABELS["brand_name"] if fk.parent.name == "brand_id" and col.name == "name"
+                    else f"{LABELS.get(fk.parent.name, fk.parent.name)} · {LABELS.get(col.name, col.name)}")
+            if fk.parent.name == "category_id" and target.name == "inventory_options":
+                parent = target.alias("related_category_parent")
+                source = source.outerjoin(parent, parent.c.id == alias.c.parent_id)
+                add("category_id.main_id", func.coalesce(parent.c.id, alias.c.id, type_=Integer()),
+                    "شناسه دستهٔ اصلی")
+                add("category_id.main_name", func.coalesce(parent.c.name, alias.c.name, type_=String()),
+                    "دستهٔ اصلی")
         result[name] = Dataset(table, source, columns, descriptors)
     return result
 
@@ -163,8 +181,11 @@ def conditions(ds, request):
         clauses.append(ds.table.c.deleted_at.is_(None))
     if request.search:
         # Treat wildcard characters literally, and never interpolate SQL identifiers.
+        searchable = [c for c in ds.table.c if type_name(c) in {"text", "integer"}]
+        if "brand_id.name" in ds.columns:
+            searchable.append(ds.columns["brand_id.name"])
         clauses.append(or_(*(cast(c, String).contains(request.search, autoescape=True)
-                            for c in ds.table.c if type_name(c) in {"text", "integer"})))
+                            for c in searchable)))
     for f in request.filters:
         col = ds.columns.get(f.field)
         if col is None: fail("ستون فیلتر معتبر نیست.")
@@ -198,6 +219,8 @@ def conditions(ds, request):
 
 def selected(ds, request):
     names = request.columns if request.columns is not None else [c.name for c in ds.table.c]
+    if request.columns is None and "brand_id.name" in ds.columns:
+        names.append("brand_id.name")
     if not names or len(set(names)) != len(names) or any(n not in ds.columns for n in names):
         fail("ستون‌های انتخاب‌شده معتبر نیستند.")
     return names
@@ -239,6 +262,11 @@ def options(db, name, field, search="", offset=0):
     # Offer human-readable FK labels using only columns that reflection found.
     related = [ds.columns[f"{field}.{n}"] for n in ("first_name", "last_name", "name", "title", "number", "invoice_code")
                if f"{field}.{n}" in ds.columns]
+    if field == "category_id" and "category_id.main_name" in ds.columns:
+        category_name = ds.columns["category_id.name"]
+        related = [func.nullif(ds.columns["category_id.main_name"], category_name), category_name]
+    elif field == "category_id.main_id":
+        related = [ds.columns["category_id.main_name"]]
     clauses = [col.is_not(None)]
     if search:
         clauses.append(or_(*(cast(c, String).contains(search, autoescape=True) for c in [col, *related])))

@@ -4,6 +4,13 @@ from database import Base
 from models.finance import utc_now
 
 
+class Brand(Base):
+    __tablename__ = "brands"
+    __table_args__ = {"sqlite_autoincrement": True}
+    id = Column(Integer, primary_key=True)
+    name = Column(String(80), nullable=False, unique=True)
+
+
 class InventoryOption(Base):
     __tablename__ = "inventory_options"
     __table_args__ = (
@@ -15,6 +22,7 @@ class InventoryOption(Base):
     kind = Column(String(12), nullable=False)
     name = Column(String(80), nullable=False)
     active = Column(Boolean, nullable=False, default=True)
+    parent_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=True)
 
 
 class Purchase(Base):
@@ -32,7 +40,9 @@ class Purchase(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
     category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=False)
     category_name = Column(String(80), nullable=False)
+    category_parent_name = Column(String(80), nullable=True)
     product_name = Column(String(150), nullable=False)
+    brand_name = Column(String(80), nullable=True)
     unit = Column(String(80), nullable=False)
     quantity = Column(Integer, nullable=False)
     purchase_price = Column(BigInteger, nullable=False)
@@ -54,7 +64,9 @@ class PurchaseItem(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
     category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=False)
     category_name = Column(String(80), nullable=False)
+    category_parent_name = Column(String(80), nullable=True)
     product_name = Column(String(150), nullable=False)
+    brand_name = Column(String(80), nullable=True)
     unit = Column(String(80), nullable=False)
     quantity = Column(Integer, nullable=False)
     purchase_price = Column(BigInteger, nullable=False)

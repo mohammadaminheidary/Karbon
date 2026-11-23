@@ -1,6 +1,6 @@
 """Transactional synthetic data using Karbon's schema; never imports app startup."""
 from collections import Counter, defaultdict
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, time, timezone
 import hashlib
 import json
@@ -32,6 +32,7 @@ from schemas.customer_schema import CustomerWrite
 from schemas.order_schema import ProductWrite, OrderWrite
 from schemas.finance_schema import CategoryWrite, TransactionLine
 from schemas.document_schema import DocumentCreate
+from services.database_maintenance import database_access
 from services.order_service import serialize, load_order_relations
 from services.document_service import fingerprint as document_fingerprint
 
@@ -76,9 +77,11 @@ class Generator:
                 self.prepare(self.connection)
                 yield self.connection
             return
-        if self.engine.url.database != ":memory:" and not Path(self.engine.url.database).is_file():
+        database = self.engine.url.database
+        if database != ":memory:" and not Path(database).is_file():
             raise SafetyError("Existing database not found. Start Karbon once to initialize it.")
-        with self.engine.connect() as connection:
+        lease = nullcontext() if database == ":memory:" else database_access(database)
+        with lease, self.engine.connect() as connection:
             try:
                 connection.exec_driver_sql("BEGIN IMMEDIATE")
                 self.prepare(connection)

@@ -6,15 +6,22 @@ from schemas.finance_schema import parse_jalali
 from pydantic import model_validator
 
 
-class InventoryOptionWrite(BaseModel):
+class InventoryNameWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=80)
-    active: bool = Field(default=True, strict=True)
 
     @field_validator("name", mode="before")
     @classmethod
     def normalized_name(cls, value):
         return normalize_text(value) if isinstance(value, str) else value
+
+
+class InventoryOptionWrite(InventoryNameWrite):
+    active: bool = Field(default=True, strict=True)
+
+
+class InventoryCategoryWrite(InventoryOptionWrite):
+    parent_id: int | None = Field(default=None, strict=True, gt=0, le=9223372036854775807)
 
 
 class PurchaseRowWrite(BaseModel):
