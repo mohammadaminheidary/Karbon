@@ -33,12 +33,13 @@ export function formatDate(value) {
 
 export function formatJalaliInput(value) {
   if (!value) return "";
+  const date = value instanceof Date ? value : new Date(`${value}T12:00:00+03:30`);
   const parts = Object.fromEntries(
     dateFormatter
-      .formatToParts(new Date(`${value}T12:00:00+03:30`))
+      .formatToParts(date)
       .map((part) => [part.type, part.value]),
   );
-  return `${parts.year}/${parts.month}/${parts.day}`;
+  return `${parts.year.padStart(4, "۰")}/${parts.month}/${parts.day}`;
 }
 
 export function normalizeJalaliDate(value) {

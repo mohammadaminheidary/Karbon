@@ -28,15 +28,34 @@ async function settled() {
 }
 async function createCustomer(index) {
   await page.locator("#openCreateCustomerButton").click();
+  const date = page.locator("#customerLastContact");
+  const segments = date.locator("input");
+  const contactDate = await segments.evaluateAll((fields) => fields.map((field) => field.value).join("/"));
+  const jalali = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+    timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  assert.equal(contactDate, jalali.format(new Date()));
+  if (index === 2) {
+    await segments.first().click();
+    await page.keyboard.type("1405");
+    assert.equal(await segments.nth(1).evaluate((field) => field === document.activeElement), true);
+    await page.keyboard.type("08");
+    assert.equal(await segments.nth(2).evaluate((field) => field === document.activeElement), true);
+    await page.keyboard.press("Backspace");
+    assert.deepEqual(await date.locator("span").allTextContents(), ["/", "/"]);
+    await page.keyboard.type("12");
+    assert.deepEqual(await segments.evaluateAll((fields) => fields.map((field) => field.value)), ["۱۴۰۵", "۰۸", "۱۲"]);
+  }
   await page.locator("#customerFirstName").fill(`شناسه ${index}`);
   await page.locator("#customerLastName").fill("آزمون مرورگر");
   const response = page.waitForResponse((response) =>
     new URL(response.url()).pathname === "/api/customers" && response.request().method() === "POST");
-  await page.locator("#saveCustomerButton").click();
+  await page.locator(index === 2 ? "#saveCustomerAndOrderButton" : "#saveCustomerButton").click();
   const saved = await response;
   assert.equal(saved.status(), 201);
   const customer = await saved.json();
   customers.push(customer);
+  assert.equal(jalali.format(new Date(`${customer.last_contact_date}T12:00:00+03:30`)), index === 2 ? "۱۴۰۵/۰۸/۱۲" : contactDate);
   assert.match(customer.permanent_id, /^\d{6}-\d{6}-[A-Z0-9]{4}$/);
   const parts = new Intl.DateTimeFormat("en-US-u-ca-persian", {
     timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit",
@@ -46,6 +65,16 @@ async function createCustomer(index) {
   assert.equal(customer.permanent_id.slice(0, 13),
     `${part("day")}${part("month")}${part("year").slice(-2)}-${part("hour")}${part("minute")}${part("second")}`);
   await page.waitForFunction(() => !document.getElementById("customerFormModal").open);
+  if (index === 2) {
+    await page.waitForFunction(() => document.getElementById("createOrderModal")?.open);
+    assert.equal(new URL(page.url()).pathname, "/page/customers-page.html");
+    assert.equal(await page.locator("#orderCustomerSearch").inputValue(), `${customer.customer_code} · ${customer.first_name} ${customer.last_name}`);
+    assert.equal(await page.locator("#orderCustomerDetails").isVisible(), true);
+    await page.locator("#createOrderModal footer [data-dialog-close]").click();
+    await page.waitForFunction(() => !document.getElementById("createOrderModal").open);
+  } else {
+    assert.equal(await page.locator("#createOrderModal[open]").count(), 0);
+  }
   await settled();
   assert.equal(await code(customer).textContent(), customer.permanent_id);
   assert.ok((await card(customer).textContent()).includes("کد مشتری:"));

@@ -334,15 +334,15 @@
           class="grid grid-cols-1 gap-5 sm:grid-cols-3"
           aria-label="خلاصه مشتریان"
         >
-          <dl class="orders-stat">
+          <dl class="card-tilt orders-stat">
             <dt>کل مشتریان</dt>
             <dd id="totalCustomersCount" aria-live="polite">—</dd>
           </dl>
-          <dl class="orders-stat">
+          <dl class="card-tilt orders-stat">
             <dt>مشتریان تسویه‌نشده</dt>
             <dd id="unsettledCustomersCount" aria-live="polite">—</dd>
           </dl>
-          <dl class="orders-stat">
+          <dl class="card-tilt orders-stat">
             <dt>مشتریان تسویه‌شده</dt>
             <dd id="settledCustomersCount" aria-live="polite">—</dd>
           </dl>
@@ -675,23 +675,35 @@
               <!-- Last Contact -->
               <div>
                 <label
-                  for="customerLastContact"
+                  id="customerLastContactLabel"
+                  for="customerLastContactYear"
                   class="mb-2 block text-xs font-bold text-mirage/60"
                 >
                   آخرین تماس (شمسی)
                 </label>
 
-                <input
+                <div
                   id="customerLastContact"
-                  aria-describedby="customerLastContactError customerDateHint"
-                  type="text"
-                  inputmode="numeric"
+                  role="group"
+                  aria-labelledby="customerLastContactLabel"
                   dir="ltr"
-                  maxlength="10"
-                  autocomplete="off"
-                  placeholder="۱۴۰۵/۰۷/۱۴"
-                  class="h-11 w-full rounded-xl border border-french-gray/40 bg-white px-3 text-sm text-mirage outline-none transition focus:border-persian-blue focus:ring-4 focus:ring-persian-blue/10"
-                />
+                  class="flex h-11 w-full items-center gap-1 rounded-xl border border-french-gray/40 bg-white px-3 text-sm text-mirage tabular-nums transition focus-within:border-persian-blue focus-within:ring-4 focus-within:ring-persian-blue/10"
+                >
+                  <input id="customerLastContactYear" type="text" inputmode="numeric" maxlength="4"
+                    autocomplete="off" placeholder="سال" aria-label="سال آخرین تماس"
+                    aria-describedby="customerDateHint customerLastContactError"
+                    class="w-[4.5ch] rounded-sm text-center outline-none focus:bg-persian-blue/10" />
+                  <span aria-hidden="true">/</span>
+                  <input id="customerLastContactMonth" type="text" inputmode="numeric" maxlength="2"
+                    autocomplete="off" placeholder="ماه" aria-label="ماه آخرین تماس"
+                    aria-describedby="customerLastContactError"
+                    class="w-[3ch] rounded-sm text-center outline-none focus:bg-persian-blue/10" />
+                  <span aria-hidden="true">/</span>
+                  <input id="customerLastContactDay" type="text" inputmode="numeric" maxlength="2"
+                    autocomplete="off" placeholder="روز" aria-label="روز آخرین تماس"
+                    aria-describedby="customerLastContactError"
+                    class="w-[3ch] rounded-sm text-center outline-none focus:bg-persian-blue/10" />
+                </div>
                 <p id="customerDateHint" class="mt-2 text-xs text-mirage/50">
                   تاریخ شمسی؛ مثال: ۱۴۰۵/۰۷/۱۴ (سال/ماه/روز)
                 </p>
@@ -805,6 +817,15 @@
               class="h-11 rounded-xl bg-persian-blue px-6 text-sm font-black text-white transition hover:bg-persian-blue/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               ذخیره مشتری
+            </button>
+            <button
+              id="saveCustomerAndOrderButton"
+              type="submit"
+              aria-haspopup="dialog"
+              hidden
+              class="h-11 rounded-xl border border-persian-blue/25 bg-persian-blue/10 px-5 text-sm font-bold text-persian-blue transition hover:bg-persian-blue/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              ذخیره و ثبت سفارش
             </button>
           </footer>
         </form>

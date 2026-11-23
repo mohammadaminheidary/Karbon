@@ -2,6 +2,7 @@ import { onExternalDataChange } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { createSpinner } from "../components/loader.js";
+import { initializeCustomerContactDate } from "./customer-contact-date.js";
 import {
   createCustomer,
   updateCustomer,
@@ -15,15 +16,16 @@ import {
   fullName,
   formatNumber,
   formatJalaliInput,
-  normalizeJalaliDate,
 } from "./customer-utils.js";
 
 const get = (id) => document.getElementById(id);
 let formDialog,
   duplicateDialog,
+  lastContactDate,
   editingCustomer = null,
   submitting = false;
 let onSaved,
+  prepareCreateOrder,
   duplicateResolver,
   generation = 0;
 
@@ -38,9 +40,9 @@ function showError(field, message) {
     last_name: "customerLastName",
     address: "customerAddress",
     notes: "customerNotes",
-    last_contact_date: "customerLastContact",
   }[field];
   if (input) get(input).setAttribute("aria-invalid", "true");
+  if (field === "last_contact_date") lastContactDate.markInvalid();
 }
 
 function clearErrors() {
@@ -110,7 +112,6 @@ function collectData() {
       null,
     address: get("customerAddress").value.trim() || null,
     notes: get("customerNotes").value.trim() || null,
-    last_contact_date: get("customerLastContact").value || null,
     phone_numbers: [
       ...new Set(
         [...document.querySelectorAll("[data-phone-input]")]
@@ -121,9 +122,7 @@ function collectData() {
   };
   let valid = true;
   try {
-    data.last_contact_date = normalizeJalaliDate(
-      get("customerLastContact").value,
-    );
+    data.last_contact_date = lastContactDate.getValue();
   } catch (error) {
     showError("last_contact_date", error.message);
     valid = false;
@@ -151,7 +150,7 @@ function collectData() {
   return valid ? data : null;
 }
 
-function setBusy(busy) {
+function setBusy(busy, submitter) {
   submitting = busy;
   get("customerForm").setAttribute("aria-busy", String(busy));
   get("customerForm")
@@ -160,18 +159,15 @@ function setBusy(busy) {
       input.disabled = busy;
     });
   get("closeCustomerFormButton").disabled = busy;
-  const button = get("saveCustomerButton");
-  button.replaceChildren();
-  if (busy) button.append(createSpinner());
-  button.append(
-    document.createTextNode(
-      busy
-        ? " در حال ذخیره..."
-        : editingCustomer
-          ? "ذخیره تغییرات"
-          : "ذخیره مشتری",
-    ),
-  );
+  const saveAndOrder = get("saveCustomerAndOrderButton");
+  saveAndOrder.hidden = Boolean(editingCustomer);
+  for (const [button, label] of [
+    [get("saveCustomerButton"), editingCustomer ? "ذخیره تغییرات" : "ذخیره مشتری"],
+    [saveAndOrder, "ذخیره و ثبت سفارش"],
+  ]) {
+    if (busy && button === submitter) button.replaceChildren(createSpinner(), " در حال ذخیره...");
+    else button.textContent = label;
+  }
   updatePhoneRows();
 }
 
@@ -214,10 +210,15 @@ async function submit(event) {
   if (submitting || formDialog.closing) return;
   const data = collectData();
   if (!data) return;
-  setBusy(true);
+  const submitter = event.submitter ?? get("saveCustomerButton");
+  setBusy(true, submitter);
   const editing = editingCustomer;
+  let openCreateOrder;
   let result;
   try {
+    if (!editing && submitter.id === "saveCustomerAndOrderButton") {
+      openCreateOrder = await prepareCreateOrder();
+    }
     const save = () =>
       editing ? updateCustomer(editing.id, data) : createCustomer(data);
     try {
@@ -249,9 +250,13 @@ async function submit(event) {
       formDialog.active &&
       document.activeElement === document.body
     )
-      get("saveCustomerButton").focus();
+      submitter.focus();
   }
-  if (result) await onSaved(result, Boolean(editing));
+  if (result) {
+    const refresh = onSaved(result, Boolean(editing));
+    if (openCreateOrder) await openCreateOrder({ customer: result });
+    await refresh;
+  }
 }
 
 export async function openCreateCustomerModal() {
@@ -259,6 +264,7 @@ export async function openCreateCustomerModal() {
   const current = ++generation;
   editingCustomer = null;
   get("customerForm").reset();
+  lastContactDate.setValue(formatJalaliInput(new Date()));
   clearErrors();
   get("customerFormTitle").textContent = "مشتری جدید";
   get("customerCode").value = "در حال دریافت...";
@@ -293,9 +299,7 @@ export function openEditCustomerModal(customer) {
     ["customerNotes", "notes"],
   ])
     get(id).value = customer[key] || "";
-  get("customerLastContact").value = formatJalaliInput(
-    customer.last_contact_date,
-  );
+  lastContactDate.setValue(formatJalaliInput(customer.last_contact_date));
   if (customer.gender)
     document.querySelector(
       `input[name="customerGender"][value="${customer.gender}"]`,
@@ -306,8 +310,10 @@ export function openEditCustomerModal(customer) {
   formDialog.open(get("customerFirstName"));
 }
 
-export function initializeCustomerModal({ onSaved: callback }) {
-  onSaved = callback;
+export function initializeCustomerModal({ onSaved: saved, prepareCreateOrder: prepare }) {
+  onSaved = saved;
+  prepareCreateOrder = prepare;
+  lastContactDate = initializeCustomerContactDate(get("customerLastContact"));
   onExternalDataChange(async () => {
     if (
       submitting ||
@@ -340,19 +346,6 @@ export function initializeCustomerModal({ onSaved: callback }) {
     },
   });
   get("customerForm").addEventListener("submit", submit);
-  get("customerLastContact").addEventListener("blur", () => {
-    const input = get("customerLastContact");
-    try {
-      const date = normalizeJalaliDate(input.value);
-      if (date)
-        input.value = date.replace(
-          /[0-9]/g,
-          (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)],
-        );
-    } catch {
-      // Preserve incomplete input; submit validation explains the field error.
-    }
-  });
   get("addCustomerPhoneButton").addEventListener("click", () =>
     addPhone("", true),
   );

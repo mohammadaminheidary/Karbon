@@ -1,7 +1,7 @@
 import { onPageRefresh } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { createSpinner } from "../components/loader.js";
 import { getCustomers, getCustomer, deleteCustomer } from "./customer-api.js";
 import { disintegrateCustomerCard } from "./customer-card-animation.js";
@@ -23,7 +23,6 @@ import {
 const get = (id) => document.getElementById(id);
 const PAGE_SIZE = 12;
 const DELETE_DELAY_MS = 4000;
-let onCustomerDeleted;
 let search = "",
   nextOffset = 0,
   total = 0,
@@ -43,10 +42,6 @@ let deleteTimer,
   deleteDeadline = 0,
   deleteInFlight = false,
   deletingCustomer = null;
-
-function toast(message, success = true) {
-  notifyNavbar(message, { role: success ? "status" : "alert" });
-}
 
 function listState(state) {
   if (state === "error" && customersLoaded) {
@@ -71,11 +66,11 @@ function listState(state) {
 }
 
 function createCustomerCard(customer) {
-  const wrapper = element("div");
+  const wrapper = element("div", "card-tilt");
   wrapper.setAttribute("role", "listitem");
   const card = element(
     "button",
-    "group w-full cursor-pointer rounded-xl border border-french-gray/30 bg-white px-4 py-3 text-right transition duration-200 hover:border-persian-blue/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-persian-blue/20",
+    "card-tilt-surface group w-full cursor-pointer rounded-xl border border-french-gray/30 bg-white px-4 py-3 text-right transition duration-200 hover:border-french-gray/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-persian-blue/20",
   );
   card.type = "button";
   card.dataset.customerId = customer.id;
@@ -300,6 +295,8 @@ function renderDetails(customer) {
   ])
     info.append(detailField(label, value, ltr));
   const status = statusMeta(customer.summary.status);
+  const summary = element("div");
+  summary.append(createSummary(customer.summary));
   body.append(
     info,
     element(
@@ -307,7 +304,7 @@ function renderDetails(customer) {
       `my-5 inline-block rounded-full px-3 py-1 text-xs font-bold ${status.classes}`,
       status.label,
     ),
-    createSummary(customer.summary),
+    summary,
   );
   if (!customer.summary.available)
     body.append(
@@ -317,6 +314,22 @@ function renderDetails(customer) {
         "اطلاعات مالی پس از راه‌اندازی بخش سفارش‌ها و پرداخت‌ها در دسترس خواهد بود.",
       ),
     );
+  const carryovers = element("section", "orders-detail-section mt-5 grid gap-3");
+  carryovers.hidden = true;
+  body.append(carryovers);
+  void import("../fiscal-years/customer-carryovers.js").then(({ loadCustomerCarryovers }) =>
+    loadCustomerCarryovers(carryovers, customer.id, async () => {
+      try {
+        const updated = await getCustomer(customer.id);
+        if (summary.isConnected) summary.replaceChildren(createSummary(updated.summary));
+        await loadCustomers({ visibleCount: Math.max(PAGE_SIZE, loadedCustomers.length) });
+      } catch { /* The next customer refresh can retrieve updated totals. */ }
+    }),
+  ).catch(() => {
+    if (!carryovers.isConnected) return;
+    carryovers.hidden = false;
+    carryovers.append(element("p", "orders-error", "دریافت فاکتورهای انتقالی انجام نشد."));
+  });
 }
 
 async function openDetails(id) {
@@ -361,7 +374,7 @@ function cancelDelete() {
   clearTimeout(deleteTimer);
   cancelAnimationFrame(deleteFrame);
   deleteDeadline = 0;
-  if (deletingCustomer) toast("حذف لغو شد.");
+  if (deletingCustomer) notify("حذف لغو شد.");
   deletingCustomer = null;
 }
 
@@ -399,7 +412,7 @@ async function finalDelete() {
     deleteDialog.close();
     detailsDialog.close();
     detailsRequest++;
-    onCustomerDeleted?.(deletedCustomer);
+    notify("مشتری حذف شد", { type: "success" });
     await disintegrateCustomerCard(
       get("customersList").querySelector(`[data-customer-id="${deletedCustomer.id}"]`),
     );
@@ -458,8 +471,7 @@ function startDelete() {
   countdownTick();
 }
 
-export async function initializeCustomers({ onCreated, onDeleted } = {}) {
-  onCustomerDeleted = onDeleted;
+export async function initializeCustomers() {
   detailsDialog = new NavbarPanelDialog("customerDetailsModal", {
     onCancel: () => {
       detailsRequest++;
@@ -470,15 +482,29 @@ export async function initializeCustomers({ onCreated, onDeleted } = {}) {
     canClose: () => !deleteInFlight,
     onCancel: cancelDelete,
   });
+  let openCreateOrder;
   initializeCustomerModal({
+    prepareCreateOrder: async () => {
+      if (!openCreateOrder) {
+        try {
+          const { initializeOrderDialogs } = await import("../orders/order-dialogs.js");
+          openCreateOrder = initializeOrderDialogs(refreshCodes);
+        } catch {
+          throw new Error("پنل سفارش آماده نشد. دوباره تلاش کنید یا مشتری را جداگانه ذخیره کنید.");
+        }
+      }
+      return openCreateOrder;
+    },
     onSaved: async (customer, edited) => {
-      if (edited) toast("اطلاعات مشتری با موفقیت ویرایش شد.");
+      notify(
+        edited ? "اطلاعات مشتری با موفقیت ویرایش شد." : "مشتری اضافه شد",
+        { type: "success" },
+      );
       if (selectedCustomer?.id === customer.id) {
         selectedCustomer = customer;
         renderDetails(customer);
       }
       if (!edited) {
-        onCreated?.(customer);
         get("customerSearchInput").value = "";
         search = "";
         nextOffset = 0;
