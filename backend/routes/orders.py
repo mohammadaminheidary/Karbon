@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 from database import get_database
 from security.auth import get_current_user
 from routes.finance import finance_errors
-from schemas.order_schema import OrderWrite, ProductWrite, ProductEdit
+from schemas.order_schema import OrderWrite, ProductWrite, ProductEdit, SettlementWrite
 from schemas.finance_schema import FinanceDelete
 from services import order_service as service
+from services.fiscal_period import active_period, effective_day, jalali
 
 router = APIRouter(prefix="/api", tags=["Orders"], dependencies=[Depends(get_current_user)])
 
@@ -47,6 +48,12 @@ def final_invoice(order_id: int = Path(gt=0, le=9223372036854775807), db: Sessio
         return service.invoice(db, order_id)
 
 
+@router.post("/orders/{order_id}/payments", status_code=201)
+def settle_invoice(data: SettlementWrite, order_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database)):
+    with finance_errors():
+        return service.settle_invoice(db, order_id, data)
+
+
 @router.post("/products", status_code=201)
 def create_product(data: ProductWrite, db: Session = Depends(get_database)):
     with finance_errors():
@@ -56,7 +63,7 @@ def create_product(data: ProductWrite, db: Session = Depends(get_database)):
 @router.get("/orders/next-number")
 def next_number(db: Session = Depends(get_database)):
     with finance_errors():
-        return {"order_number": service.next_number(db)}
+        return {"order_number": service.next_number(db), "business_jalali": jalali(effective_day(active_period(db)))}
 
 
 @router.get("/orders")

@@ -4,6 +4,7 @@ from sqlalchemy.orm import aliased
 from models.inventory import Brand, InventoryOption, Purchase, PurchaseItem
 from models.order import PRODUCT_BRAND_CHECK, Product, OrderItem
 from services.finance_service import FinanceError, require
+from services.fiscal_period import ensure_open, stock_change
 from schemas.customer_schema import normalize_text
 import hashlib
 import json
@@ -211,6 +212,7 @@ def save_purchase(db, data):
             result = purchase_data(db, previous)
             db.commit()
             return result
+        ensure_open(db, data.purchase_date)
         records, products, quantities = [], {}, Counter()
         for position, row in enumerate(data.rows, 1):
             category, parent = require_category(db, row.category_id)
@@ -231,6 +233,7 @@ def save_purchase(db, data):
                 raise FinanceError("موجودی پس از خرید بیش از حد مجاز است.", 422)
             product.stock += quantity
             product.revision += 1
+            stock_change(db, product, data.purchase_date, quantity)
         # Retain the original receipt columns as the first-row snapshot for older
         # readers; purchase_items owns the complete invoice and its row totals.
         first = {key: value for key, value in records[0].items() if key != "position"}

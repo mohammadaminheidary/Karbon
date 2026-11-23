@@ -6,6 +6,7 @@ from security.auth import get_current_user
 from routes.finance import finance_errors
 from schemas.inventory_schema import InventoryCategoryWrite, InventoryNameWrite, PurchaseWrite
 from services import inventory_service as service
+from services.fiscal_period import active_period, effective_day, jalali
 
 router = APIRouter(prefix="/api/settings/inventory-options", tags=["Inventory settings"], dependencies=[Depends(get_current_user)])
 OptionKind = Literal["categories", "units"]
@@ -38,7 +39,7 @@ def delete_brand(brand_id: int = Path(gt=0, le=9223372036854775807), db: Session
 
 @purchase_router.get("/next-number")
 def next_purchase(db: Session = Depends(get_database)):
-    return {"invoice_number": service.next_purchase_number(db)}
+    return {"invoice_number": service.next_purchase_number(db), "business_jalali": jalali(effective_day(active_period(db)))}
 
 
 @purchase_router.post("", status_code=201)

@@ -39,6 +39,7 @@ from routes.faces import router as faces_router
 from routes.dashboard import router as dashboard_router
 from routes.reports import router as reports_router
 from routes.backup import router as backup_router
+from routes.fiscal_years import router as fiscal_years_router
 from services.database_maintenance import DatabaseMaintenanceMiddleware, database_access
 from services.fiscal_period import initialize_fiscal_storage
 from config import KARBON_VERSION
@@ -88,6 +89,8 @@ app.add_middleware(PrivateResponseMiddleware)
 async def private_face_validation(request, error):
     if request.url.path.startswith("/api/settings/backup"):
         return JSONResponse({"detail": "اطلاعات درخواست پشتیبان نامعتبر است."}, status_code=422)
+    if request.url.path.startswith("/api/settings/fiscal-years/") and request.url.path.endswith("/close"):
+        return JSONResponse({"detail": "اطلاعات تأیید یا عبارت عبور پشتیبان نامعتبر است."}, status_code=422)
     if request.url.path.startswith("/api/faces"):
         # Pydantic's default error includes input values (including biometrics).
         return JSONResponse({"detail": {"code": "INVALID_INPUT", "message": "تصاویر معتبر با تعداد مناسب و رضایت ثبت چهره لازم است."}}, status_code=422)
@@ -216,6 +219,7 @@ app.include_router(faces_router)
 app.include_router(dashboard_router)
 app.include_router(reports_router)
 app.include_router(backup_router)
+app.include_router(fiscal_years_router)
 
 
 # ======================================================

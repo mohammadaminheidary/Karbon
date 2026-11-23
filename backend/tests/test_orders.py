@@ -189,6 +189,7 @@ class OrdersIntegrationTests(unittest.TestCase):
         for method,path,body in [("GET","/orders",None),("POST","/orders",self.payload()),("GET","/orders/next-number",None),("GET","/products",None),("POST","/products",{"name":"x","unit":"y","price":1})]:
             self.assertEqual(self.request(method,path,body,False)[0],401)
         self.assertEqual(len(self.request("GET","/products")[1]),2)
+        self.assertEqual(self.post("/products", {"name": "کالای بدون قیمت", "unit": "عدد"})["price"], 0)
         self.assertEqual(self.request("POST","/products",{"name":"کالای اول","unit":"عدد","price":1})[0],409)
         self.assertEqual(self.request("POST","/products",{"name":"x","unit":"y","price":-1})[0],422)
         self.post("/orders",self.payload(payments=[]))
@@ -208,7 +209,10 @@ class OrdersIntegrationTests(unittest.TestCase):
         self.assertEqual(self.request("PUT",f'/products/{self.product["id"]}',{**body,"revision":updated["revision"]})[0],409)
         product = next(item for item in self.request("GET","/products")[1] if item["id"]==self.product["id"])
         self.assertEqual(product["stock"],18)
-        self.assertEqual(self.request("PUT",f'/products/{self.product["id"]}',{**body,"revision":product["revision"],"active":False})[0],200)
+        edit = {key: value for key, value in body.items() if key != "price"}
+        status, edited = self.request("PUT", f'/products/{self.product["id"]}', {**edit, "revision": product["revision"], "active": False})
+        self.assertEqual(status, 200, edited)
+        self.assertEqual(edited["price"], 2500)
         self.assertNotIn(self.product["id"],[item["id"] for item in self.request("GET","/products")[1]])
         self.assertIn(self.product["id"],[item["id"] for item in self.request("GET","/products?include_inactive=true")[1]])
         self.assertEqual(self.request("POST","/products",{"name":"x","unit":"y","price":1,"product_code":"fake"})[0],422)

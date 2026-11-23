@@ -12,6 +12,7 @@ from models.finance import BankAccount, ExpenseCategory, FinancialTransaction
 from schemas.finance_schema import BankWrite, CategoryWrite, TransactionWrite, TransactionEdit, FinanceDelete
 from security.auth import get_current_user
 from services import finance_service as service
+from services.fiscal_period import FiscalPeriodError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Finance"], dependencies=[Depends(get_current_user)])
@@ -23,6 +24,8 @@ def finance_errors():
         yield
     except service.FinanceError as error:
         raise HTTPException(error.status, error.message)
+    except FiscalPeriodError as error:
+        raise HTTPException(409, str(error))
     except IntegrityError:
         logger.exception("Finance constraint failed")
         raise HTTPException(409, "شماره کارت، شبا، شماره حساب یا عنوان تکراری است، یا اطلاعات مرتبط قابل ذخیره نیست.")

@@ -3,6 +3,9 @@
 Call while holding the SQLite write lock, in the same transaction as deletion.
 """
 from sqlalchemy import text
+from services.fiscal_period import locked_date_sql
+
+OPEN_TRANSACTION = f"NOT {locked_date_sql('transaction_date')}"
 
 
 def compact_customer_codes(db):
@@ -14,7 +17,7 @@ def compact_customer_codes(db):
         db.execute(text("UPDATE customers SET customer_code = -id WHERE id=:id"), [{"id": item["id"]} for item in changed])
         db.execute(text("UPDATE customers SET customer_code=:code WHERE id=:id"), changed)
     if codes:
-        db.execute(text("UPDATE financial_transactions SET account_code=:code WHERE customer_id=:id AND account_code!=:code"), [{**item, "code": str(item["code"])} for item in codes])
+        db.execute(text(f"UPDATE financial_transactions SET account_code=:code WHERE customer_id=:id AND account_code!=:code AND {OPEN_TRANSACTION}"), [{**item, "code": str(item["code"])} for item in codes])
 
 
 def compact_category_codes(db):
@@ -24,11 +27,14 @@ def compact_category_codes(db):
     if changed:
         db.execute(text("UPDATE expense_categories SET display_code=:code WHERE id=:id"), changed)
     if codes:
-        db.execute(text("UPDATE financial_transactions SET account_code=:code WHERE expense_category_id=:id AND account_code!=:code"), [{**item, "code": f"E-{item['code']:06d}"} for item in codes])
+        db.execute(text(f"UPDATE financial_transactions SET account_code=:code WHERE expense_category_id=:id AND account_code!=:code AND {OPEN_TRANSACTION}"), [{**item, "code": f"E-{item['code']:06d}"} for item in codes])
 
 
 def compact_transaction_numbers(db):
-    rows = db.execute(text("SELECT id, transaction_number FROM financial_transactions WHERE deleted_at IS NULL ORDER BY id")).all()
+    # Transaction numbers become stable references once fiscal books are kept.
+    rows = db.execute(text("""SELECT id, transaction_number FROM financial_transactions
+        WHERE deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM fiscal_years)
+        ORDER BY id""")).all()
     changed = [{"number": number, "id": record_id} for number, (record_id, old) in enumerate(rows, 1) if number != old]
     if changed:
         db.execute(text("UPDATE financial_transactions SET transaction_number=:number WHERE id=:id"), changed)

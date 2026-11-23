@@ -9,15 +9,16 @@ from sqlalchemy import func, or_, text
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.exc import IntegrityError
 
-from config import APP_TIMEZONE
+from config import app_timezone
 from models.document import Document, DocumentAccount
 from models.finance import BankAccount, BankDirectory, FinancialTransaction as Transaction
 from models.order import OrderPayment
 from schemas.customer_schema import normalize_text
 from schemas.finance_schema import TransactionEdit
 from security.password import verify_password
-from services.finance_service import FinanceError, apply_transaction_fields, require, serialize, sums, invoice_links
-from services.reference_codes import compact_transaction_numbers
+from services.finance_service import FinanceError, apply_transaction_fields, require, serialize, sums, invoice_links, next_transaction_number
+from services.fiscal_period import active_period, effective_day, ensure_open, in_active_period, jalali, locked_date_sql
+from services.reference_codes import OPEN_TRANSACTION, compact_transaction_numbers
 
 
 def initialize_document_storage(engine):
@@ -51,7 +52,10 @@ def initialize_document_storage(engine):
                 index.create(bind=connection, checkfirst=True)
             # Copy only accounts already used by documents. No customer/category
             # relationships remain on these rows, so future renumbering is isolated.
-            legacy = connection.execute(text("SELECT id, document_id, kind, title, account_code FROM financial_transactions WHERE document_id IS NOT NULL AND document_account_id IS NULL")).mappings().all()
+            legacy = connection.execute(text(f"""SELECT id, document_id, kind, title, account_code
+                FROM financial_transactions WHERE document_id IS NOT NULL AND document_account_id IS NULL
+                AND {OPEN_TRANSACTION} AND document_id IN (
+                    SELECT id FROM documents WHERE NOT {locked_date_sql('date')})""")).mappings().all()
             accounts = {(row.code, row.kind): row.id for row in connection.execute(text("SELECT id, code, kind FROM document_accounts"))}
             used_codes = {code for code, _ in accounts}
             changed = set()
@@ -147,7 +151,8 @@ def summary(document, income=0, expense=0, count=0):
 
 
 def list_documents(db, search="", start_date=None, end_date=None, document_type="", skip=0, limit=15):
-    query = db.query(Document).filter(Document.deleted_at.is_(None))
+    available = db.query(Document).filter(Document.deleted_at.is_(None), in_active_period(Document.date))
+    query = available
     total = query.count()
     search = normalize_text(search)
     if search:
@@ -167,8 +172,8 @@ def list_documents(db, search="", start_date=None, end_date=None, document_type=
     return {
         "total": total, "filtered_total": filtered_total,
         "items": [summary(item, *aggregates.get(item.id, (0, 0, 0))) for item in documents],
-        "document_types": [row[0] for row in db.query(Document.document_type).filter(Document.deleted_at.is_(None)).distinct().order_by(Document.document_type).all()],
-        "available_dates": [row[0] for row in db.query(Document.date).filter(Document.deleted_at.is_(None)).distinct().order_by(Document.date).all()],
+        "document_types": [row[0] for row in available.with_entities(Document.document_type).distinct().order_by(Document.document_type).all()],
+        "available_dates": [row[0] for row in available.with_entities(Document.date).distinct().order_by(Document.date).all()],
     }
 
 
@@ -193,7 +198,8 @@ def next_number(db, now):
 
 
 def preview_number(db):
-    return {"number": next_number(db, datetime.now(APP_TIMEZONE))}
+    return {"number": next_number(db, datetime.now(app_timezone())),
+            "business_jalali": jalali(effective_day(active_period(db)))}
 
 
 def save_document(db, data, document_id=None):
@@ -218,7 +224,8 @@ def save_document(db, data, document_id=None):
             raise FinanceError("این سند قبلاً ثبت و سپس ویرایش شده است؛ اطلاعات آن را دوباره دریافت کنید.", 409)
         if document_id is not None and data.revision != document.revision:
             raise FinanceError("سند در جای دیگری تغییر کرده است؛ جزئیات را دوباره دریافت و ویرایش کنید.", 409)
-        now = datetime.now(APP_TIMEZONE)
+        ensure_open(db, data.date, document.date if document is not None else data.date)
+        now = datetime.now(app_timezone())
         if document is None:
             if any(row.id is not None for row in data.rows):
                 raise FinanceError("سند جدید نباید شناسه ردیف قبلی داشته باشد.", 422)
@@ -235,11 +242,11 @@ def save_document(db, data, document_id=None):
         db.flush()
         existing = {item.id: item for item in db.query(Transaction).filter(Transaction.document_id == document.id, Transaction.deleted_at.is_(None)).all()}
         used = set()
-        count = db.query(Transaction.id).filter(Transaction.deleted_at.is_(None)).count()
+        number = next_transaction_number(db)
         for index, row in enumerate(data.rows):
             if row.id is not None and row.id not in existing:
                 raise FinanceError("ردیف انتخاب‌شده به این سند تعلق ندارد یا حذف شده است.", 409)
-            item = existing[row.id] if row.id is not None else Transaction(request_id=str(uuid5(data.request_id, f"row-{index}")), document_id=document.id, transaction_number=count + index + 1)
+            item = existing[row.id] if row.id is not None else Transaction(request_id=str(uuid5(data.request_id, f"row-{index}")), document_id=document.id, transaction_number=number + index)
             if row.id is not None:
                 used.add(row.id)
             if item.id and db.query(OrderPayment.id).filter(OrderPayment.transaction_id == item.id).first():
@@ -249,6 +256,7 @@ def save_document(db, data, document_id=None):
             db.add(item)
         for key, item in existing.items():
             if key not in used:
+                ensure_open(db, item.transaction_date)
                 if db.query(OrderPayment.id).filter(OrderPayment.transaction_id == key).first():
                     raise FinanceError("پرداخت متصل به فاکتور نهایی‌شده قابل حذف نیست.", 409)
                 item.deleted_at = item.updated_at = datetime.now(timezone.utc)
@@ -270,8 +278,10 @@ def delete_document(db, document_id, data, user):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         document = require(db, Document, document_id, "سند", include_deleted=True)
+        ensure_open(db, document.date)
         if document.deleted_at is None:
             rows = db.query(Transaction).filter(Transaction.document_id == document.id).all()
+            ensure_open(db, *(item.transaction_date for item in rows))
             if db.query(OrderPayment.id).join(Transaction, OrderPayment.transaction_id == Transaction.id).filter(Transaction.document_id == document.id).first():
                 raise FinanceError("سند دارای پرداخت فاکتور نهایی‌شده قابل حذف نیست.", 409)
             document.deleted_at = datetime.now(timezone.utc)

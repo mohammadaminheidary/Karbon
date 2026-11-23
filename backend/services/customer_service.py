@@ -1,10 +1,14 @@
+from datetime import date
+
 from sqlalchemy import String, case, cast, exists, func, insert, or_, select, text
 from sqlalchemy.orm import object_session
 
 from models.customer import Customer, utc_now
 from models.finance import FinancialTransaction
+from models.fiscal_year import FiscalYear
 from models.order import Order, OrderPayment
 from services.customer_ids import generate_customer_id, generate_customer_ids
+from services.fiscal_period import active_value, in_active_period
 from services.reference_codes import compact_customer_codes
 from schemas.customer_schema import CustomerSummary, normalize_text
 
@@ -27,21 +31,50 @@ class CustomerHasOrders(Exception):
     pass
 
 
-def get_summary(db, customer_id):
-    """Compute invoice totals and receipts from their authoritative records."""
-    summary = CustomerSummary()
-    count, total = db.query(func.count(Order.id), func.coalesce(func.sum(Order.subtotal - Order.discount), 0)).filter(Order.customer_id == customer_id, Order.deleted_at.is_(None)).one()
-    summary.order_count = count
-    summary.total_orders = int(total)
-    summary.paid = int(db.query(func.coalesce(func.sum(FinancialTransaction.amount), 0)).join(
-        OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id).join(Order, Order.id == OrderPayment.order_id).filter(Order.customer_id == customer_id, Order.deleted_at.is_(None)).scalar())
-    summary.available = True
-    summary.debt = summary.total_orders - summary.paid
-    summary.status = (
-        "debtor" if summary.debt > 0 else
-        "settled" if summary.order_count > 0 else "no_payment"
+def invoice_balances(db, customer_id=None):
+    # Receipts on older invoices are active-year cash. Only active-year
+    # invoices contribute sales, and only payments through the period end
+    # contribute to outstanding balances.
+    end = func.coalesce(active_value(FiscalYear.end_date).scalar_subquery(), date.max)
+    tx = FinancialTransaction
+    payments = db.query(
+        OrderPayment.order_id.label("order_id"),
+        func.sum(tx.amount).label("paid_through_end"),
+        func.sum(case((in_active_period(tx.transaction_date), tx.amount), else_=0)).label("paid"),
+    ).join(tx, tx.id == OrderPayment.transaction_id).filter(
+        tx.deleted_at.is_(None), tx.transaction_date <= end,
     )
-    return summary
+    if customer_id is not None:
+        payments = payments.filter(OrderPayment.order_id.in_(select(Order.id).where(Order.customer_id == customer_id)))
+    allocations = payments.group_by(OrderPayment.order_id).subquery()
+    invoice_total = Order.subtotal - Order.discount
+    in_period = in_active_period(Order.invoice_date)
+    through_end = Order.invoice_date <= end
+    unpaid = func.max(invoice_total - func.coalesce(allocations.c.paid_through_end, 0), 0)
+    query = db.query(
+        Order.customer_id.label("customer_id"),
+        func.sum(case((in_period, 1), else_=0)).label("order_count"),
+        func.sum(case((in_period, invoice_total), else_=0)).label("sales"),
+        func.sum(allocations.c.paid).label("paid"),
+        func.sum(case((through_end, unpaid), else_=0)).label("debt"),
+        func.sum(case((through_end, 1), else_=0)).label("invoices"),
+    ).outerjoin(allocations, allocations.c.order_id == Order.id).filter(
+        Order.deleted_at.is_(None),
+    )
+    if customer_id is not None:
+        query = query.filter(Order.customer_id == customer_id)
+    return query.group_by(Order.customer_id)
+
+
+def customer_summary(count=0, sales=0, paid=0, debt=0, invoices=0):
+    return CustomerSummary(order_count=int(count or 0), total_orders=int(sales or 0),
+                           paid=int(paid or 0), debt=int(debt or 0), available=True,
+                           status="debtor" if debt else "settled" if invoices else "no_payment")
+
+
+def get_summary(db, customer_id):
+    row = invoice_balances(db, customer_id).one_or_none()
+    return customer_summary(*row[1:]) if row else customer_summary()
 
 
 def serialize_customer(customer, summary=None):
@@ -66,28 +99,13 @@ def list_customers(db, search="", skip=0, limit=50, *, options_only=False, custo
     query = db.query(Customer).filter(Customer.deleted_at.is_(None))
     if customer_id is not None:
         query = query.filter(Customer.id == customer_id)
-    # Match get_summary's debt/status rules across all customers, independently
-    # of the visible search results and pagination. Aggregate payments separately
-    # so multiple receipts cannot multiply an order's invoice total.
-    orders = db.query(
-        Order.customer_id.label("customer_id"),
-        func.count(Order.id).label("order_count"),
-        func.sum(Order.subtotal - Order.discount).label("total"),
-    ).filter(Order.deleted_at.is_(None)).group_by(Order.customer_id).subquery()
-    payments = db.query(
-        Order.customer_id.label("customer_id"),
-        func.sum(FinancialTransaction.amount).label("paid"),
-    ).select_from(FinancialTransaction).join(
-        OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id,
-    ).join(Order, Order.id == OrderPayment.order_id).filter(Order.deleted_at.is_(None)).group_by(Order.customer_id).subquery()
-    debt = func.coalesce(orders.c.total, 0) - func.coalesce(payments.c.paid, 0)
-    counts = None if options_only else query.outerjoin(orders, orders.c.customer_id == Customer.id).outerjoin(
-        payments, payments.c.customer_id == Customer.id,
-    ).with_entities(
-        func.count(Customer.id),
-        func.coalesce(func.sum(case((debt > 0, 1), else_=0)), 0),
-        func.coalesce(func.sum(case(((debt <= 0) & (orders.c.order_count > 0), 1), else_=0)), 0),
-    ).one()
+    if not options_only:
+        balances = invoice_balances(db).subquery()
+        counts = query.outerjoin(balances, balances.c.customer_id == Customer.id).with_entities(
+            func.count(Customer.id),
+            func.coalesce(func.sum(case((balances.c.debt > 0, 1), else_=0)), 0),
+            func.coalesce(func.sum(case(((balances.c.debt == 0) & (balances.c.invoices > 0), 1), else_=0)), 0),
+        ).one()
     search = normalize_text(search).lower()
     if search:
         # Escape LIKE wildcards so searches are literal and parameterized.
@@ -109,15 +127,10 @@ def list_customers(db, search="", skip=0, limit=50, *, options_only=False, custo
         fields = (Customer.id, Customer.customer_code, Customer.first_name, Customer.last_name, Customer.phone_numbers)
         items = query.with_entities(*fields).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
         return {"items": [dict(row._mapping) for row in items], "total": total, "skip": skip, "limit": limit}
-    items = query.outerjoin(orders, orders.c.customer_id == Customer.id).outerjoin(
-        payments, payments.c.customer_id == Customer.id,
-    ).add_columns(orders.c.order_count, orders.c.total, payments.c.paid).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
-    serialized = []
-    for item, count, amount, paid in items:
-        count, amount, paid = int(count or 0), int(amount or 0), int(paid or 0)
-        summary = CustomerSummary(order_count=count, total_orders=amount, paid=paid, debt=amount-paid,
-                                  status="debtor" if amount > paid else "settled" if count else "no_payment", available=True)
-        serialized.append(serialize_customer(item, summary))
+    items = query.outerjoin(balances, balances.c.customer_id == Customer.id).add_columns(
+        balances.c.order_count, balances.c.sales, balances.c.paid, balances.c.debt, balances.c.invoices,
+    ).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
+    serialized = [serialize_customer(item, customer_summary(*values)) for item, *values in items]
     return {"items": serialized, "total": total, "skip": skip, "limit": limit,
             "total_customers": counts[0], "unsettled_customers": counts[1], "settled_customers": counts[2]}
 
@@ -175,7 +188,6 @@ def insert_customers(db, rows):
              customer_code=first_code + offset, created_at=registered_at, permanent_id=permanent_id)
         for offset, (row, permanent_id) in enumerate(zip(rows, permanent_ids))
     ], execution_options={"render_nulls": True})
-
 
 
 def save_customer(db, data, customer_id=None):

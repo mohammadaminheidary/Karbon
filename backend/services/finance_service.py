@@ -5,19 +5,21 @@ import re
 from pathlib import Path
 
 import jdatetime
-from sqlalchemy import case, func, text, or_, and_, cast, String
+from sqlalchemy import case, func, text, or_, and_, cast, String, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import object_session
 
-from config import APP_TIMEZONE
+from config import app_timezone
 from models.customer import Customer
 from models.document import DocumentAccount
 from models.finance import BankAccount, BankDirectory, ExpenseCategory, FinancialTransaction as Transaction
+from models.fiscal_year import FiscalBankOpening, FiscalYear
 from models.order import Order, OrderPayment, CASH_ACCOUNT_NUMBER
 from schemas.finance_schema import parse_jalali
 from schemas.customer_schema import normalize_text, DIGITS
 from security.password import verify_password
 from services.reference_codes import compact_customer_codes, compact_category_codes, compact_transaction_numbers
+from services.fiscal_period import active_period, active_value, effective_day, ensure_open, in_active_period
 
 
 def initialize_bank_storage(engine):
@@ -86,26 +88,46 @@ def totals(income, expense):
     return {"income": int(income), "expense": int(expense), "balance": int(income - expense)}
 
 
+def next_transaction_number(db):
+    return 1 + int(db.scalar(select(func.coalesce(func.max(Transaction.transaction_number), 0)).where(or_(
+        Transaction.deleted_at.is_(None), select(FiscalYear.year).exists()))))
+
+
+def exact_amount(value):
+    return str(value) if abs(value) > 2**53 - 1 else value
+
+
 def bank_list(db, bank_id=None):
-    ledger = db.query(Transaction.bank_id, *sums()).filter(Transaction.deleted_at.is_(None))
-    accounts = db.query(BankAccount, BankDirectory).outerjoin(BankDirectory, BankAccount.bank == BankDirectory.code).filter(BankAccount.deleted_at.is_(None))
+    ledger = db.query(Transaction.bank_id, *sums()).filter(Transaction.deleted_at.is_(None), in_active_period(Transaction.transaction_date))
+    referenced = select(Transaction.id).where(Transaction.bank_id == BankAccount.id, Transaction.deleted_at.is_(None)).exists()
+    accounts = db.query(BankAccount, BankDirectory, FiscalBankOpening.balance, referenced.label("referenced")).outerjoin(
+        BankDirectory, BankAccount.bank == BankDirectory.code).outerjoin(
+        FiscalBankOpening, (FiscalBankOpening.bank_id == BankAccount.id)
+        & (FiscalBankOpening.year == active_value(FiscalYear.year).scalar_subquery())
+    ).filter(BankAccount.deleted_at.is_(None))
     if bank_id is not None:
         ledger = ledger.filter(Transaction.bank_id == bank_id)
         accounts = accounts.filter(BankAccount.id == bank_id)
     grouped = ledger.group_by(Transaction.bank_id).all()
     values = {key: totals(income, expense) for key, income, expense in grouped}
-    return [{
-        **{column.name: getattr(bank, column.name) for column in BankAccount.__table__.columns},
-        "name": directory.name if directory else bank.name,
-        "logo_url": directory.logo_url if directory else None,
-        "profile_complete": all((bank.first_name, bank.last_name, bank.bank, bank.card_number)),
-        "opening_balance": bank.opening_balance, "active": bank.active,
-        "is_cash": bank.account_number == CASH_ACCOUNT_NUMBER,
-        "can_edit": bank.account_number != CASH_ACCOUNT_NUMBER,
-        "can_delete": bank.account_number != CASH_ACCOUNT_NUMBER and bank.id not in values,
-        **values.get(bank.id, totals(0, 0)),
-        "balance": bank.opening_balance + values.get(bank.id, totals(0, 0))["balance"],
-    } for bank, directory in accounts.order_by(BankAccount.id).all()]
+    result = []
+    for bank, directory, opening, has_transactions in accounts.order_by(BankAccount.id):
+        activity = values.get(bank.id, totals(0, 0))
+        start_balance = bank.opening_balance if opening is None else opening
+        is_cash = bank.account_number == CASH_ACCOUNT_NUMBER
+        result.append({
+            **{column.name: getattr(bank, column.name) for column in BankAccount.__table__.columns},
+            "name": directory.name if directory else bank.name,
+            "logo_url": directory.logo_url if directory else None,
+            "profile_complete": all((bank.first_name, bank.last_name, bank.bank, bank.card_number)),
+            "opening_balance": exact_amount(start_balance),
+            "opening_balance_locked": opening is not None,
+            "is_cash": is_cash, "can_edit": not is_cash,
+            "can_delete": not is_cash and not has_transactions and not opening,
+            "income": exact_amount(activity["income"]), "expense": exact_amount(activity["expense"]),
+            "balance": exact_amount(start_balance + activity["balance"]),
+        })
+    return result
 
 
 def category_list(db):
@@ -147,7 +169,14 @@ def save_bank(db, data, record_id=None):
     # Keep a previously selected inactive bank editable, but reject new selection.
     if not directory.active and bank.bank != directory.code:
         raise FinanceError("بانک انتخاب‌شده غیرفعال است.", 409)
-    for key, value in data.model_dump(exclude={"account_number"}).items():
+    period = active_period(db)
+    opening = db.get(FiscalBankOpening, (period.year, bank.id)) if period and bank.id else None
+    if opening and "opening_balance" in data.model_fields_set and data.opening_balance != opening.balance:
+        raise FinanceError("مانده افتتاحیه از سال بسته‌شده منتقل شده است و قابل تغییر نیست.", 409)
+    excluded = {"account_number"}
+    if opening:
+        excluded.add("opening_balance")
+    for key, value in data.model_dump(exclude=excluded).items():
         setattr(bank, key, value)
     bank.name = directory.name
     bank.deleted_at = None
@@ -169,7 +198,7 @@ def invoice_links(db, transaction_ids):
     if not links:
         return {}
     order_ids = {order.id for _, order in links}
-    paid = dict(db.query(OrderPayment.order_id, func.sum(Transaction.amount)).join(Transaction, OrderPayment.transaction_id == Transaction.id).filter(OrderPayment.order_id.in_(order_ids)).group_by(OrderPayment.order_id).all())
+    paid = dict(db.query(OrderPayment.order_id, func.sum(Transaction.amount)).join(Transaction, OrderPayment.transaction_id == Transaction.id).filter(OrderPayment.order_id.in_(order_ids), Transaction.deleted_at.is_(None)).group_by(OrderPayment.order_id).all())
     return {payment.transaction_id: {"order_id": order.id, "invoice_code": order.invoice_code, "method": payment.method,
             "subtotal": order.subtotal, "discount": order.discount, "total": order.subtotal-order.discount,
             "paid": int(paid[order.id]), "remaining": order.subtotal-order.discount-int(paid[order.id])}
@@ -194,6 +223,7 @@ def serialize(item, bank, directory=None, *, links=None):
 def apply_transaction_fields(db, item, data, now=None):
     """Validate references and apply a row without committing its owner's unit of work."""
     existing = item.id is not None
+    ensure_open(db, data.transaction_date, item.transaction_date if existing else data.transaction_date)
     bank = require(db, BankAccount, data.bank_id, "بانک", active=not existing or data.bank_id != item.bank_id)
     if data.document_account_id is not None:
         if item.document_id is None:
@@ -217,7 +247,7 @@ def apply_transaction_fields(db, item, data, now=None):
     if data.time_mode == "manual":
         item.transaction_time = f"{data.hour:02d}:{data.minute:02d}:00"
     elif not existing:
-        item.transaction_time = (now or datetime.now(APP_TIMEZONE)).strftime("%H:%M:%S")
+        item.transaction_time = (now or datetime.now(app_timezone())).strftime("%H:%M:%S")
     item.updated_at = datetime.now(timezone.utc)
     return bank
 
@@ -241,8 +271,7 @@ def save_transaction(db, data):
             result = serialize(prior, bank, db.get(BankDirectory, bank.bank) if bank.bank else None)
             db.commit()
             return result
-        item = Transaction(request_id=str(data.request_id),
-                           transaction_number=db.query(Transaction.id).filter(Transaction.deleted_at.is_(None)).count() + 1)
+        item = Transaction(request_id=str(data.request_id), transaction_number=next_transaction_number(db))
         bank = apply_transaction_fields(db, item, data)
         db.add(item)
         db.flush()
@@ -261,7 +290,8 @@ def daily(db, day):
         raise FinanceError("تاریخ انتخاب‌شده در محدوده تقویم شمسی نیست.", 422) from None
     rows = db.query(Transaction, BankAccount, BankDirectory).join(BankAccount, Transaction.bank_id == BankAccount.id).outerjoin(
         BankDirectory, BankAccount.bank == BankDirectory.code).filter(
-        Transaction.transaction_date == day, Transaction.deleted_at.is_(None)).order_by(Transaction.transaction_time, Transaction.id).all()
+        Transaction.transaction_date == day, Transaction.deleted_at.is_(None),
+        in_active_period(Transaction.transaction_date)).order_by(Transaction.transaction_time, Transaction.id).all()
     links = invoice_links(db, [item.id for item, _, _ in rows])
     income = expense = 0
     points = [{"time": "00:00:00", **totals(0, 0)}]
@@ -281,7 +311,8 @@ def calendar(db, start, end):
     if end < start or (end - start).days > 62:
         raise FinanceError("بازه تقویم باید حداکثر ۶۳ روز و به ترتیب تاریخ باشد.", 422)
     rows = db.query(Transaction.transaction_date, *sums()).filter(
-        Transaction.transaction_date.between(start, end), Transaction.deleted_at.is_(None)).group_by(Transaction.transaction_date).all()
+        Transaction.transaction_date.between(start, end), Transaction.deleted_at.is_(None),
+        in_active_period(Transaction.transaction_date)).group_by(Transaction.transaction_date).all()
     values = {day: totals(income, expense) for day, income, expense in rows}
     return [{"date": start + timedelta(days=offset), **values.get(start + timedelta(days=offset), totals(0, 0))}
             for offset in range((end - start).days + 1)]
@@ -312,7 +343,7 @@ def bank_activity(db, bank_id, period, anchor=None):
     if bank is None:
         raise FinanceError("حساب بانکی موردنظر پیدا نشد.", 404)
     try:
-        end = jalali_filter(anchor) if anchor else datetime.now(APP_TIMEZONE).date()
+        end = jalali_filter(anchor) if anchor else effective_day(active_period(db))
         jalali = jdatetime.date.fromgregorian(date=end)
         if period == "yesterday":
             start = end = end - timedelta(days=1)
@@ -333,7 +364,8 @@ def bank_activity(db, bank_id, period, anchor=None):
     except (ValueError, OverflowError):
         raise FinanceError("بازه انتخاب‌شده در محدوده تقویم شمسی نیست.", 422) from None
     rows = db.query(Transaction.transaction_date, *sums()).filter(
-        Transaction.bank_id == bank_id, Transaction.deleted_at.is_(None), Transaction.transaction_date.between(start, end)).group_by(Transaction.transaction_date).all()
+        Transaction.bank_id == bank_id, Transaction.deleted_at.is_(None), Transaction.transaction_date.between(start, end),
+        in_active_period(Transaction.transaction_date)).group_by(Transaction.transaction_date).all()
     values = {day: totals(income, expense) for day, income, expense in rows}
     chart = [{"date": start + timedelta(days=offset), **values.get(start + timedelta(days=offset), totals(0, 0))}
              for offset in range((end - start).days + 1)]
@@ -345,7 +377,8 @@ def bank_transactions(db, bank_id, *, start_date=None, end_date=None, day=None, 
                       min_amount=None, max_amount=None, search=None, cursor=None):
     bank = require(db, BankAccount, bank_id, "حساب بانکی")
     directory = db.get(BankDirectory, bank.bank) if bank.bank else None
-    query = db.query(Transaction).filter(Transaction.bank_id == bank_id, Transaction.deleted_at.is_(None))
+    query = db.query(Transaction).filter(Transaction.bank_id == bank_id, Transaction.deleted_at.is_(None),
+                                        in_active_period(Transaction.transaction_date))
     start = jalali_filter(start_date) if start_date else None
     end = jalali_filter(end_date) if end_date else None
     if start and end and end < start:
@@ -439,6 +472,8 @@ def delete_finance_record(db, model, record_id, data, user):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         item = require(db, model, record_id, "اطلاعات", include_deleted=True)
+        if model is Transaction:
+            ensure_open(db, item.transaction_date)
         if model is Transaction and item.document_id is not None:
             raise FinanceError("تراکنش متصل به سند را با حذف یا ویرایش همان سند تغییر دهید.", 409)
         if model is Transaction and db.query(OrderPayment.id).filter(OrderPayment.transaction_id == item.id).first():
@@ -446,6 +481,11 @@ def delete_finance_record(db, model, record_id, data, user):
         if model is BankAccount and item.account_number == CASH_ACCOUNT_NUMBER:
             raise FinanceError("صندوق نقدی قابل حذف نیست.", 409)
         if item.deleted_at is None:
+            if model is BankAccount:
+                period = active_period(db)
+                opening = db.get(FiscalBankOpening, (period.year, record_id)) if period else None
+                if opening and opening.balance:
+                    raise FinanceError("حساب دارای مانده افتتاحیه است و قابل حذف نیست.", 409)
             if model is BankAccount and db.query(Transaction.id).filter(
                     Transaction.bank_id == record_id, Transaction.deleted_at.is_(None)).first():
                 raise FinanceError("این حساب تراکنش ثبت‌شده دارد و قابل حذف نیست.", 409)

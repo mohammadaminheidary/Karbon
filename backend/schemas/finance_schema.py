@@ -22,6 +22,14 @@ def parse_jalali(value):
         raise ValueError("تاریخ شمسی واردشده معتبر نیست.") from None
 
 
+def normalize_tracking_number(value):
+    if value is not None:
+        value = value.translate(DIGITS)
+        if not re.fullmatch(r"[0-9]+", value):
+            raise ValueError("شماره پیگیری باید فقط شامل رقم باشد.")
+    return value
+
+
 class BankWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     first_name: str = Field(min_length=1, max_length=100)
@@ -121,11 +129,7 @@ class TransactionLine(BaseModel):
     @field_validator("tracking_number")
     @classmethod
     def tracking(cls, value):
-        if value is not None:
-            value = value.translate(DIGITS)
-            if not re.fullmatch(r"[0-9]+", value):
-                raise ValueError("شماره پیگیری باید فقط شامل رقم باشد.")
-        return value
+        return normalize_tracking_number(value)
 
     @model_validator(mode="after")
     def source(self):

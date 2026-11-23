@@ -2,7 +2,7 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from schemas.finance_schema import parse_jalali
+from schemas.finance_schema import normalize_tracking_number, parse_jalali
 from schemas.customer_schema import normalize_text
 
 LIMIT = 999999999999
@@ -53,6 +53,20 @@ class PaymentWrite(StrictFields):
         return self
 
 
+class SettlementWrite(PaymentWrite):
+    request_id: UUID
+    transaction_date: date
+    tracking_number: str | None = Field(default=None, max_length=100)
+
+    @field_validator("transaction_date", mode="before")
+    @classmethod
+    def receipt_date(cls, value):
+        return parse_jalali(value)
+
+    @field_validator("tracking_number")
+    @classmethod
+    def tracking(cls, value):
+        return normalize_tracking_number(value or None)
 
 
 class OrderWrite(StrictFields):

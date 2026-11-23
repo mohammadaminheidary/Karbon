@@ -10,7 +10,7 @@ from config import app_timezone
 from models.customer import Customer
 from models.finance import BankAccount, FinancialTransaction
 from models.order import CASH_ACCOUNT_NUMBER, Product, Order, OrderItem, OrderPayment
-from services.finance_service import FinanceError, require
+from services.finance_service import FinanceError, next_transaction_number, require
 from services.fiscal_period import active_period, effective_day, ensure_open, in_active_period, jalali, stock_change
 from services.reference_codes import compact_transaction_numbers
 from schemas.customer_schema import normalize_text
@@ -64,7 +64,6 @@ def products(db, include_inactive=False, for_order=False):
 def product_data(item, name, parent_name, brand_name):
     return {**{column.name: getattr(item, column.name) for column in Product.__table__.columns},
             "category_path": category_path(name, parent_name), "brand_name": brand_name}
-
 
 
 def save_product(db, data, product_id=None):
@@ -202,8 +201,8 @@ def build_invoice(db, order):
     return json.loads(json.dumps(data, default=str, ensure_ascii=False))
 
 
-def invoice(db, order_id):
-    order = require(db, Order, order_id, "سفارش")
+def invoice(db, order_id, *, include_deleted=False):
+    order = require(db, Order, order_id, "سفارش", include_deleted=include_deleted)
     if not order.invoice_snapshot:
         raise FinanceError("فاکتور نهایی آماده نیست.", 409)
     return order.invoice_snapshot
@@ -213,8 +212,11 @@ def order_details(db, order_id):
     order = require(db, Order, order_id, "سفارش")
     saved = invoice(db, order_id)
     # Execution status is live; invoice/customer/item history stays permanent.
-    return {**saved, **serialize(db, order), "customer": saved["customer"],
-            "items": saved["items"], "payments": saved["payments"]}
+    details = serialize(db, order)
+    issued_payments = {p["transaction_id"]: p.get("account_name") for p in saved["payments"]}
+    for payment in details["payments"]:
+        payment["account_name"] = issued_payments.get(payment["transaction_id"]) or db.get(BankAccount, payment["bank_id"]).name
+    return {**saved, **details, "customer": saved["customer"], "items": saved["items"]}
 
 
 def complete_order(db, order_id):
@@ -222,6 +224,7 @@ def complete_order(db, order_id):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         order = require(db, Order, order_id, "سفارش")
+        ensure_open(db, order.invoice_date)
         if not order.invoice_snapshot:
             raise FinanceError("فقط سفارش ثبت‌شده با فاکتور نهایی قابل تکمیل است.", 409)
         if order.status not in ("active", "completed"):
@@ -242,6 +245,7 @@ def reactivate_order(db, order_id):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         order = require(db, Order, order_id, "سفارش")
+        ensure_open(db, order.invoice_date)
         if not order.invoice_snapshot:
             raise FinanceError("فقط سفارش ثبت‌شده با فاکتور نهایی قابل بازگشت است.", 409)
         if order.status not in ("active", "completed"):
@@ -275,13 +279,14 @@ def load_order_relations(db, orders):
     if ids:
         for item in db.query(OrderItem).filter(OrderItem.order_id.in_(ids)).order_by(OrderItem.position).all():
             items.setdefault(item.order_id, []).append(item)
-        for payment, transaction in db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(OrderPayment.order_id.in_(ids)).all():
+        for payment, transaction in db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(
+                OrderPayment.order_id.in_(ids), FinancialTransaction.deleted_at.is_(None)).order_by(OrderPayment.id).all():
             payments.setdefault(payment.order_id, []).append((payment, transaction))
     return {order.id: (customers[order.customer_id], items.get(order.id, []), payments.get(order.id, [])) for order in orders}
 
 
 def list_orders(db, status, skip, limit):
-    query = db.query(Order).filter(Order.deleted_at.is_(None))
+    query = db.query(Order).filter(Order.deleted_at.is_(None), in_active_period(Order.invoice_date))
     orders = query.filter(Order.status == status).order_by(Order.id.desc()).offset(skip).limit(limit).all()
     loaded = load_order_relations(db, orders)
     counts = dict(query.with_entities(Order.status, func.count(Order.id)).group_by(Order.status).all())
@@ -291,7 +296,8 @@ def list_orders(db, status, skip, limit):
 
 
 def list_invoices(db, search, skip, limit):
-    query = db.query(Order).join(Customer, Customer.id == Order.customer_id).filter(Order.deleted_at.is_(None))
+    query = db.query(Order).join(Customer, Customer.id == Order.customer_id).filter(
+        Order.deleted_at.is_(None), in_active_period(Order.invoice_date))
     search = normalize_text(search)
     if search:
         pattern = "%" + search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
@@ -321,13 +327,16 @@ def delete_invoice(db, order_id, data, user):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         order = require(db, Order, order_id, "فاکتور", include_deleted=True)
+        ensure_open(db, order.invoice_date)
         if order.deleted_at is None:
             deleted_at = datetime.now(timezone.utc)
             # Keep immutable invoice history and retry IDs, while removing every
             # linked receipt from the live ledger in the same transaction.
-            for receipt in db.query(FinancialTransaction).join(
+            receipts = db.query(FinancialTransaction).join(
                     OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id,
-            ).filter(OrderPayment.order_id == order.id).all():
+            ).filter(OrderPayment.order_id == order.id).all()
+            ensure_open(db, *(receipt.transaction_date for receipt in receipts))
+            for receipt in receipts:
                 receipt.deleted_at = deleted_at
                 receipt.updated_at = deleted_at
             quantities = Counter()
@@ -338,6 +347,7 @@ def delete_invoice(db, order_id, data, user):
                 if product.stock is not None:
                     product.stock += quantity
                     product.revision += 1
+                    stock_change(db, product, order.invoice_date, quantity)
             order.deleted_at = deleted_at
             db.flush()
             compact_transaction_numbers(db)
@@ -360,6 +370,72 @@ def cash_account(db):
     return account
 
 
+def payment_bank(db, data):
+    if data.method == "cash":
+        return cash_account(db)
+    bank = require(db, BankAccount, data.bank_id, "حساب بانکی", active=True)
+    if bank.account_number == CASH_ACCOUNT_NUMBER:
+        raise FinanceError("برای پرداخت غیرنقدی، حساب بانکی انتخاب کنید.", 422)
+    return bank
+
+
+def add_receipt(db, order, customer, data, day, request_id, number, *, tracking_number=None):
+    bank = payment_bank(db, data)
+    label = {"pos": "کارت‌خوان", "cash": "نقدی", "transfer": "کارت‌به‌کارت"}[data.method]
+    now = datetime.now(app_timezone())
+    transaction = FinancialTransaction(
+        request_id=request_id, transaction_number=number, kind="income", customer_id=customer.id,
+        bank_id=bank.id, amount=data.amount, title=f"{customer.first_name} {customer.last_name}",
+        account_code=str(customer.customer_code), description=f"فاکتور {order.invoice_code} · {label}",
+        tracking_number=tracking_number, transaction_date=day, transaction_time=now.strftime("%H:%M:%S"), time_mode="auto",
+    )
+    db.add(transaction)
+    db.flush()
+    db.add(OrderPayment(order_id=order.id, transaction_id=transaction.id, method=data.method))
+    return transaction.id
+
+
+def settle_invoice(db, order_id, data):
+    db.rollback()
+    try:
+        db.execute(text("BEGIN IMMEDIATE"))
+        order = require(db, Order, order_id, "فاکتور")
+        prior = db.query(FinancialTransaction, OrderPayment).outerjoin(
+            OrderPayment, OrderPayment.transaction_id == FinancialTransaction.id,
+        ).filter(FinancialTransaction.request_id == str(data.request_id)).first()
+        if prior:
+            transaction, allocation = prior
+            is_cash = db.get(BankAccount, transaction.bank_id).account_number == CASH_ACCOUNT_NUMBER
+            if (not allocation or allocation.order_id != order_id or allocation.method != data.method
+                    or transaction.deleted_at is not None or transaction.transaction_date != data.transaction_date
+                    or transaction.amount != data.amount or transaction.tracking_number != data.tracking_number
+                    or not (is_cash if data.method == "cash" else transaction.bank_id == data.bank_id)):
+                raise FinanceError("شناسه درخواست قبلاً برای پرداخت دیگری استفاده شده است.", 409)
+            transaction_id = transaction.id
+        else:
+            period = active_period(db)
+            ensure_open(db, data.transaction_date)
+            if period is None or order.invoice_date >= period.start_date:
+                raise FinanceError("این مسیر برای پرداخت فاکتور سال‌های بسته‌شده است.", 409)
+            if not period.start_date <= data.transaction_date <= period.end_date:
+                raise FinanceError("تاریخ دریافت باید در سال مالی فعال باشد.", 422)
+            paid = db.query(func.coalesce(func.sum(FinancialTransaction.amount), 0)).join(OrderPayment).filter(
+                OrderPayment.order_id == order.id, FinancialTransaction.deleted_at.is_(None),
+            ).scalar()
+            if data.amount > order.subtotal - order.discount - paid:
+                raise FinanceError("مبلغ دریافتی از مانده فاکتور بیشتر است.", 409)
+            customer = require(db, Customer, order.customer_id, "مشتری")
+            transaction_id = add_receipt(db, order, customer, data, data.transaction_date,
+                                         str(data.request_id), next_transaction_number(db), tracking_number=data.tracking_number)
+            db.flush()
+        details = serialize(db, order)
+        db.commit()
+        return {"transaction_id": transaction_id, "order_id": order_id, "outstanding": details["remaining"]}
+    except Exception:
+        db.rollback()
+        raise
+
+
 def save_order(db, data):
     fingerprint = hashlib.sha256(data.model_dump_json(exclude={"request_id"}).encode()).hexdigest()
     db.rollback()
@@ -375,6 +451,7 @@ def save_order(db, data):
             result = serialize(db, prior)
             db.commit()
             return result
+        ensure_open(db, data.invoice_date, data.payment_date if data.payments else data.invoice_date)
         customer = require(db, Customer, data.customer_id, "مشتری")
         catalog = {}
         quantities = Counter()
@@ -390,6 +467,7 @@ def save_order(db, data):
                     raise FinanceError(f"موجودی «{product.name}» کافی نیست.", 409)
                 product.stock -= quantity
                 product.revision += 1
+                stock_change(db, product, data.invoice_date, -quantity)
         number = data.order_number or next_number(db)
         if db.query(Order.id).filter(Order.order_number == number).first():
             raise FinanceError("شماره سفارش تکراری است؛ شماره دیگری وارد کنید.", 409)
@@ -407,19 +485,11 @@ def save_order(db, data):
             db.add(OrderItem(order_id=order.id, product_id=product.id, position=position, product_name=product.name,
                              brand_name=product.brand.name if product.brand else None,
                              category_id=product.category_id, unit=product.unit, quantity=item.quantity, unit_price=item.unit_price))
-        now = datetime.now(app_timezone())
-        number = db.query(FinancialTransaction.id).filter(FinancialTransaction.deleted_at.is_(None)).count()
-        for index, payment in enumerate(data.payments, 1):
-            bank = cash_account(db) if payment.method == "cash" else require(db, BankAccount, payment.bank_id, "حساب بانکی", active=True)
-            if payment.method != "cash" and bank.account_number == CASH_ACCOUNT_NUMBER:
-                raise FinanceError("برای پرداخت غیرنقدی، حساب بانکی انتخاب کنید.", 422)
-            transaction = FinancialTransaction(request_id=str(uuid5(data.request_id, payment.method)), kind="income",
-                customer_id=customer.id, bank_id=bank.id, amount=payment.amount, title=f"{customer.first_name} {customer.last_name}",
-                account_code=str(customer.customer_code), description=f"فاکتور {order.invoice_code} · { {'pos': 'کارت‌خوان', 'cash': 'نقدی', 'transfer': 'کارت‌به‌کارت'}[payment.method]}",
-                transaction_date=data.payment_date, transaction_time=now.strftime("%H:%M:%S"), time_mode="auto", transaction_number=number + index)
-            db.add(transaction)
-            db.flush()
-            db.add(OrderPayment(order_id=order.id, transaction_id=transaction.id, method=payment.method))
+        if data.payments:
+            number = next_transaction_number(db)
+            for index, payment in enumerate(data.payments):
+                add_receipt(db, order, customer, payment, data.payment_date,
+                            str(uuid5(data.request_id, payment.method)), number + index)
         db.flush()
         order.invoice_snapshot = build_invoice(db, order)
         db.flush()
