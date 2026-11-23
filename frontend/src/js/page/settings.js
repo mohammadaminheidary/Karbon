@@ -1,4 +1,4 @@
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { startPage } from "../components/page-ready.js";
 import { initializeNavbar } from "../components/navbar.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -7,9 +7,13 @@ const initializeDocumentAccounts = lazyTool(() => import("../documents/account-s
 const initializeExpenseSettings = lazyTool(() => import("../finance/expense-settings.js"), "initializeExpenseSettings");
 const initializeBankAccounts = lazyTool(() => import("../finance/bank-accounts.js"), "initializeBankAccounts");
 const initializeInventorySettings = lazyTool(() => import("../warehouse/inventory-settings.js"), "initializeInventorySettings");
+const initializeBrandSettings = lazyTool(() => import("../warehouse/brand-settings.js"), "initializeBrandSettings");
 const initializeProductSettings = lazyTool(() => import("../orders/product-settings.js"), "initializeProductSettings");
 const initializeInvoiceSettings = lazyTool(() => import("../orders/invoice-settings.js"), "initializeInvoiceSettings");
 const initializeSecuritySettings = lazyTool(() => import("../auth/security-settings.js"), "initializeSecuritySettings");
+const initializeCustomerImport = lazyTool(() => import("../customers/customer-import.js"), "initializeCustomerImport");
+const initializeBackupSettings = lazyTool(() => import("../components/backup-settings.js"), "initializeBackupSettings");
+const initializeFiscalYears = lazyTool(() => import("../fiscal-years/fiscal-settings.js"), "initializeFiscalYears");
 const openFaceRegistration = lazyTool(() => import("../attendance/face-panel.js"), "openFaceRegistration");
 
 function lazyTool(load, name) {
@@ -55,10 +59,13 @@ const SETTINGS_SECTIONS =
     "products",
     "inventory",
     "units",
+    "brands",
     "invoices",
     "appearance",
     "security",
     "backup",
+    "fiscal-year",
+    "data-import",
   ]);
 
 
@@ -156,14 +163,11 @@ function handleUnauthorized(
 
 
 /* ======================================================
-   Toast
+   Member notifications
 ====================================================== */
 
-function showToast(message, type = "success") {
-  notifyNavbar(message, {
-    duration: 3000,
-    role: type === "success" ? "status" : "alert",
-  });
+function notifyMember(message, type = "success") {
+  notify(message, { type, duration: 3000 });
 }
 
 
@@ -278,6 +282,9 @@ async function showSettingsSection(
 
 
   const panel = document.querySelector(`[data-settings-panel="${section}"]`);
+  const newProduct = getElement("openCreateProductButton");
+  newProduct.hidden = section !== "products";
+  newProduct.closest(".navbar-title-island").classList.toggle("orders-title-island", !newProduct.hidden);
   const version = (sectionLoads.get(section) || 0) + 1;
   sectionLoads.set(section, version);
   panel?.setAttribute("aria-busy", "true");
@@ -300,6 +307,9 @@ async function showSettingsSection(
   if (section === "inventory" || section === "units") {
     await initializeInventorySettings();
   }
+  if (section === "brands") {
+    await initializeBrandSettings();
+  }
   if (section === "products") {
     await initializeProductSettings();
   }
@@ -308,6 +318,15 @@ async function showSettingsSection(
   }
   if (section === "security") {
     await initializeSecuritySettings();
+  }
+  if (section === "data-import") {
+    await initializeCustomerImport(panel);
+  }
+  if (section === "backup") {
+    await initializeBackupSettings(panel);
+  }
+  if (section === "fiscal-year") {
+    await initializeFiscalYears(panel);
   }
   } finally {
     if (sectionLoads.get(section) === version) panel?.setAttribute("aria-busy", "false");
@@ -778,7 +797,7 @@ async function loadMembers() {
     }
 
 
-    if (membersLoaded) showToast(message?.textContent || "لطفاً دوباره تلاش کنید.", "error");
+    if (membersLoaded) notifyMember(message?.textContent || "لطفاً دوباره تلاش کنید.", "error");
     else setMembersState("error");
 
   } finally {
@@ -1129,7 +1148,7 @@ async function handleMemberSubmit(
       );
 
 
-      showToast(
+      notifyMember(
         "اطلاعات عضو ویرایش شد."
       );
 
@@ -1139,7 +1158,7 @@ async function handleMemberSubmit(
       );
 
 
-      showToast(
+      notifyMember(
         "عضو با موفقیت اضافه شد."
       );
     }
@@ -1412,8 +1431,9 @@ function cancelPendingDelete() {
 
 
   if (pending) {
-    showToast(
-      "حذف عضو لغو شد."
+    notifyMember(
+      "حذف عضو لغو شد.",
+      "info"
     );
   }
 }
@@ -1500,7 +1520,7 @@ async function executeDeleteMember() {
     closeDeleteModal();
 
 
-    showToast(
+    notifyMember(
       "عضو با موفقیت حذف شد."
     );
 
@@ -1529,7 +1549,7 @@ async function executeDeleteMember() {
     resetDeleteCountdownUI();
 
 
-    showToast(
+    notifyMember(
       error instanceof
         MembersApiError
         ? error.message
@@ -1737,7 +1757,6 @@ async function initSettingsPage() {
   setupEvents();
 
   setupSettingsNavigation();
-
   initializeAppearanceSettings();
 
   onPageRefresh(loadMembers, {

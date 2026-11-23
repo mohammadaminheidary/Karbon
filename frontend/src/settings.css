@@ -173,23 +173,25 @@
   gap: 12px;
 }
 .settings-category-card {
+  display: grid;
+  min-width: 0;
+  border-radius: 16px;
+  text-align: start;
+  cursor: pointer;
+}
+.settings-card-face {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
   padding: 20px;
   border: 1px solid var(--settings-line);
-  border-radius: 16px;
+  border-radius: inherit;
   background: white;
-  text-align: start;
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
 }
-.settings-category-card:hover {
-  border-color: var(--theme-soft);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-persian-blue) 3.137%, transparent);
+.settings-category-card:hover > .settings-card-face {
+  border-color: var(--color-french-gray);
+  box-shadow: 0 4px 16px rgb(15 23 42 / 5%);
 }
 .settings-category-copy {
   min-width: 0;
@@ -393,6 +395,129 @@
 .settings-form-card :disabled {
   cursor: wait;
 }
+.settings-form-card #backupOpenFolder:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fiscal-stack {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.fiscal-settings [hidden],
+.fiscal-stack[hidden] {
+  display: none;
+}
+.fiscal-heading {
+  justify-content: space-between;
+}
+.fiscal-heading p,
+.fiscal-export-status {
+  color: var(--settings-muted, #526076);
+  font-size: 0.8rem;
+  margin-block-start: 0.3rem;
+}
+.fiscal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+.fiscal-years-list li {
+  align-items: start;
+  flex-wrap: wrap;
+}
+.fiscal-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+  gap: 0.65rem;
+}
+.fiscal-metrics > div {
+  border: 1px solid color-mix(in srgb, var(--color-mirage) 12%, transparent);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  overflow-wrap: anywhere;
+}
+.fiscal-metrics dt {
+  font-size: 0.78rem;
+  opacity: 0.72;
+}
+.fiscal-metrics dd {
+  margin-block-start: 0.2rem;
+  font-weight: 700;
+}
+.fiscal-fold {
+  border-block-start: 1px solid color-mix(in srgb, var(--color-mirage) 12%, transparent);
+  padding-block: 0.55rem;
+}
+.fiscal-fold > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.fiscal-table-scroll {
+  margin-block-start: 0.55rem;
+  overflow-x: auto;
+}
+.fiscal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  text-align: start;
+}
+.fiscal-table :is(th, td) {
+  border-block-end: 1px solid color-mix(in srgb, var(--color-mirage) 12%, transparent);
+  padding: 0.55rem 0.65rem;
+  min-width: 5rem;
+}
+.fiscal-table th {
+  background: color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
+}
+.fiscal-confirm {
+  margin-block-start: 1rem;
+}
+.fiscal-confirm fieldset {
+  display: grid;
+  gap: 0.55rem;
+}
+.fiscal-confirm input[type="password"],
+.fiscal-search :is(input, select) {
+  background: var(--color-white);
+  border: 1px solid color-mix(in srgb, var(--color-mirage) 24%, transparent);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.65rem;
+}
+.fiscal-confirm input[type="password"] {
+  max-width: min(26rem, 100%);
+}
+.fiscal-checkbox {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-block: 0.45rem;
+}
+.settings-backup-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--settings-line);
+  font-size: 0.75rem;
+}
+.settings-backup-list li > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.settings-backup-list li p {
+  margin-top: 5px;
+  color: var(--settings-muted);
+}
+#backupControls[hidden],
+#backupLogin[hidden] {
+  display: none;
+}
 .settings-shell :is(button, a):focus-visible {
   outline: 3px solid var(--theme-soft);
   outline-offset: 3px;
@@ -424,7 +549,7 @@
   .settings-security-grid {
     grid-template-columns: 1fr;
   }
-  .settings-category-card {
+  .settings-card-face {
     padding: 16px;
   }
 }
@@ -601,6 +726,66 @@
 .appearance-preview strong { color: var(--color-persian-blue); font-size: 1.125rem; }
 .appearance-preview p { margin-top: 8px; font-size: 0.875rem; line-height: 1.9; }
 .appearance-preview > span { display: block; margin-top: 8px; color: var(--settings-muted); font-size: 0.6875rem; line-height: 1.9; }
+.appearance-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.appearance-dock-toggle { margin-bottom: 12px; }
+.appearance-card-tilt-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 6px 20px;
+  margin-top: 12px;
+}
+.appearance-card-tilt-toggle { font-size: 0.8125rem; font-weight: 700; }
+.appearance-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--settings-muted);
+}
+.appearance-switch::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-start: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+}
+.appearance-toggle input:checked + .appearance-switch {
+  background: var(--color-persian-blue);
+}
+.appearance-toggle input:checked + .appearance-switch::before {
+  inset-inline-start: 20px;
+}
+.appearance-toggle input:focus-visible + .appearance-switch {
+  outline: 2px solid var(--color-persian-blue);
+  outline-offset: 3px;
+}
+#appearanceDockMagnification:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+@media (forced-colors: active) {
+  .appearance-switch {
+    forced-color-adjust: none;
+    background: Canvas;
+    box-shadow: inset 0 0 0 1px CanvasText;
+  }
+  .appearance-switch::before { background: CanvasText; }
+  .appearance-toggle input:checked + .appearance-switch { background: Highlight; }
+  .appearance-toggle input:checked + .appearance-switch::before { background: HighlightText; }
+  .appearance-toggle input:focus-visible + .appearance-switch { outline-color: Highlight; }
+}
 @media (max-width: 540px) {
   .appearance-swatches { gap: 8px; }
   .appearance-swatch { min-width: 0; flex: 1; padding: 8px 4px; }

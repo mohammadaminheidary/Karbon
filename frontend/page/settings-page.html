@@ -24,11 +24,34 @@
     <!-- navigation:start -->
 <div id="navbarHost">
 <div class="navbar-dock">
-  <section class="navbar-info navbar-title-island" aria-label="صفحه فعلی">
+  <section class="navbar-info navbar-title-island orders-title-island" aria-label="صفحه فعلی">
     <span class="navbar-glass" aria-hidden="true"></span>
     <span class="navbar-page-title" aria-live="polite" title="تنظیمات">تنظیمات</span>
     <!-- navbar-actions:start -->
-
+<button
+          id="openCreateProductButton"
+          type="button"
+          class="orders-create"
+          aria-label="ثبت کالای جدید"
+          title="ثبت کالای جدید"
+          aria-haspopup="dialog"
+          aria-controls="productFormModal"
+          disabled
+          hidden
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+          </svg>
+          <span>کالای جدید</span>
+        </button>
     <!-- navbar-actions:end -->
   </section>
   <nav id="mainNavbar" class="glass-navbar" aria-label="ناوبری اصلی">
@@ -405,6 +428,12 @@
               </div>
               <div class="settings-nav-group">
                 <p class="settings-nav-label">مالی و اسناد</p>
+                <button type="button" id="settings-tab-fiscal-year" aria-controls="settings-panel-fiscal-year"
+                  data-settings-target="fiscal-year" class="settings-nav-button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4m8-4v4M3 10h18m-12 6 2 2 4-4" />
+                  </svg><span>سال مالی</span>
+                </button>
                 <button
                   type="button"
                   id="settings-tab-banks"
@@ -521,12 +550,17 @@
                     aria-hidden="true"
                   >
                     <path d="m3 8 9-5 9 5v13H3V8ZM7 21V11h10v10M7 15h10M7 18h10" /></svg
-                  ><span>انبار</span>
+                  ><span>دسته‌بندی کالا</span>
                 </button>
                 <button type="button" id="settings-tab-units" aria-controls="settings-panel-units" data-settings-target="units" class="settings-nav-button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 13-13 5 5L8 21l-5-5ZM12 7l3 3M8 11l3 3M4 15l3 3" /></svg><span>واحد</span></button>
+                <button type="button" id="settings-tab-brands" aria-controls="settings-panel-brands" data-settings-target="brands" class="settings-nav-button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13 13 20a2 2 0 0 1-3 0l-7-7V3h10l7 7a2 2 0 0 1 0 3Z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span>برندها</span></button>
               </div>
               <div class="settings-nav-group">
                 <p class="settings-nav-label">برنامه</p>
+                <button type="button" id="settings-tab-data-import" aria-controls="settings-panel-data-import" data-settings-target="data-import" class="settings-nav-button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16v4h16v-4M12 4v11m-4-4 4 4 4-4"/></svg>
+                  <span>ورودی اطلاعات</span>
+                </button>
                 <button
                   type="button"
                   id="settings-tab-appearance"
@@ -607,47 +641,52 @@
                   <button
                     type="button"
                     data-open-settings-section="members"
-                    class="settings-category-card"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="9" cy="8" r="3" />
-                        <path
-                          d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M21 21v-3a6 6 0 0 0-3-5"
-                        /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong>مدیریت اعضا</strong
-                      ><span>اطلاعات اعضا و ثبت چهره برای ورود خودکار</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span></button
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <circle cx="9" cy="8" r="3" />
+                          <path
+                            d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M21 21v-3a6 6 0 0 0-3-5"
+                          /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong>مدیریت اعضا</strong
+                        ><span>اطلاعات اعضا و ثبت چهره برای ورود خودکار</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button
                   ><button
                     type="button"
                     data-open-settings-section="security"
-                    class="settings-category-card"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z" />
-                        <path d="m8 12 3 3 5-6" /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong>امنیت حساب</strong
-                      ><span>تغییر رمز عبور ورود</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z" />
+                          <path d="m8 12 3 3 5-6" /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong>امنیت حساب</strong
+                        ><span>تغییر رمز عبور ورود</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
                   </button>
                 </div>
               </div>
@@ -657,90 +696,101 @@
                   <button
                     type="button"
                     data-open-settings-section="banks"
-                    class="settings-category-card"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="m3 9 9-6 9 6M3 21h18M5 10v7M12 10v7M19 10v7M3 18h18"
-                        /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong>حساب‌های بانکی</strong
-                      ><span>حساب‌ها، کارت‌ها و شماره شبا</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span></button
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="m3 9 9-6 9 6M3 21h18M5 10v7M12 10v7M19 10v7M3 18h18"
+                          /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong>حساب‌های بانکی</strong
+                        ><span>حساب‌ها، کارت‌ها و شماره شبا</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button
                   ><button
                     type="button"
                     data-open-settings-section="expenses"
-                    class="settings-category-card"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <rect x="3" y="5" width="18" height="14" rx="3" />
-                        <path d="M3 10h18M7 15h4" /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong>عناوین هزینه</strong
-                      ><span>تعریف و مدیریت عناوین هزینه</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span></button
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <rect x="3" y="5" width="18" height="14" rx="3" />
+                          <path d="M3 10h18M7 15h4" /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong>عناوین هزینه</strong
+                        ><span>تعریف و مدیریت عناوین هزینه</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button
                   ><button
                     type="button"
                     data-open-settings-section="document-accounts"
-                    class="settings-category-card"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6ZM14 3v6h6M8 13h8M8 17h5"
-                        /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong>حساب‌های اسناد</strong
-                      ><span>کدها و حساب‌های درآمد و هزینه اسناد</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span></button
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6ZM14 3v6h6M8 13h8M8 17h5"
+                          /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong>حساب‌های اسناد</strong
+                        ><span>کدها و حساب‌های درآمد و هزینه اسناد</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button
                   ><button
                     type="button"
                     data-open-settings-section="invoices"
-                    class="settings-category-card"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M6 3h12v18l-3-2-3 2-3-2-3 2V3ZM9 7h6M9 11h6M9 15h3"
-                        /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong>فاکتورها</strong
-                      ><span>جستجو و مدیریت فاکتورهای مشتریان</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M6 3h12v18l-3-2-3 2-3-2-3 2V3ZM9 7h6M9 11h6M9 15h3"
+                          /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong>فاکتورها</strong
+                        ><span>جستجو و مدیریت فاکتورهای مشتریان</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
                   </button>
                 </div>
               </div>
@@ -750,49 +800,61 @@
                   <button
                     type="button"
                     data-open-settings-section="products"
-                    class="settings-category-card"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="m12 3 9 5v9l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v9M7 5.8l9 5"
-                        /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong>کالاها</strong
-                      ><span>نام، قیمت، واحد و موجودی کالاها</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span></button
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="m12 3 9 5v9l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v9M7 5.8l9 5"
+                          /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong>کالاها</strong
+                        ><span>نام، قیمت، واحد و موجودی کالاها</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button
                   ><button
                     type="button"
                     data-open-settings-section="inventory"
-                    class="settings-category-card"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="m3 8 9-5 9 5v13H3V8ZM7 21V11h10v10M7 15h10M7 18h10"
-                        /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong>انبار</strong
-                      ><span>مدیریت دسته‌بندی‌های انبار</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="m3 8 9-5 9 5v13H3V8ZM7 21V11h10v10M7 15h10M7 18h10"
+                          /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong>دسته‌بندی کالا</strong
+                        ><span>مدیریت دسته‌های اصلی و زیردسته‌های انبار</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
                   </button>
-                  <button type="button" data-open-settings-section="units" class="settings-category-card"><span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 13-13 5 5L8 21l-5-5ZM12 7l3 3M8 11l3 3M4 15l3 3" /></svg></span><span class="settings-category-copy"><strong>واحد</strong><span>مدیریت واحدهای مشترک برنامه</span></span><span class="settings-card-arrow" aria-hidden="true">‹</span></button>
+                  <button type="button" data-open-settings-section="units" class="settings-category-card card-tilt"><span class="settings-card-face card-tilt-surface"><span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 13-13 5 5L8 21l-5-5ZM12 7l3 3M8 11l3 3M4 15l3 3" /></svg></span><span class="settings-category-copy"><strong>واحد</strong><span>مدیریت واحدهای مشترک برنامه</span></span><span class="settings-card-arrow" aria-hidden="true">‹</span></span></button>
+                  <button type="button" data-open-settings-section="brands" class="settings-category-card card-tilt">
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13 13 20a2 2 0 0 1-3 0l-7-7V3h10l7 7a2 2 0 0 1 0 3Z"/><circle cx="7.5" cy="7.5" r="1"/></svg></span>
+                      <span class="settings-category-copy"><strong>برندها</strong><span>مدیریت برندهای کالا</span></span>
+                      <span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button>
                 </div>
               </div>
               <div class="settings-overview-group">
@@ -800,91 +862,144 @@
                 <div class="settings-card-grid">
                   <button
                     type="button"
-                    data-open-settings-section="appearance"
-                    class="settings-category-card"
+                    data-open-settings-section="data-import"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="4" />
-                        <path
-                          d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1 1M18 18l1 1M5 19l1-1M18 6l1-1"
-                        /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong>ظاهر برنامه</strong
-                      ><span>شخصی‌سازی محیط کار</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span></button
-                  ><button
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16v4h16v-4M12 4v11m-4-4 4 4 4-4"/></svg></span>
+                      <span class="settings-category-copy"><strong>ورودی اطلاعات</strong><span>ورود مشتریان از اکسل</span></span>
+                      <span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    data-open-settings-section="appearance"
+                    class="settings-category-card card-tilt"
+                  >
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="4" />
+                          <path
+                            d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1 1M18 18l1 1M5 19l1-1M18 6l1-1"
+                          /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong>ظاهر برنامه</strong
+                        ><span>شخصی‌سازی محیط کار</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button
+                  ><button type="button" data-open-settings-section="fiscal-year" class="settings-category-card card-tilt">
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4m8-4v4M3 10h18m-12 6 2 2 4-4" />
+                      </svg></span>
+                      <span class="settings-category-copy"><strong>سال مالی</strong><span>بستن دوره و مشاهده بایگانی</span></span>
+                      <span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button><button
                     type="button"
                     data-open-settings-section="backup"
-                    class="settings-category-card"
+                    class="settings-category-card card-tilt"
                   >
-                    <span class="settings-icon"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.7"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M8 17H6a4 4 0 0 1-1-8 7 7 0 0 1 13-1 4.5 4.5 0 0 1 0 9h-2M12 21V11m-3 3 3-3 3 3"
-                        /></svg></span
-                    ><span class="settings-category-copy"
-                      ><strong
-                        >پشتیبان‌گیری<span class="settings-soon">به‌زودی</span></strong
-                      ><span>نگهداری نسخه پشتیبان از اطلاعات</span></span
-                    ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.7"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M8 17H6a4 4 0 0 1-1-8 7 7 0 0 1 13-1 4.5 4.5 0 0 1 0 9h-2M12 21V11m-3 3 3-3 3 3"
+                          /></svg></span
+                      ><span class="settings-category-copy"
+                        ><strong
+                          >پشتیبان‌گیری</strong
+                        ><span>نگهداری نسخه پشتیبان از اطلاعات</span></span
+                      ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
                   </button>
                 </div>
               </div>
             </section>
 
+            <section id="settings-panel-data-import" aria-labelledby="settings-tab-data-import" data-settings-panel="data-import" class="hidden min-w-0 w-full max-w-full">
+              <div class="mb-4"><h2 class="text-xl font-black">ورودی اطلاعات</h2></div>
+              <div class="settings-card-grid">
+                <button type="button" id="openCustomerImport" class="settings-category-card card-tilt" aria-haspopup="dialog" aria-controls="customerImportModal" disabled>
+                  <span class="settings-card-face card-tilt-surface">
+                    <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7a4 4 0 1 1 8 0 4 4 0 0 1-8 0ZM4 21v-3a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v3"/></svg></span>
+                    <span class="settings-category-copy"><strong>ورود مشتریان از اکسل</strong></span>
+                    <span class="settings-card-arrow" aria-hidden="true">‹</span>
+                  </span>
+                </button>
+              </div>
+            </section>
+
             <section id="settings-panel-inventory" aria-labelledby="settings-tab-inventory" data-settings-panel="inventory" class="finance-surface hidden min-w-0 w-full max-w-full">
-              <div class="mb-5 flex flex-wrap items-center justify-between gap-4"><h2 class="text-xl font-black">انبار</h2><button id="refreshInventoryOptions" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button></div>
-              <p class="text-sm text-mirage/60">دسته‌بندی‌های فعال در فرم خرید کالا نمایش داده می‌شوند.</p>
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-4"><h2 class="text-xl font-black">دسته‌بندی کالا و انبار</h2><button id="refreshInventoryOptions" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button></div>
+              <p class="text-sm text-mirage/70">برای دسته‌بندی کالا یا ثبت خرید، یک دستهٔ اصلی یا زیردستهٔ فعال را انتخاب کنید.</p>
               <p id="inventoryOptionsStatus" role="status" class="mt-4 text-sm text-mirage/60"></p>
-              <div id="inventoryOptionsLists" class="inventory-options-grid inventory-options-single">
-                <article class="inventory-options-card">
-                  <h3>دسته‌بندی‌های کالا</h3>
+              <div id="inventoryOptionsLists" class="inventory-categories-layout">
+                <article class="card-tilt inventory-options-card">
+                  <h3 id="inventory-categories-title">افزودن دسته‌بندی</h3>
                   <form id="inventory-categories-form">
-                    <fieldset>
-                      <label for="inventory-categories-name">عنوان دسته‌بندی</label>
-                      <div class="inventory-option-entry">
-                        <input
-                          id="inventory-categories-name"
-                          class="finance-field"
-                          maxlength="80"
-                          required
-                          autocomplete="off"
-                        /><button
-                          type="submit"
-                          class="finance-button bg-persian-blue text-white"
-                        >
-                          افزودن
-                        </button>
+                    <fieldset id="inventory-categories-fields" class="space-y-4" disabled>
+                      <div>
+                        <label for="inventory-categories-name">عنوان دسته‌بندی</label>
+                        <input id="inventory-categories-name" class="finance-field" maxlength="80" required autocomplete="off" />
+                      </div>
+                      <div>
+                        <label for="inventory-categories-parent">دستهٔ اصلی</label>
+                        <select id="inventory-categories-parent" class="finance-field" aria-describedby="inventory-categories-parent-help">
+                          <option value="">دستهٔ اصلی جدید</option>
+                        </select>
+                        <p id="inventory-categories-parent-help" class="mt-1 text-xs text-mirage/65">برای ایجاد زیردسته، دستهٔ اصلی آن را انتخاب کنید.</p>
+                      </div>
+                      <label class="inventory-unit-choice">
+                        <input id="inventory-categories-active" type="checkbox" checked />
+                        <span>فعال</span>
+                      </label>
+                      <div class="flex flex-wrap gap-2">
+                        <button id="inventory-categories-submit" type="submit" class="finance-button bg-persian-blue text-white">افزودن</button>
+                        <button id="inventory-categories-cancel" type="button" class="finance-button border border-french-gray/40" hidden>انصراف</button>
                       </div>
                     </fieldset>
                   </form>
-                  <ul id="inventory-categories-list" class="inventory-options-list"></ul>
+                </article>
+                <article class="card-tilt inventory-options-card">
+                  <h3>دسته‌ها و زیردسته‌ها</h3>
+                  <ul id="inventory-categories-list" class="inventory-category-tree"></ul>
                 </article>
               </div>
+              <dialog id="inventory-category-delete" aria-labelledby="inventory-category-delete-title" aria-describedby="inventory-category-delete-description" class="inventory-category-dialog finance-surface">
+                <h3 id="inventory-category-delete-title" class="text-lg font-black">حذف دسته‌بندی</h3>
+                <p id="inventory-category-delete-description" class="mt-3 text-sm text-mirage/70"></p>
+                <p id="inventory-category-delete-error" role="alert" class="mt-3 text-sm text-alizarin-crimson"></p>
+                <form id="inventory-category-delete-form" class="mt-5 flex flex-wrap gap-2">
+                  <button id="inventory-category-delete-confirm" type="submit" class="finance-button bg-alizarin-crimson text-white">حذف دسته‌بندی</button>
+                  <button id="inventory-category-delete-cancel" type="button" class="finance-button border border-french-gray/40" autofocus>انصراف</button>
+                </form>
+              </dialog>
             </section>
             <section id="settings-panel-units" aria-labelledby="settings-tab-units" data-settings-panel="units" class="finance-surface hidden min-w-0 w-full max-w-full">
               <div class="mb-5 flex flex-wrap items-center justify-between gap-4"><h2 class="text-xl font-black">واحد</h2><button id="refreshUnitOptions" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button></div>
               <p class="text-sm text-mirage/60">واحدهای انتخاب‌شده در کالاها، خرید و سفارش‌های جدید قابل استفاده هستند. غیرفعال کردن واحد، سوابق قبلی را تغییر نمی‌دهد.</p>
               <p id="unitOptionsStatus" role="status" class="mt-4 text-sm text-mirage/60"></p>
               <div id="unitOptionsLists" class="inventory-options-grid inventory-options-single">
-                <article class="inventory-options-card">
+                <article class="card-tilt inventory-options-card">
                   <h3>واحدها</h3>
                   <label for="inventory-units-search">جستجوی واحدها</label
                   ><input
@@ -924,6 +1039,43 @@
               </div>
             </section>
 
+            <section id="settings-panel-brands" aria-labelledby="settings-tab-brands" data-settings-panel="brands" class="finance-surface hidden min-w-0 w-full max-w-full">
+              <h2 class="text-xl font-black">برندها</h2>
+              <p id="brandSettingsStatus" role="status" class="mt-4 text-sm text-mirage/60"></p>
+              <div class="inventory-categories-layout">
+                <article class="card-tilt inventory-options-card">
+                  <h3 id="brandFormTitle">افزودن برند</h3>
+                  <form id="brandSettingsForm">
+                    <fieldset id="brandSettingsFields" class="space-y-4">
+                      <label for="brandSettingsName">نام برند</label>
+                      <input id="brandSettingsName" class="finance-field" maxlength="80" required autocomplete="off" />
+                      <p id="brandSettingsError" role="alert" class="text-sm text-alizarin-crimson" hidden></p>
+                      <div class="flex flex-wrap gap-2">
+                        <button id="saveBrand" type="submit" class="finance-button bg-persian-blue text-white">افزودن</button>
+                        <button id="cancelBrandEdit" type="button" class="finance-button border border-french-gray/40" hidden>انصراف</button>
+                      </div>
+                    </fieldset>
+                  </form>
+                </article>
+                <article class="card-tilt inventory-options-card">
+                  <div class="flex flex-wrap items-start justify-between gap-2">
+                    <h3>فهرست برندها</h3>
+                    <button id="refreshBrands" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button>
+                  </div>
+                  <ul id="brandSettingsList"></ul>
+                </article>
+              </div>
+              <dialog id="brandDeleteDialog" aria-labelledby="brandDeleteTitle" aria-describedby="brandDeleteDescription" class="inventory-category-dialog finance-surface">
+                <h3 id="brandDeleteTitle" class="text-lg font-black">حذف برند</h3>
+                <p id="brandDeleteDescription" class="mt-3 text-sm text-mirage/70"></p>
+                <p id="brandDeleteError" role="alert" class="mt-3 text-sm text-alizarin-crimson"></p>
+                <form id="brandDeleteForm" class="mt-5 flex flex-wrap gap-2">
+                  <button id="confirmBrandDelete" type="submit" class="finance-button bg-alizarin-crimson text-white">حذف برند</button>
+                  <button id="cancelBrandDelete" type="button" class="finance-button border border-french-gray/40" autofocus>انصراف</button>
+                </form>
+              </dialog>
+            </section>
+
             <section id="settings-panel-invoices" aria-labelledby="settings-tab-invoices" data-settings-panel="invoices" class="finance-surface hidden min-w-0 w-full max-w-full">
               <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
                 <h2 class="text-xl font-black">فاکتورهای مشتریان</h2>
@@ -936,7 +1088,7 @@
               <button id="settingsInvoicesMore" type="button" class="finance-button mt-5 border border-french-gray/40" hidden>نمایش بیشتر</button>
             </section>
 
-            <section id="settings-panel-products" aria-labelledby="settings-tab-products" data-settings-panel="products"
+            <section id="settings-panel-products" aria-labelledby="settings-tab-products" data-settings-panel="products" data-card-tilt-section="products"
               class="finance-surface hidden min-w-0 w-full max-w-full"
             >
               <div class="mb-5 flex items-center justify-between gap-4">
@@ -949,93 +1101,6 @@
                   بروزرسانی
                 </button>
               </div>
-              <form
-                id="settingsProductForm"
-                class="rounded-2xl border border-french-gray/30 bg-white p-5"
-                novalidate
-              >
-                <fieldset
-                  id="settingsProductFields"
-                  class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-                >
-                  <label
-                    >کد کالا<input
-                      id="settingsProductCode"
-                      class="finance-field"
-                      readonly
-                      value="تولید خودکار هنگام ثبت"
-                  /></label>
-                  <label
-                    >نام کالا<input
-                      id="settingsProductName"
-                      class="finance-field"
-                      maxlength="150"
-                      required
-                  /></label>
-                  <label
-                    >دسته‌بندی<select
-                      id="settingsProductCategory"
-                      class="finance-field"
-                      required disabled
-                    ><option value="">در حال دریافت دسته‌بندی‌ها…</option></select>
-                    <span class="text-sm text-mirage/60">دسته‌بندی‌ها در <a href="#inventory">تنظیمات انبار</a> مدیریت می‌شوند.</span>
-                  </label>
-                  <label
-                    >واحد<select
-                      id="settingsProductUnit"
-                      class="finance-field"
-                      aria-describedby="settingsProductUnitHint"
-                      required disabled
-                    ><option value="">در حال دریافت واحدها…</option></select>
-                    <span id="settingsProductUnitHint" class="text-sm text-mirage/60">واحدهای فعال در <a href="#units">تنظیمات واحدها</a> مدیریت می‌شوند. واحد غیرفعال فعلی فقط برای همین کالا حفظ می‌شود.</span>
-                  </label>
-                  <label
-                    >قیمت (تومان)<input
-                      id="settingsProductPrice"
-                      class="finance-field"
-                      inputmode="numeric"
-                      maxlength="21"
-                      dir="ltr"
-                      required
-                  /></label>
-                  <label
-                    >موجودی فعلی<input
-                      id="settingsProductStock"
-                      class="finance-field"
-                      inputmode="numeric"
-                      maxlength="10"
-                      dir="ltr"
-                      placeholder="خالی: بدون کنترل موجودی"
-                  /></label>
-                  <label
-                    >وضعیت<select id="settingsProductActive" class="finance-field">
-                      <option value="true">فعال</option>
-                      <option value="false">غیرفعال</option>
-                    </select></label
-                  >
-                </fieldset>
-                <p class="mt-3 text-xs leading-6 text-mirage/50">
-                  موجودی را به مقدار فعلی اصلاح کنید. مقدار صفر یعنی ناموجود؛ موجودی خالی
-                  برای خدمات و کالاهای بدون کنترل موجودی است.
-                </p>
-                <div class="mt-4 flex gap-3">
-                  <button
-                    id="saveSettingsProduct"
-                    type="submit"
-                    class="finance-button bg-persian-blue text-white"
-                  >
-                    ثبت کالا
-                  </button>
-                  <button
-                    id="cancelSettingsProductEdit"
-                    type="button"
-                    class="finance-button border border-french-gray/40"
-                    hidden
-                  >
-                    انصراف از ویرایش
-                  </button>
-                </div>
-              </form>
               <p
                 id="settingsProductsStatus"
                 class="my-4 text-sm text-mirage/60"
@@ -1252,7 +1317,7 @@
             <section id="settings-panel-expenses" aria-labelledby="settings-tab-expenses" data-settings-panel="expenses"
               class="finance-surface hidden min-w-0 w-full max-w-full"
             >
-              <div class="rounded-2xl border border-french-gray/30 bg-white p-5 sm:p-6">
+              <div class="card-tilt rounded-2xl border border-french-gray/30 bg-white p-5 sm:p-6">
                 <h2 class="text-lg font-black">عناوین هزینه</h2>
                 <p class="mt-2 text-sm text-mirage/45">
                   عناوین فعال در ثبت هزینه نمایش داده می‌شوند. کد حساب‌ها خودکار و
@@ -1314,7 +1379,7 @@
               </div>
             </section>
             <section id="settings-panel-document-accounts" aria-labelledby="settings-tab-document-accounts" data-settings-panel="document-accounts" class="finance-surface hidden min-w-0 w-full max-w-full">
-              <div class="rounded-2xl border border-french-gray/30 bg-white p-5 sm:p-6">
+              <div class="card-tilt rounded-2xl border border-french-gray/30 bg-white p-5 sm:p-6">
                 <h2 class="text-lg font-black">کد حساب‌های اسناد</h2>
                 <p class="mt-2 text-sm text-mirage/45">حساب‌های مستقل برای ثبت درآمد و هزینه در اسناد. این کدها از مشتریان و عناوین هزینه مستقل هستند.</p>
                 <form id="documentAccountForm" class="mt-5">
@@ -1338,7 +1403,7 @@
               <div class="settings-section-heading">
                 <div>
                   <h2>تنظیمات ظاهر</h2>
-                  <p>رنگ و اندازه نوشته‌ها را مطابق سلیقه خود تنظیم کنید. تغییرات در این مرورگر ذخیره می‌شود.</p>
+                  <p>رنگ، اندازه نوشته‌ها و انیمیشن داک را تنظیم کنید. تغییرات در این مرورگر ذخیره می‌شود.</p>
                 </div>
               </div>
               <fieldset class="appearance-section">
@@ -1378,11 +1443,48 @@
                   <div id="appearancePageList" class="appearance-page-list"></div>
                 </div>
               </div>
-              <div class="appearance-preview">
+              <div class="appearance-preview card-tilt">
                 <strong>پیش‌نمایش نوشته‌ها</strong>
                 <p>مدیریت کسب و کار با کربن؛ اندازه نوشته‌ها بلافاصله تغییر می‌کند.</p>
                 <span>نمایش این صفحه تابع اندازه اختصاصی تنظیمات است، اگر آن را انتخاب کرده باشید.</span>
               </div>
+              <fieldset class="appearance-section">
+                <legend>جلوهٔ سه‌بعدی کارت‌ها</legend>
+                <p class="appearance-description">جلوهٔ حرکت و نور کارت‌ها را برای هر بخش جداگانه روشن یا خاموش کنید.</p>
+                <div id="appearanceCardTiltList" class="appearance-card-tilt-list"></div>
+              </fieldset>
+              <fieldset class="appearance-section">
+                <legend>داک ناوبری</legend>
+                <label class="appearance-toggle appearance-dock-toggle">
+                  <input id="appearanceDockAnimation" class="sr-only" type="checkbox" role="switch" checked />
+                  <span class="appearance-switch" aria-hidden="true"></span>
+                  <span>انیمیشن داک</span>
+                </label>
+                <div class="appearance-font-heading">
+                  <label for="appearanceDockMagnification">میزان بزرگ‌نمایی</label>
+                </div>
+                <div class="appearance-slider-row">
+                  <input id="appearanceDockMagnification" type="range" min="110" max="180" step="5" value="160" dir="ltr" />
+                  <output id="appearanceDockMagnificationValue" for="appearanceDockMagnification">۱۶۰٪</output>
+                </div>
+              </fieldset>
+              <fieldset class="appearance-section">
+                <legend>هالهٔ آیتم فعال نوبار</legend>
+                <div class="appearance-font-heading">
+                  <label for="appearanceDockHighlightTransparency">شفافیت هاله</label>
+                </div>
+                <div class="appearance-slider-row">
+                  <input id="appearanceDockHighlightTransparency" type="range" min="0" max="100" value="45" dir="ltr" />
+                  <output id="appearanceDockHighlightTransparencyValue" for="appearanceDockHighlightTransparency">۴۵٪</output>
+                </div>
+                <div class="appearance-font-heading mt-4">
+                  <label for="appearanceDockHighlightDarkness">تیرگی رنگ هاله</label>
+                </div>
+                <div class="appearance-slider-row">
+                  <input id="appearanceDockHighlightDarkness" type="range" min="0" max="100" value="0" dir="ltr" />
+                  <output id="appearanceDockHighlightDarknessValue" for="appearanceDockHighlightDarkness">۰٪</output>
+                </div>
+              </fieldset>
               <p id="appearanceMessage" class="appearance-description" role="status" aria-live="polite"></p>
               <div class="settings-form-footer">
                 <button id="appearanceResetDefaults" type="button" class="settings-secondary-button">بازنشانی تنظیمات ظاهر به پیش‌فرض</button>
@@ -1431,7 +1533,7 @@
                 تلاش دوباره
               </button>
               <div class="settings-security-grid">
-                <form id="passwordForm" class="settings-form-card" novalidate>
+                <form id="passwordForm" class="card-tilt settings-form-card" novalidate>
                   <fieldset disabled>
                     <div class="settings-form-heading">
                       <h3>رمز عبور</h3>
@@ -1526,24 +1628,182 @@
               </div>
             </section>
 
+            <section id="settings-panel-fiscal-year" aria-labelledby="settings-tab-fiscal-year" data-settings-panel="fiscal-year"
+              class="hidden settings-security fiscal-settings min-w-0 w-full max-w-full">
+              <div class="settings-section-heading"><h2>سال مالی</h2></div>
+              <p id="fiscalStatus" class="settings-form-message" role="status" aria-live="polite" hidden></p>
+              <div id="fiscalCurrent" class="fiscal-stack">
+                <section class="card-tilt settings-form-card" id="fiscalActive" aria-labelledby="fiscalActiveTitle" hidden>
+                  <div class="fiscal-actions fiscal-heading">
+                    <div><h3 id="fiscalActiveTitle" tabindex="-1"></h3><p id="fiscalActiveRange"></p></div>
+                    <button id="fiscalPreviewButton" class="settings-primary-button" type="button" hidden>بستن سال مالی</button>
+                  </div>
+                </section>
+                <section class="card-tilt settings-form-card" id="fiscalPreview" aria-labelledby="fiscalPreviewTitle" hidden>
+                  <h3 id="fiscalPreviewTitle" tabindex="-1">پیش‌نمایش بستن سال مالی</h3>
+                  <div id="fiscalPreviewData" class="fiscal-stack"></div>
+                  <form id="fiscalConfirmForm" autocomplete="off" class="fiscal-confirm">
+                    <fieldset id="fiscalConfirmFields">
+                      <label for="fiscalPassphrase">عبارت عبور پشتیبان ایمنی</label>
+                      <input id="fiscalPassphrase" type="password" minlength="12" maxlength="256" required
+                        autocomplete="new-password" aria-describedby="fiscalPassphraseHint" dir="auto" />
+                      <p id="fiscalPassphraseHint" class="settings-field-hint">حداقل ۱۲ نویسه وارد کنید و عبارت عبور را جدا از فایل پشتیبان نگه دارید.</p>
+                      <label class="fiscal-checkbox"><input id="fiscalConfirmation" type="checkbox" required />
+                        پیش‌نمایش را بررسی کردم و بستن سال مالی و فعال‌سازی سال بعد را تأیید می‌کنم.
+                      </label>
+                      <div class="fiscal-actions">
+                        <button class="settings-primary-button" type="submit">تأیید و بستن سال</button>
+                        <button class="settings-secondary-button" id="fiscalCancelPreview" type="button">انصراف</button>
+                      </div>
+                    </fieldset>
+                    <p id="fiscalConfirmStatus" class="settings-form-message" role="status" aria-live="polite" hidden></p>
+                  </form>
+                </section>
+                <section class="card-tilt settings-form-card" aria-labelledby="fiscalYearsTitle">
+                  <h3 id="fiscalYearsTitle">سال‌های مالی</h3>
+                  <ul id="fiscalYearsList" class="settings-backup-list fiscal-years-list"></ul>
+                </section>
+              </div>
+              <div id="fiscalArchive" class="fiscal-stack" hidden>
+                <section class="card-tilt settings-form-card fiscal-stack" aria-labelledby="fiscalArchiveTitle">
+                  <div class="fiscal-actions fiscal-heading">
+                    <div><h3 id="fiscalArchiveTitle"></h3><p id="fiscalArchiveRange"></p></div>
+                    <a class="settings-secondary-button" href="/page/settings-page.html#fiscal-year">بازگشت به سال جاری</a>
+                  </div>
+                  <div id="fiscalArchiveSummary"></div>
+                </section>
+                <section class="card-tilt settings-form-card fiscal-stack" aria-labelledby="fiscalRecordsTitle">
+                  <h3 id="fiscalRecordsTitle">سوابق سال مالی</h3>
+                  <form id="fiscalSearchForm" class="fiscal-actions fiscal-search">
+                    <label for="fiscalRecordKind">نوع سابقه</label>
+                    <select id="fiscalRecordKind">
+                      <option value="orders">سفارش‌ها</option><option value="invoices">فاکتورها</option>
+                      <option value="customers">صورتحساب مشتریان</option><option value="transactions">تراکنش‌ها</option>
+                    </select>
+                    <label for="fiscalSearch">جست‌وجو</label>
+                    <input id="fiscalSearch" type="search" maxlength="200" placeholder="نام، کد یا شماره پیگیری" />
+                    <button class="settings-secondary-button" type="submit">جست‌وجو</button>
+                  </form>
+                  <p id="fiscalRecordStatus" role="status" class="settings-field-hint"></p>
+                  <div id="fiscalRecords"></div>
+                  <div class="fiscal-actions">
+                    <button type="button" id="fiscalPrevious" class="settings-secondary-button" hidden>صفحه قبل</button>
+                    <button type="button" id="fiscalNext" class="settings-secondary-button" hidden>صفحه بعد</button>
+                  </div>
+                </section>
+                <section id="fiscalRecordDetails" class="card-tilt settings-form-card fiscal-stack" tabindex="-1" hidden></section>
+              </div>
+            </section>
+
             <!-- Backup -->
             <section id="settings-panel-backup" aria-labelledby="settings-tab-backup" data-settings-panel="backup"
-              class="hidden min-w-0 w-full max-w-full"
-            >
-              <div
-                class="rounded-2xl border border-french-gray/30 bg-white p-8 shadow-sm"
-              >
-                <h2 class="text-lg font-black text-mirage">پشتیبان‌گیری</h2>
+              class="hidden settings-security min-w-0 w-full max-w-full">
+              <div class="settings-section-heading">
+                <h2>پشتیبان‌گیری و بازیابی</h2>
+              </div>
+              <p id="backupAccessStatus" class="settings-form-message" role="status" hidden></p>
+              <div id="backupControls" class="settings-security-grid" hidden>
+                <form id="backupCreateForm" class="card-tilt settings-form-card" autocomplete="off">
+                  <div class="settings-form-heading">
+                    <h3>ساخت نسخه پشتیبان</h3>
+                    <p id="backupPassphraseHint">عبارت عبوری با حداقل ۱۲ نویسه انتخاب کنید و آن را جدا از فایل پشتیبان نگه دارید.</p>
+                  </div>
+                  <fieldset id="backupCreateFields" disabled>
+                    <div class="settings-field">
+                      <label for="backupCreatePassphrase">عبارت عبور پشتیبان</label>
+                      <input id="backupCreatePassphrase" type="password" minlength="12" maxlength="256" required
+                        autocomplete="new-password" aria-describedby="backupPassphraseHint" dir="auto" />
+                    </div>
+                    <div class="settings-form-footer">
+                      <button type="submit" class="settings-primary-button">ایجاد پشتیبان</button>
+                    </div>
+                  </fieldset>
+                  <p id="backupCreateStatus" class="settings-form-message" role="status" hidden></p>
+                </form>
 
-                <p class="mt-2 text-sm text-mirage/45">
-                  تنظیمات این بخش بعداً پیاده‌سازی می‌شود.
-                </p>
+                <section class="card-tilt settings-form-card" aria-labelledby="backupListTitle">
+                  <div class="settings-form-heading">
+                    <h3 id="backupListTitle">نسخه‌های پشتیبان</h3>
+                  </div>
+                  <div class="mt-4 flex flex-wrap items-center gap-3">
+                    <button id="backupOpenFolder" type="button" class="settings-secondary-button" disabled
+                      aria-describedby="backupFolderReason">باز کردن پوشه پشتیبان</button>
+                    <p id="backupFolderReason" class="settings-field-hint" hidden></p>
+                  </div>
+                  <p id="backupListStatus" class="settings-form-message" role="status" hidden></p>
+                  <ul id="backupList" class="settings-backup-list"></ul>
+                </section>
+
+                <form id="backupUploadForm" class="card-tilt settings-form-card" autocomplete="off">
+                  <div class="settings-form-heading">
+                    <h3>بازیابی از پشتیبان</h3>
+                    <p id="backupUploadHint">فایل ZIP ساخته‌شده در کاربن را با عبارت عبور آن انتخاب کنید.</p>
+                  </div>
+                  <fieldset id="backupUploadFields" disabled>
+                    <div class="settings-field">
+                      <label for="backupUploadFile">فایل پشتیبان ZIP</label>
+                      <input id="backupUploadFile" type="file" accept=".zip,application/zip" required
+                        aria-describedby="backupUploadHint" />
+                    </div>
+                    <div class="settings-field">
+                      <label for="backupUploadPassphrase">عبارت عبور فایل</label>
+                      <input id="backupUploadPassphrase" type="password" maxlength="256" required dir="auto" />
+                    </div>
+                    <div class="settings-form-footer">
+                      <button type="submit" class="settings-primary-button">بارگذاری و بررسی</button>
+                    </div>
+                  </fieldset>
+                  <p id="backupUploadStatus" class="settings-form-message" role="status" hidden></p>
+                  <div id="backupValidated" class="mt-4 space-y-3 border-t border-french-gray/30 pt-4" hidden>
+                    <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+                      <dt>زمان ایجاد</dt><dd><time id="backupValidatedDate"></time></dd>
+                      <dt>نسخه کاربن</dt><dd><bdi id="backupValidatedVersion"></bdi></dd>
+                    </dl>
+                    <p class="text-sm text-mirage/70">کاربن با همین عبارت عبور یک پشتیبان ایمنی می‌سازد و سپس داده‌های فعلی را جایگزین می‌کند.</p>
+                    <button id="backupRestore" type="button" class="settings-secondary-button">جایگزینی داده‌ها و بازیابی</button>
+                  </div>
+                  <a id="backupLogin" href="/page/login-page.html" class="settings-secondary-button inline-flex mt-3" hidden>ورود دوباره</a>
+                </form>
               </div>
             </section>
           </div>
         </div>
       </div>
     </main>
+
+    <dialog id="customerImportModal" aria-hidden="true" aria-labelledby="customerImportTitle" class="fixed inset-0 m-auto hidden max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto overscroll-contain rounded-3xl border border-french-gray/30 bg-white text-mirage shadow-2xl not-open:hidden backdrop:bg-mirage/45">
+      <div role="dialog" aria-modal="true" aria-labelledby="customerImportTitle" class="finance-surface min-w-0 w-full">
+        <header class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-french-gray/30 bg-white px-4 py-3 sm:px-6">
+          <h2 id="customerImportTitle" class="text-lg font-black">ورود مشتریان از اکسل</h2>
+          <button type="button" data-dialog-close class="grid size-10 shrink-0 place-items-center rounded-xl text-mirage/65 hover:bg-mirage/10" aria-label="بستن پنجره ورود مشتریان">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" class="size-5"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </header>
+        <div class="p-4 sm:p-6">
+          <p id="customerImportHelp" class="text-sm text-mirage/70">فایل ‎.xlsx‎ را انتخاب کنید. ردیف اول باید عنوان ستون‌ها باشد. فقط نام و نام خانوادگی الزامی‌اند.</p>
+          <button type="button" id="customerImportTemplate" class="finance-button mt-3 border border-french-gray/40">دانلود فایل نمونه</button>
+          <fieldset id="customerImportControls" class="mt-4 min-w-0 space-y-4">
+            <label for="customerImportFile">فایل اکسل</label>
+            <input type="file" id="customerImportFile" accept=".xlsx" aria-describedby="customerImportHelp" class="finance-field w-full" />
+            <div id="customerImportOptions" hidden>
+              <div id="customerImportSheetChoice">
+                <label for="customerImportSheet">شیت اکسل</label>
+                <select id="customerImportSheet" class="finance-field w-full sm:max-w-xs"></select>
+              </div>
+              <h3 class="mt-4 mb-2 font-bold">تطبیق ستون‌ها</h3>
+              <div id="customerImportMapping" class="grid gap-3 sm:grid-cols-2"></div>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <button type="button" id="customerImportPreview" class="finance-button border border-french-gray/40">بررسی و پیش‌نمایش</button>
+                <button type="button" id="customerImportCommit" class="finance-button bg-persian-blue text-white" disabled>تأیید و ورود مشتریان</button>
+              </div>
+            </div>
+          </fieldset>
+          <p id="customerImportStatus" class="mt-4 text-sm" role="status"></p>
+          <p id="customerImportError" class="mt-2 text-sm font-bold text-red-700" role="alert"></p>
+          <div id="customerImportOutput" class="mt-4 min-w-0"></div>
+        </div>
+      </div>
+    </dialog>
 
     <!-- ==================== Member Form Modal ==================== -->
     <div

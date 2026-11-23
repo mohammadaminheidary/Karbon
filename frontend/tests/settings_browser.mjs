@@ -103,6 +103,7 @@ try {
     "products",
     "inventory",
     "units",
+    "brands",
     "invoices",
     "appearance",
     "security",
@@ -188,7 +189,7 @@ try {
     await open(kind === "units" ? "units" : "inventory");
     await page.locator(`#inventory-${kind}-name`).fill(name);
     await submit(
-      `#inventory-${kind}-form button`,
+      `#inventory-${kind}-form button[type="submit"]`,
       "/settings/inventory-options/",
     );
     await contains(`#inventory-${kind}-list`, name);
@@ -228,8 +229,10 @@ try {
     },
   ]) {
     await open(cfg.section);
+    if (cfg.section === "products") await page.locator("#openCreateProductButton").click();
     await page.locator(cfg.name).fill(cfg.title);
     if (cfg.section === "products") {
+      await page.locator("#settingsProductCategory").selectOption({ index: 1 });
       await page.locator("#settingsProductUnit").selectOption("عدد");
       await page.locator("#settingsProductPrice").fill("1200");
       await page.locator("#settingsProductStock").fill("5");
@@ -313,8 +316,9 @@ try {
   await page.locator("#passwordForm button[type=submit]").click();
   await contains("#passwordMessage", "فعلی");
   await page.locator("#passwordCurrentPassword").fill("incorrect");
-  await page.locator("#securityNewPassword").fill("short7!");
-  await page.locator("#securityConfirmPassword").fill("short7!");
+  const firstPassword = "first browser passphrase";
+  await page.locator("#securityNewPassword").fill(firstPassword);
+  await page.locator("#securityConfirmPassword").fill(firstPassword);
   await page.locator("#passwordForm button[type=submit]").click();
   await contains("#passwordMessage", "صحیح نیست");
   assert.equal(
@@ -336,15 +340,15 @@ try {
     await page.locator("#passwordCurrentPassword").getAttribute("type"),
     "password",
   );
-  const shortLogin = await context.request.post(base + "/api/login", {
-    data: { username: "customers-test", password: "short7!" },
+  const firstLogin = await context.request.post(base + "/api/login", {
+    data: { username: "customers-test", password: firstPassword },
   });
-  assert.equal(shortLogin.status(), 200);
+  assert.equal(firstLogin.status(), 200);
   const old = await context.request.get(base + "/api/auth/me", {
     headers: { Authorization: "Bearer " + original },
   });
   assert.equal(old.status(), 401);
-  await page.locator("#passwordCurrentPassword").fill("short7!");
+  await page.locator("#passwordCurrentPassword").fill(firstPassword);
   await page.locator("#securityNewPassword").fill("secure browser passphrase");
   await page.locator("#securityConfirmPassword").fill("different passphrase");
   await page.locator("#passwordForm button[type=submit]").click();
@@ -384,9 +388,12 @@ try {
     },
   });
   assert.equal(newLogin.status(), 200);
-  // Offline feedback retains credentials and retry recovers.
-  await page.route("**/api/auth/me", (route) => route.abort());
+  // Exercise the Security section's retry after the page-level session check.
+  await page.goto(base + "/page/settings-page.html#general");
   await page.reload();
+  await ready();
+  await page.route("**/api/auth/me", (route) => route.abort());
+  await open("security");
   await page.locator("#securityRetry").waitFor({ state: "visible" });
   await page.unroute("**/api/auth/me");
   await page.locator("#securityRetry").click();
@@ -408,7 +415,7 @@ try {
   await page.waitForURL("**/index.html");
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: 12 sections at 5 widths; existing settings CRUD; security validation, session rotation, reload, retry and subsequent login.",
+    `PASS: ${sections.length} sections at 5 widths; existing settings CRUD; security validation, session rotation, reload, retry and subsequent login.`,
   );
 } catch (error) {
   await page.screenshot({

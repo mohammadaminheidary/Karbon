@@ -3,6 +3,7 @@ import { publishDataChange } from "../components/data-events.js";
 import { getToken, logout } from "../auth/auth-storage.js";
 
 const API_URL = "http://127.0.0.1:8000/api/customers";
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export class CustomerApiError extends Error {
   constructor(message, status = 0, detail = null) {
@@ -12,7 +13,7 @@ export class CustomerApiError extends Error {
   }
 }
 
-async function request(path = "", { method = "GET", body, signal } = {}) {
+async function request(path = "", { method = "GET", body, signal, workbook, download, readOnly } = {}) {
   const token = getToken();
   if (!token) {
     logout();
@@ -25,18 +26,20 @@ async function request(path = "", { method = "GET", body, signal } = {}) {
   const cancel = () => controller.abort();
   if (signal?.aborted) cancel();
   signal?.addEventListener("abort", cancel, { once: true });
-  const timeout = setTimeout(cancel, 15000);
+  const timeout = setTimeout(cancel, workbook ? 60000 : 15000);
   try {
-    response = await apiFetch(`${API_URL}${path}`, {
+    response = await (readOnly ? fetch : apiFetch)(`${API_URL}${path}`, {
       method,
       signal: controller.signal,
       headers: {
-        Accept: "application/json",
+        Accept: download ? XLSX_TYPE : "application/json",
         Authorization: `Bearer ${token}`,
         ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(workbook ? { "Content-Type": XLSX_TYPE } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: workbook ?? (body ? JSON.stringify(body) : undefined),
     });
+    if (download && response.ok) return await response.blob();
     data = response.status === 204 ? null : await response.json();
   } catch (error) {
     if (signal?.aborted) throw error;
@@ -69,7 +72,7 @@ async function request(path = "", { method = "GET", body, signal } = {}) {
     }
     throw new CustomerApiError(message, response.status, data?.detail);
   }
-  if (method !== "GET") publishDataChange();
+  if (method !== "GET" && !readOnly && (!workbook || data.inserted)) publishDataChange();
   return data;
 }
 
@@ -88,6 +91,20 @@ export const updateCustomer = (id, data) =>
   request(`/${Number(id)}`, { method: "PUT", body: data });
 export const deleteCustomer = (id) =>
   request(`/${Number(id)}`, { method: "DELETE" });
+
+export const getCustomerImportTemplate = () =>
+  request("/import/template", { download: true, readOnly: true });
+
+export const inspectCustomerWorkbook = (workbook) =>
+  request("/import/inspect", { method: "POST", workbook, readOnly: true });
+
+export function processCustomerWorkbook(action, workbook, sheet, columns) {
+  const params = new URLSearchParams({ sheet });
+  for (const column of columns) params.append("columns", column);
+  return request(`/import/${action}?${params}`, {
+    method: "POST", workbook, readOnly: action === "preview",
+  });
+}
 
 // Selectors need identity/contact fields, not invoice aggregates.
 export const getCustomerOptions = ({ search = "", skip = 0, limit = 100, customer_id, signal } = {}) =>
