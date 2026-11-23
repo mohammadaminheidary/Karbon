@@ -1,4 +1,7 @@
 import { initializeNavigation } from "./navigation.js";
+import { initializeDockMagnification } from "./dock-magnification.js";
+import { initializeNavbarActiveHighlight } from "./navbar-active-highlight.js";
+import { notify } from "./notifications.js";
 import { getToken, logout } from "../auth/auth-storage.js";
 
 import { revokeSession } from "../auth/auth-api.js";
@@ -12,11 +15,10 @@ export function initializeNavbar() {
   cleanupNavbar?.();
   if (!host.querySelector("#mainNavbar")) return;
   const navbar = host.querySelector("nav");
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  let pulse;
-  const glass = navbar.querySelector(".navbar-glass");
   const controller = new AbortController();
   const { signal } = controller;
+  initializeDockMagnification(navbar, { signal });
+  initializeNavbarActiveHighlight(navbar, { signal });
   host.querySelector("#logoutButton").addEventListener(
     "click",
     async () => {
@@ -28,8 +30,10 @@ export function initializeNavbar() {
         logout();
         window.location.replace("/page/login-page.html");
       } catch (error) {
-        const { notifyNavbar } = await import("./navbar-notification.js");
-        notifyNavbar(error.message || "ارتباط با سرور برقرار نشد. دوباره تلاش کنید.");
+        notify(
+          error.message || "ارتباط با سرور برقرار نشد. دوباره تلاش کنید.",
+          { type: "error" },
+        );
       } finally {
         button.disabled = false;
       }
@@ -48,9 +52,9 @@ export function initializeNavbar() {
         const { openReports } = await import("../reports/reports.js");
         await openReports();
       } catch (error) {
-        const { notifyNavbar } = await import("./navbar-notification.js");
-        notifyNavbar(
+        notify(
           error.message || "بارگذاری گزارش انجام نشد. دوباره تلاش کنید.",
+          { type: "error" },
         );
       } finally {
         openingReports = false;
@@ -145,7 +149,6 @@ export function initializeNavbar() {
   function cleanup() {
     stopClock();
     resetNavigation();
-    pulse?.cancel();
     controller.abort();
     if (cleanupNavbar === cleanup) cleanupNavbar = undefined;
   }
@@ -163,58 +166,5 @@ export function initializeNavbar() {
     { signal },
   );
   startClock();
-
-  function animateGlass(event) {
-    if (
-      reducedMotion.matches ||
-      !glass.animate ||
-      !event.target.closest(".navbar-item") ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    )
-      return;
-    // Let an existing spring settle rather than snapping it back on rapid clicks.
-    if (pulse?.playState === "running") return;
-    pulse = glass.animate(
-      [
-        // Quick expansion, then a damped return with no oscillation past rest.
-        {
-          transform: "scaleX(1)",
-          offset: 0,
-          easing: "cubic-bezier(.2,.75,.25,1)",
-        },
-        {
-          transform: "scaleX(1.022)",
-          offset: 0.24,
-          easing: "cubic-bezier(.25,0,.2,1)",
-        },
-        { transform: "scaleX(1)", offset: 1 },
-      ],
-      { duration: 300, easing: "linear" },
-    );
-  }
-
-  // Feedback starts on press. Native links and logout handlers run immediately.
-  navbar.addEventListener("pointerdown", animateGlass, {
-    passive: true,
-    signal,
-  });
-  navbar.addEventListener(
-    "click",
-    (event) => {
-      if (event.detail === 0) animateGlass(event); // Keyboard activation.
-    },
-    { passive: true, signal },
-  );
-  reducedMotion.addEventListener(
-    "change",
-    () => {
-      if (reducedMotion.matches) pulse?.cancel();
-    },
-    { signal },
-  );
   return cleanup;
 }

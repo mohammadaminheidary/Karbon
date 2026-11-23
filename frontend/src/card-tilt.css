@@ -1,0 +1,54 @@
+:root {
+  --card-tilt-transition: transform 190ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+/* A card can be its own surface or use a separate face on a stationary host. */
+@media screen and (any-hover: hover) and (any-pointer: fine) and (prefers-reduced-motion: no-preference) {
+  @layer components {
+    :is(
+      .card-tilt:not(:has(> .card-tilt-surface)),
+      .card-tilt > .card-tilt-surface
+    ) {
+      position: relative;
+      transition:
+        var(--card-tilt-transition),
+        border-color 150ms,
+        box-shadow 150ms;
+
+      &::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        border-radius: inherit;
+        background: radial-gradient(
+          ellipse 55% 70% at var(--card-light-x, 50%) var(--card-light-y, 50%),
+          rgb(255 255 255 / 18%),
+          rgb(255 255 255 / 5%) 56%,
+          transparent
+        );
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 190ms ease-out;
+      }
+    }
+  }
+
+  :is(
+    .card-tilt[data-tilted]:not(:has(> .card-tilt-surface)),
+    .card-tilt[data-tilted] > .card-tilt-surface
+  ) {
+    transform: perspective(var(--card-perspective)) translateZ(var(--card-lift))
+      rotateX(var(--card-tilt-x)) rotateY(var(--card-tilt-y));
+
+    &::after {
+      opacity: 1;
+    }
+  }
+
+  @media (forced-colors: active) {
+    :is(.card-tilt, .card-tilt > .card-tilt-surface)::after {
+      display: none;
+    }
+  }
+}

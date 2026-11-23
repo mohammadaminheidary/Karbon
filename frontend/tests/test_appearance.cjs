@@ -63,6 +63,8 @@ test("first paint defaults and corrupt or unsupported preferences remain usable"
       theme: "purple",
       fontSize: -1,
       pageFontSizes: { dashboard: "125", settings: 200 },
+      dockAnimation: "false",
+      dockMagnification: 181,
     }),
   ]) {
     const { api, document } = app({ value });
@@ -70,9 +72,66 @@ test("first paint defaults and corrupt or unsupported preferences remain usable"
       theme: "blue",
       fontSize: 100,
       pageFontSizes: {},
+      cardTiltBySection: {},
+      dockAnimation: true,
+      dockMagnification: 160,
+      dockHighlightTransparency: 45,
+      dockHighlightDarkness: 0,
     });
     assert.equal(document.documentElement.dataset.theme, "blue");
     assert.equal(document.documentElement.style.fontSize, "100%");
+  }
+});
+test("card tilt defaults on for each section and persists independent overrides", () => {
+  const first = app({ pathname: "/page/settings-page.html" });
+  assert.deepEqual(
+    plain(first.api.cardTiltSections.map(({ id }) => id)).sort(),
+    [...plain(first.api.pages.map(({ id }) => id)), "products"].sort(),
+  );
+  for (const { id } of first.api.cardTiltSections) {
+    assert.equal(first.api.cardTiltEnabled(id), true, id);
+  }
+  first.api.updatePreferences({
+    cardTiltBySection: { customers: false, products: false, banks: "off" },
+  });
+  const value = first.storage.get(first.api.STORAGE_KEY);
+  const restored = app({ value, pathname: "/page/customers-page.html" });
+  assert.equal(restored.api.cardTiltEnabled(), false);
+  assert.equal(restored.api.cardTiltEnabled("products"), false);
+  assert.equal(restored.api.cardTiltEnabled("banks"), true);
+  assert.equal(restored.api.cardTiltEnabled("settings"), true);
+  assert.equal(app({ value, pathname: "/new-section" }).api.cardTiltEnabled(), true);
+  const snapshot = restored.api.getPreferences();
+  snapshot.cardTiltBySection.customers = true;
+  assert.equal(restored.api.cardTiltEnabled(), false);
+  restored.api.resetPreferences();
+  assert.equal(restored.api.cardTiltEnabled(), true);
+  assert.equal(restored.api.cardTiltEnabled("products"), true);
+});
+test("dock highlight settings validate and persist independently", () => {
+  const first = app();
+  first.api.updatePreferences({ dockHighlightTransparency: 100, dockHighlightDarkness: 72 });
+  first.api.updatePreferences({ dockHighlightTransparency: 0 });
+  const restored = app({ value: first.storage.get(first.api.STORAGE_KEY) });
+  assert.equal(restored.api.getPreferences().dockHighlightTransparency, 0);
+  assert.equal(restored.api.getPreferences().dockHighlightDarkness, 72);
+  assert.equal(restored.document.documentElement.style["--dock-highlight-transparency"], "0%");
+  assert.equal(restored.document.documentElement.style["--dock-highlight-darkness"], "72%");
+  restored.api.updatePreferences({ dockHighlightTransparency: "25", dockHighlightDarkness: 101 });
+  assert.equal(restored.api.getPreferences().dockHighlightTransparency, 45);
+  assert.equal(restored.api.getPreferences().dockHighlightDarkness, 0);
+});
+test("dock preferences preserve a disabled effect and validate magnification steps", () => {
+  const first = app();
+  for (const dockMagnification of [110, 135, 180]) {
+    assert.equal(first.api.updatePreferences({ dockAnimation: false, dockMagnification }), true);
+    const restored = app({ value: first.storage.get(first.api.STORAGE_KEY) });
+    assert.equal(restored.api.getPreferences().dockAnimation, false);
+    assert.equal(restored.api.getPreferences().dockMagnification, dockMagnification);
+  }
+  for (const dockMagnification of [105, 112, 185, "160", null]) {
+    first.api.updatePreferences({ dockMagnification });
+    assert.equal(first.api.getPreferences().dockMagnification, 160);
   }
 });
 test("preferences survive new documents and apply page overrides only to the matching page", () => {
@@ -162,12 +221,22 @@ test("reset restores initial appearance, persists and preserves unrelated storag
     theme: "red",
     fontSize: 125,
     pageFontSizes: { settings: 85, customers: 120 },
+    cardTiltBySection: { settings: false },
+    dockAnimation: false,
+    dockMagnification: 180,
+    dockHighlightTransparency: 8,
+    dockHighlightDarkness: 80,
   });
   assert.equal(api.resetPreferences(), true);
   assert.deepEqual(plain(api.getPreferences()), {
     theme: "blue",
     fontSize: 100,
     pageFontSizes: {},
+    cardTiltBySection: {},
+    dockAnimation: true,
+    dockMagnification: 160,
+    dockHighlightTransparency: 45,
+    dockHighlightDarkness: 0,
   });
   assert.equal(document.documentElement.dataset.theme, "blue");
   assert.equal(document.documentElement.style.fontSize, "100%");

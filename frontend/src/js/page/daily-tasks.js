@@ -2,7 +2,7 @@ import { startPage } from "../components/page-ready.js";
 import { refreshData } from "../components/api-cache.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { initializeNavbar } from "../components/navbar.js";
-import { createNavbarNotification } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { protectPage } from "../guards/auth-guard.js";
 import {
@@ -23,8 +23,6 @@ import { initializeTaskDrag } from "../tasks/task-drag.js";
 
 initializeNavbar();
 const $ = (id) => document.getElementById(id);
-const titleIsland = document.querySelector(".navbar-title-island");
-const notify = createNavbarNotification(titleIsland);
 const curtain = $("taskCurtain");
 const details = $("taskDetails");
 const formDialog = new NavbarPanelDialog("taskCurtain", {
@@ -89,7 +87,7 @@ function render(focusId) {
 }
 
 function card(task) {
-  const article = node("article", "task-card");
+  const article = node("article", "task-card card-tilt");
   article.id = `task-card-${task.id}`;
   article.dataset.taskId = String(task.id);
   article.draggable = !pending.has(task.id);
@@ -132,7 +130,7 @@ async function changeStatus(id, status, restoreFocus = false) {
   try {
     const updated = await updateTaskStatus(id, status);
     tasks = tasks.map((item) => (item.id === id ? updated : item));
-    notify("وضعیت کار بروزرسانی شد.");
+    notify("وضعیت کار بروزرسانی شد.", { type: "success" });
   } catch (error) {
     task.status = previousStatus;
     showError($("tasksError"), error.message);
@@ -229,7 +227,7 @@ $("confirmDeleteTask").addEventListener("click", async () => {
   }
   if (deleted) {
     await closeDetails();
-    notify("کار حذف شد.");
+    notify("کار حذف شد.", { type: "success" });
   }
   if (reloadRequested) void loadTasks();
 });
@@ -355,7 +353,7 @@ $("taskForm").addEventListener("submit", async (event) => {
   if (saved) {
     const created = editingId === null;
     await closeForm();
-    if (created) notify("کار اضافه شد.");
+    if (created) notify("کار اضافه شد.", { type: "success" });
     // Refresh also recovers the board if its initial request failed.
     await loadTasks();
   } else if (reloadRequested) {

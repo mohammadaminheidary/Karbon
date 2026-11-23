@@ -1,6 +1,5 @@
 import { startPage } from "../components/page-ready.js";
 import { initializeNavbar } from "../components/navbar.js";
-import { createNavbarNotification } from "../components/navbar-notification.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { financeRequest } from "../finance/finance-api.js";
@@ -9,8 +8,6 @@ import { initializeDocumentDialogs } from "../documents/document-dialogs.js";
 
 initializeNavbar();
 const $ = (id) => document.getElementById(id);
-const titleIsland = document.querySelector(".navbar-title-island");
-const notify = createNavbarNotification(titleIsland);
 const number = new Intl.NumberFormat("fa-IR");
 const pageSize = 15;
 let items = [],
@@ -27,7 +24,6 @@ let loading = false,
   ready = false,
   pendingRefresh = false;
 const dialogs = initializeDocumentDialogs({
-  notify,
   onIdle: () => {
     if (pendingRefresh) void refresh();
   },
@@ -43,11 +39,11 @@ const dialogs = initializeDocumentDialogs({
 });
 
 function renderCard(item) {
-  const wrapper = node("div");
+  const wrapper = node("div", "card-tilt");
   wrapper.setAttribute("role", "listitem");
   const card = node(
     "button",
-    "group w-full cursor-pointer rounded-xl border border-french-gray/30 bg-white px-4 py-3 text-right transition duration-200 hover:border-persian-blue/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-persian-blue/20",
+    "card-tilt-surface group w-full cursor-pointer rounded-xl border border-french-gray/30 bg-white px-4 py-3 text-right transition duration-200 hover:border-french-gray/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-persian-blue/20",
   );
   card.type = "button";
   card.dataset.documentId = item.id;

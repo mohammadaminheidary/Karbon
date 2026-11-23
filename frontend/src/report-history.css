@@ -104,7 +104,7 @@
 }
 @media (hover: hover) {
   .report-history-entry:has(.report-card-link:hover) {
-    border-color: var(--color-persian-blue);
+    border-color: var(--color-french-gray);
   }
 }
 .reports-refresh {

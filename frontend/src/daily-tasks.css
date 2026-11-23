@@ -109,15 +109,19 @@
     0 4px 16px rgb(15 23 42 / 5%),
     inset 0 1px 0 rgb(255 255 255 / 70%);
   transition:
+    var(--card-tilt-transition),
     border-color 150ms ease,
     box-shadow 150ms ease;
 }
 .task-card:hover,
 .task-card:focus-visible {
-  border-color: color-mix(in srgb, var(--color-persian-blue) 30%, transparent);
   box-shadow: 0 6px 20px rgb(15 23 42 / 8%);
 }
+.task-card:hover {
+  border-color: color-mix(in srgb, var(--color-french-gray) 70%, transparent);
+}
 .task-card:focus-visible {
+  border-color: color-mix(in srgb, var(--color-persian-blue) 30%, transparent);
   outline: 2px solid var(--color-persian-blue);
   outline-offset: 3px;
 }

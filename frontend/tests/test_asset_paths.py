@@ -8,7 +8,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 CSS_REFERENCES = re.compile(r'''(?:url\(\s*["']?([^\s"')]+)|@import\s+["']([^"']+))''')
-JS_IMPORTS = re.compile(r'''(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["']([^"']+)["']''')
+JS_IMPORTS = re.compile(r'''(?:\bfrom\s+|\bimport(?:\s+|\s*\(\s*))["']([^"']+)["']''')
 
 
 class References(HTMLParser):

@@ -595,6 +595,7 @@
   border-radius: 18px;
   background: rgb(255 255 255 / 65%);
   transition:
+    var(--card-tilt-transition),
     border-color 160ms,
     box-shadow 160ms;
 }
@@ -808,11 +809,12 @@
 .orders-record {
   position: relative;
   transition:
+    var(--card-tilt-transition),
     border-color 160ms,
     box-shadow 160ms;
 }
 .orders-record:hover {
-  border-color: color-mix(in srgb, var(--color-persian-blue) 35%, transparent);
+  border-color: color-mix(in srgb, var(--color-french-gray) 70%, transparent);
   box-shadow: 0 4px 16px rgb(15 23 42 / 5%);
 }
 .orders-card-open {

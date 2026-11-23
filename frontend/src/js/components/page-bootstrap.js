@@ -1,6 +1,24 @@
 // This small, dependency-free boundary runs before the page's module graph.
 // The HTML owns the shell; a failed import must never leave an endless spinner.
 (() => {
+  const page = document.documentElement;
+  const navigation = performance.getEntriesByType("navigation")[0];
+  const fromKarbon = document.referrer.startsWith(`${window.location.origin}/`);
+  if (
+    !window.matchMedia("(prefers-reduced-motion: reduce)").matches &&
+    navigation?.type !== "reload" &&
+    (fromKarbon || navigation?.type === "back_forward")
+  ) {
+    page.dataset.pageEnter = "";
+    const clearEntrance = () => { delete page.dataset.pageEnter; };
+    const onEntranceEnd = (event) => {
+      if (event.animationName === "page-enter") clearEntrance();
+    };
+    window.addEventListener("pagehide", clearEntrance);
+    document.addEventListener("animationend", onEntranceEnd);
+    document.addEventListener("animationcancel", onEntranceEnd);
+  }
+
   const protectedPage = window.location.pathname !== "/page/login-page.html";
   if (protectedPage) {
     document.documentElement.dataset.authState = "pending";

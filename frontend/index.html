@@ -325,6 +325,7 @@
             <p class="dash-muted">عملکرد مالی و عملیات، در یک نگاه.</p>
           </div>
           <div class="dash-sync">
+            <span id="dashboardFiscalYear" hidden></span>
             <span id="dashboardStatus" role="status"
               >در حال دریافت اطلاعات…</span
             ><button
@@ -610,7 +611,7 @@
                 id="bankChart"
                 aria-label="مانده فعلی حساب‌های بانکی و صندوق"
               ></div>
-              <p class="dash-footnote">
+              <p id="dashboardBankNote" class="dash-footnote">
                 مانده اولیه + کل دریافت‌ها − کل پرداخت‌ها؛ شامل حساب‌های
                 غیرفعال.
               </p>
@@ -653,6 +654,7 @@
                 aria-label="فروش ناخالص کالاها و خدمات"
               ></div>
               <p id="stockSummary" class="dash-footnote"></p>
+              <p id="dashboardPurchases" class="dash-footnote" hidden></p>
             </article>
             <article
               data-widget-id="receivables"

@@ -22,7 +22,7 @@ export async function initializeReportHistory() {
   const limit = 50;
 
   function row(report) {
-    const item = element("li", undefined, "report-history-entry");
+    const item = element("li", undefined, "report-history-entry card-tilt");
     const badge = element(
       "span",
       report.format === "pdf" ? "PDF" : "Excel",

@@ -1,5 +1,5 @@
 import { startPage } from "../components/page-ready.js";
-import { createNavbarNotification } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { invalidateApiCache } from "../components/api-cache.js";
 import {
@@ -12,10 +12,6 @@ import { initializeNavbar } from "../components/navbar.js";
 import { initializeFaceCheckIn } from "../attendance/face-panel.js";
 
 initializeNavbar();
-
-const notifyAttendance = createNavbarNotification(
-  document.querySelector(".navbar-title-island"),
-);
 
 import { protectPage } from "../guards/auth-guard.js";
 import { logout } from "../auth/auth-storage.js";
@@ -88,7 +84,7 @@ function updateCalendarSelection() {
 function createCalendarDay(dateKey) {
   const button = node(
     "button",
-    "w-[170px] shrink-0 rounded-2xl border p-3 text-right transition-colors hover:border-persian-blue/40",
+    "card-tilt w-[170px] shrink-0 rounded-2xl border p-3 text-right transition-[color,background-color,border-color,transform] hover:border-french-gray/70",
   );
   button.type = "button";
   button.dataset.calendarDate = dateKey;
@@ -188,7 +184,7 @@ async function refreshCalendarStatistics() {
 
     if (version !== calendarVersion) return;
     console.error("Calendar statistics error:", error);
-    notifyAttendance("دریافت تقویم انجام نشد. دوباره تلاش کنید.");
+    notify("دریافت تقویم انجام نشد. دوباره تلاش کنید.", { type: "error" });
   } finally {
     if (version === calendarVersion) track.setAttribute("aria-busy", "false");
   }
@@ -223,7 +219,7 @@ async function openDayDetails(dateKey) {
     console.error("Day details error:", error);
 
     setDayDetailsError(dateKey);
-    notifyAttendance("دریافت اطلاعات روز انجام نشد. دوباره تلاش کنید.");
+    notify("دریافت اطلاعات روز انجام نشد. دوباره تلاش کنید.", { type: "error" });
   }
 }
 

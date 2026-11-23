@@ -1,4 +1,5 @@
 import { startConnectionMonitor } from "./connection.js";
+import { initializeCardTilt } from "./card-tilt.js";
 
 // Page setup may await auth and data after the document's load event. Track
 // that work explicitly so failures and tests cannot mistake HTML for readiness.
@@ -10,6 +11,7 @@ export async function startPage(initialize) {
       );
     }
     startConnectionMonitor();
+    initializeCardTilt();
     const result = await initialize();
     const failure = document.getElementById("pageStartupError");
     if (

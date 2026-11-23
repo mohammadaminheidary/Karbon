@@ -15,7 +15,7 @@ export class LayoutEditor {
     this.widgets = new Map();
     this.definitions = [...grid.children].map((surface) => {
       const id = surface.dataset.widgetId;
-      const wrapper = element("section", "dash-widget");
+      const wrapper = element("section", "dash-widget card-tilt");
       wrapper.dataset.widget = id;
       const kind = surface.querySelector('[id$="Chart"]')
         ? "chart"
@@ -38,7 +38,7 @@ export class LayoutEditor {
       resize.title = "کشیدن برای تغییر اندازه؛ کلیدهای جهت برای عرض و ارتفاع";
       grid.replaceChild(wrapper, surface);
       wrapper.append(toolbar, surface, resize);
-      surface.classList.add("dash-widget-surface");
+      surface.classList.add("dash-widget-surface", "card-tilt-surface");
       this.widgets.set(id, wrapper);
       [handle, resize].forEach((control, index) => {
         control.addEventListener("pointerdown", (event) =>

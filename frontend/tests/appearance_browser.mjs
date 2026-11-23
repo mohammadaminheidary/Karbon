@@ -41,6 +41,47 @@ const rootSize = () =>
   page.evaluate(() =>
     parseFloat(getComputedStyle(document.documentElement).fontSize),
   );
+const dockButtons = "#mainNavbar .navbar-item";
+const dockToggle = "#appearanceDockAnimation";
+const dockSlider = "#appearanceDockMagnification";
+const dockValue = "#appearanceDockMagnificationValue";
+const dockIconSize = 20;
+const dockWidth = () => page.locator("#mainNavbar").evaluate((navbar) => navbar.getBoundingClientRect().width);
+const dockSlots = () => page.locator(dockButtons).evaluateAll((buttons) =>
+  buttons.map((button) => button.getBoundingClientRect().toJSON()),
+);
+const dockFramesOverlap = () => page.locator(dockButtons).evaluateAll((buttons) => {
+  const frames = buttons.map((button) => {
+    const slot = button.getBoundingClientRect();
+    const frame = getComputedStyle(button, "::before");
+    const scale = frame.scale === "none" ? 1 : parseFloat(frame.scale);
+    const lift = parseFloat(frame.translate.split(" ")[1]) || 0;
+    return {
+      x: slot.left + slot.width / 2,
+      y: slot.top + slot.height / 2 + lift,
+      width: parseFloat(frame.width) * scale,
+      height: parseFloat(frame.height) * scale,
+    };
+  });
+  return frames.some((a, i) => frames.slice(i + 1).some((b) =>
+    Math.abs(a.x - b.x) < (a.width + b.width) / 2 - 0.1 &&
+    Math.abs(a.y - b.y) < (a.height + b.height) / 2 - 0.1,
+  ));
+});
+const waitForDockScale = (index, expected) => page.waitForFunction(
+  ({ dockButtons, dockIconSize, index, expected }) => {
+    const button = document.querySelectorAll(dockButtons)[index];
+    const frame = getComputedStyle(button, "::before");
+    const { width, height, transform, translate } = getComputedStyle(button.querySelector(".navbar-icon"));
+    const frameScale = frame.scale === "none" ? 1 : parseFloat(frame.scale);
+    return transform === "none"
+      && Math.abs(frameScale - expected) < 0.003
+      && frame.translate === translate
+      && Math.abs(parseFloat(width) / dockIconSize - expected) < 0.003
+      && Math.abs(parseFloat(height) / dockIconSize - expected) < 0.003;
+  },
+  { dockButtons, dockIconSize, index, expected },
+);
 try {
   const response = await context.request.post(base + "/api/login", {
     data: { username: "customers-test", password: "test-password" },
@@ -54,6 +95,117 @@ try {
   );
   await settings();
   assert.equal(await rootSize(), 16);
+  assert.equal(await page.locator(dockToggle).isChecked(), true);
+  assert.equal(await page.locator(dockSlider).inputValue(), "160");
+  assert.equal(await page.locator(dockValue).textContent(), "۱۶۰٪");
+  const slots = await dockSlots();
+  const restWidth = await dockWidth();
+  const pointer = (index) => ({
+    x: slots[index].left + slots[index].width / 2,
+    y: slots[index].top + slots[index].height / 2,
+  });
+  const hoverDock = async (index) => {
+    const { x, y, width, height } = await page.locator(dockButtons).nth(index).boundingBox();
+    await page.mouse.move(x + width / 2, y + height / 2);
+  };
+  const center = 6;
+  await hoverDock(center);
+  await waitForDockScale(center, 1.6);
+  assert.ok(await dockWidth() > restWidth);
+  assert.equal(await dockFramesOverlap(), false);
+  for (const amount of [110, 135, 180]) {
+    await range(dockSlider, amount);
+    await waitForDockScale(center, amount / 100);
+  }
+  const scales = await page.locator(`${dockButtons} .navbar-icon`).evaluateAll(
+    (icons, base) => icons.map((icon) => parseFloat(getComputedStyle(icon).width) / base),
+    dockIconSize,
+  );
+  assert.ok(scales[center] > scales[center - 1]);
+  assert.ok(scales[center - 1] > scales[center - 2]);
+  assert.ok(scales[center - 2] > 1);
+  assert.equal(scales[center - 3], 1);
+  assert.ok(Math.abs(scales[center - 1] - scales[center + 1]) < 0.005);
+  const expanded = await dockSlots();
+  assert.ok(expanded[center].width > slots[center].width);
+  const neighbor = expanded[center + 1];
+  const midpoint = (expanded[center].left + expanded[center].width / 2 + neighbor.left + neighbor.width / 2) / 2;
+  await page.mouse.move(midpoint, pointer(center).y, { steps: 8 });
+  assert.equal(await dockFramesOverlap(), false);
+  await page.mouse.move(0, 0);
+  await waitForDockScale(center, 1);
+  await page.waitForFunction((width) => Math.abs(document.querySelector("#mainNavbar").getBoundingClientRect().width - width) < 0.1, restWidth);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForFunction(() => document.querySelectorAll("#mainNavbar .navbar-row").length > 1);
+  const wrappedSlots = await dockSlots();
+  const wrappedWidth = await dockWidth();
+  const lastIndex = wrappedSlots.length - 1;
+  const lastSlot = wrappedSlots[lastIndex];
+  assert.ok(lastSlot.top > wrappedSlots[0].top);
+  await page.mouse.move(lastSlot.left + lastSlot.width / 2, lastSlot.top + lastSlot.height / 2);
+  await waitForDockScale(lastIndex, 1.8);
+  assert.equal(await dockFramesOverlap(), false);
+  await page.mouse.move(0, 0);
+  await waitForDockScale(lastIndex, 1);
+  const firstRowCenter = wrappedSlots[2];
+  await page.mouse.move(firstRowCenter.left + firstRowCenter.width / 2, firstRowCenter.top + firstRowCenter.height / 2);
+  await page.waitForFunction((width) => document.querySelector("#mainNavbar").getBoundingClientRect().width > width + 4, wrappedWidth);
+  assert.ok(await dockWidth() <= 390 - 32 + 0.1);
+  assert.equal(await dockFramesOverlap(), false);
+  await page.mouse.move(0, 0);
+  await page.setViewportSize({ width: 1440, height: 1050 });
+
+  const currentDockButton = page.locator(`${dockButtons}[aria-current="page"]`);
+  const currentDockFrame = () => currentDockButton.evaluate((button) => getComputedStyle(button, "::before").backgroundImage);
+  const driftStart = await currentDockFrame();
+  assert.match(driftStart, /radial-gradient/);
+  await page.waitForFunction((background) =>
+    getComputedStyle(document.querySelector("#mainNavbar [aria-current='page']"), "::before").backgroundImage !== background,
+  driftStart);
+  const transparency = "#appearanceDockHighlightTransparency";
+  const darkness = "#appearanceDockHighlightDarkness";
+  assert.equal(await page.locator(transparency).inputValue(), "45");
+  assert.equal(await page.locator(darkness).inputValue(), "0");
+  await range(transparency, 77);
+  await range(darkness, 64);
+  assert.equal(await page.locator(`${transparency}Value`).textContent(), "۷۷٪");
+  assert.equal(await page.locator(`${darkness}Value`).textContent(), "۶۴٪");
+  assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue("--dock-highlight-transparency")), "77%");
+  assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue("--dock-highlight-darkness")), "64%");
+  const currentBounds = await currentDockButton.boundingBox();
+  const currentY = currentBounds.y + currentBounds.height / 2;
+  await page.mouse.move(currentBounds.x + currentBounds.width / 2, currentY);
+  await page.waitForFunction(() => {
+    const button = document.querySelector("#mainNavbar [aria-current='page']");
+    return getComputedStyle(button, "::before").getPropertyValue("--dock-highlight-follow") === "1";
+  });
+  const highlighted = await currentDockButton.boundingBox();
+  await page.mouse.move(highlighted.x + highlighted.width * 0.3, currentY);
+  await page.waitForFunction(() => parseFloat(document.querySelector("[data-dock-highlight]")?.style.getPropertyValue("--dock-pointer-x")) < 45);
+  await page.mouse.move(highlighted.x + highlighted.width * 0.7, currentY);
+  await page.waitForFunction(() => parseFloat(document.querySelector("[data-dock-highlight]")?.style.getPropertyValue("--dock-pointer-x")) > 55);
+  await page.mouse.move(0, 0);
+  await page.locator("[data-dock-highlight]").waitFor({ state: "detached" });
+  await page.waitForFunction((width) => Math.abs(document.querySelector("#mainNavbar").getBoundingClientRect().width - width) < 0.1, restWidth);
+
+  await hoverDock(center);
+  await waitForDockScale(center, 1.8);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await waitForDockScale(center, 1);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.locator(dockToggle).focus();
+  await page.keyboard.press("Space");
+  assert.equal(await page.locator(dockToggle).isChecked(), false);
+  assert.equal(await page.locator(dockSlider).isDisabled(), true);
+  await page.emulateMedia({ forcedColors: "active" });
+  assert.equal(await page.locator(`${dockToggle} + .appearance-switch`).evaluate((track) =>
+    getComputedStyle(track).backgroundColor !== getComputedStyle(track, "::before").backgroundColor,
+  ), true);
+  await page.emulateMedia({ forcedColors: "none" });
+  await hoverDock(center);
+  await waitForDockScale(center, 1);
+  assert.equal(await page.locator("#mainNavbar[data-dock-animation]").count(), 0);
   assert.equal(
     await page
       .locator('[data-appearance-theme="blue"]')
@@ -173,6 +325,9 @@ try {
   });
   page = await context.newPage();
   track(page);
+  await settings();
+  assert.equal(await page.locator(dockToggle).isChecked(), false);
+  assert.equal(await page.locator(dockSlider).inputValue(), "180");
 
   // A new browser session restores storage. Every route and theme resolves the correct font size,
   // including dashboard SVGs, modal styles, finance forms, dynamic lists and login.
@@ -246,6 +401,15 @@ try {
     () => document.documentElement.dataset.pageState === "ready",
   );
   await other.locator('[data-appearance-theme="red"]').click();
+  await other.locator(dockToggle).focus();
+  await other.keyboard.press("Space");
+  await other.locator(dockSlider).focus();
+  await other.keyboard.press("Home");
+  await page.waitForFunction(() => {
+    const { dockAnimation, dockMagnification } = window.KarbonAppearance.getPreferences();
+    return dockAnimation && dockMagnification === 110;
+  });
+  assert.equal(await page.locator(dockValue).textContent(), "۱۱۰٪");
   await page.waitForFunction(
     () => document.documentElement.dataset.theme === "red",
   );
@@ -271,7 +435,16 @@ try {
   );
   page.once("dialog", (dialog) => dialog.accept());
   await page.locator("#appearanceResetDefaults").click();
-  const defaults = { theme: "blue", fontSize: 100, pageFontSizes: {} };
+  const defaults = {
+    theme: "blue",
+    fontSize: 100,
+    pageFontSizes: {},
+    cardTiltBySection: {},
+    dockAnimation: true,
+    dockMagnification: 160,
+    dockHighlightTransparency: 45,
+    dockHighlightDarkness: 0,
+  };
   assert.deepEqual(
     await page.evaluate(() => window.KarbonAppearance.getPreferences()),
     defaults,
@@ -279,7 +452,7 @@ try {
   assert.equal(await rootSize(), 16);
   assert.equal(await page.locator("#appearanceFontSize").inputValue(), "100");
   await page
-    .locator(".navbar-notification")
+    .locator('.notification-popup[data-type="success"]')
     .filter({ hasText: "تنظیمات ظاهر به پیش‌فرض بازنشانی شد." })
     .waitFor({ state: "visible" });
   await other.waitForFunction(
@@ -323,7 +496,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: four themes across all 12 pages; global scaling; page overrides/reset; keyboard/disclosure; five viewport widths; reload/new-session persistence; live cross-tab sync.",
+    "PASS: themes and typography across routes; dock zoom, falloff, expansion without overlap, reduced motion and toggle; keyboard, responsive controls, reset, persistence and cross-tab sync.",
   );
 } catch (error) {
   await page.screenshot({

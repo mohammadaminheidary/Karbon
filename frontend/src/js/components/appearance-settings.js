@@ -1,16 +1,28 @@
-import { notifyNavbar } from "./navbar-notification.js";
+import { notify } from "./notifications.js";
 
 export function initializeAppearanceSettings() {
   const appearance = window.KarbonAppearance;
   const globalSlider = document.getElementById("appearanceFontSize");
   const globalValue = document.getElementById("appearanceFontValue");
+  const dockToggle = document.getElementById("appearanceDockAnimation");
+  const dockControls = [
+    ["dockMagnification", "appearanceDockMagnification"],
+    ["dockHighlightTransparency", "appearanceDockHighlightTransparency"],
+    ["dockHighlightDarkness", "appearanceDockHighlightDarkness"],
+  ].map(([key, id]) => ({
+    key,
+    slider: document.getElementById(id),
+    output: document.getElementById(`${id}Value`),
+  }));
   const pageList = document.getElementById("appearancePageList");
+  const cardTiltList = document.getElementById("appearanceCardTiltList");
   const trigger = document.getElementById("appearancePageMenuButton");
   const menu = document.getElementById("appearancePageMenu");
   const message = document.getElementById("appearanceMessage");
   const formatter = new Intl.NumberFormat("fa-IR");
   const formatSize = (size) => `${formatter.format(size)}٪`;
   const rows = new Map();
+  const cardTiltSwitches = new Map();
 
   function save(patch) {
     const saved = appearance.updatePreferences(patch);
@@ -18,6 +30,29 @@ export function initializeAppearanceSettings() {
       ? "تغییرات ظاهر ذخیره شد."
       : "ذخیره در مرورگر انجام نشد؛ تنظیمات فقط تا بستن این صفحه اعمال می‌شود.";
     message.setAttribute("role", saved ? "status" : "alert");
+  }
+
+  for (const { id, label } of appearance.cardTiltSections) {
+    const control = document.createElement("label");
+    control.className = "appearance-toggle appearance-card-tilt-toggle";
+    const input = document.createElement("input");
+    input.className = "sr-only";
+    input.id = `appearance-card-tilt-${id}`;
+    input.type = "checkbox";
+    input.setAttribute("role", "switch");
+    const track = document.createElement("span");
+    track.className = "appearance-switch";
+    track.setAttribute("aria-hidden", "true");
+    const title = document.createElement("span");
+    title.textContent = label;
+    control.append(input, track, title);
+    cardTiltList.append(control);
+    cardTiltSwitches.set(id, input);
+    input.addEventListener("change", () => {
+      const { cardTiltBySection } = appearance.getPreferences();
+      cardTiltBySection[id] = input.checked;
+      save({ cardTiltBySection });
+    });
   }
 
   for (const { id, label } of appearance.pages) {
@@ -72,7 +107,8 @@ export function initializeAppearanceSettings() {
   }
 
   function render() {
-    const { theme, fontSize, pageFontSizes } = appearance.getPreferences();
+    const preferences = appearance.getPreferences();
+    const { theme, fontSize, pageFontSizes, dockAnimation } = preferences;
     document.querySelectorAll("[data-appearance-theme]").forEach((button) => {
       button.setAttribute(
         "aria-pressed",
@@ -82,6 +118,17 @@ export function initializeAppearanceSettings() {
     globalSlider.value = fontSize;
     globalSlider.setAttribute("aria-valuetext", formatSize(fontSize));
     globalValue.value = formatSize(fontSize);
+    dockToggle.checked = dockAnimation;
+    for (const [id, input] of cardTiltSwitches) {
+      input.checked = appearance.cardTiltEnabled(id);
+    }
+    for (const { key, slider, output } of dockControls) {
+      if (key === "dockMagnification") slider.disabled = !dockAnimation;
+      const value = preferences[key];
+      slider.value = value;
+      slider.setAttribute("aria-valuetext", formatSize(value));
+      output.value = formatSize(value);
+    }
     for (const [id, { slider, output, hint, reset }] of rows) {
       const custom = Object.hasOwn(pageFontSizes, id);
       slider.value = pageFontSizes[id] ?? fontSize;
@@ -103,13 +150,19 @@ export function initializeAppearanceSettings() {
   globalSlider.addEventListener("input", () =>
     save({ fontSize: Number(globalSlider.value) }),
   );
+  dockToggle.addEventListener("change", () =>
+    save({ dockAnimation: dockToggle.checked }),
+  );
+  for (const { key, slider } of dockControls) {
+    slider.addEventListener("input", () => save({ [key]: Number(slider.value) }));
+  }
 
   document
     .getElementById("appearanceResetDefaults")
     .addEventListener("click", () => {
       if (
         !window.confirm(
-          "تنظیمات ظاهر به حالت پیش‌فرض بازگردد؟ رنگ آبی و اندازه قلم ۱۰۰٪ اعمال و اندازه‌های اختصاصی صفحات پاک می‌شود. تنظیمات امنیتی و سایر تنظیمات تغییر نمی‌کند.",
+          "تنظیمات ظاهر به حالت پیش‌فرض بازگردد؟ رنگ آبی و اندازه قلم ۱۰۰٪ اعمال و اندازه‌های اختصاصی صفحات پاک می‌شود. جلوهٔ سه‌بعدی کارت‌ها برای همه بخش‌ها فعال می‌شود. انیمیشن داک با بزرگ‌نمایی ۱۶۰٪ فعال و شفافیت و تیرگی هاله بازنشانی می‌شود.",
         )
       )
         return;
@@ -120,7 +173,7 @@ export function initializeAppearanceSettings() {
         : "ظاهر بازنشانی شد؛ ذخیره در مرورگر انجام نشد و پس از بازخوانی ممکن است تنظیمات قبلی برگردد.";
       message.textContent = text;
       message.setAttribute("role", saved ? "status" : "alert");
-      notifyNavbar(text, { role: saved ? "status" : "alert" });
+      notify(text, { type: saved ? "success" : "error" });
     });
 
   function closeMenu(restoreFocus = false) {

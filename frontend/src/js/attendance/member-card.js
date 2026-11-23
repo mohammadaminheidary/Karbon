@@ -107,6 +107,7 @@ export function createMemberCard(member) {
   const card = createElement(
     "article",
     [
+      "card-tilt",
       "relative",
       "overflow-hidden",
       "rounded-2xl",
@@ -115,7 +116,7 @@ export function createMemberCard(member) {
       "bg-white",
       "p-5",
       "shadow-sm",
-      "transition-shadow",
+      "transition-[box-shadow,transform]",
       "duration-300",
       "hover:shadow-md",
     ].join(" "),
