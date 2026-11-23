@@ -4,13 +4,14 @@ Registration holds BEGIN IMMEDIATE before choosing a candidate. The database
 insert trigger claims it atomically, including for writes outside the HTTP API.
 """
 from datetime import datetime, timezone
+import json
 import secrets
 import string
 
 import jdatetime
 from sqlalchemy import text
 
-from config import APP_TIMEZONE
+from config import app_timezone
 
 
 ALPHABET = string.ascii_uppercase + string.digits
@@ -21,20 +22,28 @@ class CustomerIDExhausted(Exception):
     pass
 
 
-def generate_customer_id(connection, registered_at, *, pending=()):
+def customer_id_prefix(registered_at):
     if isinstance(registered_at, str):
         registered_at = datetime.fromisoformat(registered_at)
     # SQLite stores UTC timestamps without their timezone marker.
     if registered_at.tzinfo is None:
         registered_at = registered_at.replace(tzinfo=timezone.utc)
-    local = registered_at.astimezone(APP_TIMEZONE)
+    local = registered_at.astimezone(app_timezone())
     registered_date = jdatetime.date.fromgregorian(date=local.date())
     # Build ASCII DDMMYY explicitly: a full Jalali year is four digits and
     # must never leak into the six-digit date portion of a permanent ID.
-    prefix = (f"{registered_date.day:02d}{registered_date.month:02d}{registered_date.year % 100:02d}"
-              f"-{local.hour:02d}{local.minute:02d}{local.second:02d}")
+    return (f"{registered_date.day:02d}{registered_date.month:02d}{registered_date.year % 100:02d}"
+            f"-{local.hour:02d}{local.minute:02d}{local.second:02d}")
+
+
+def customer_id_candidate(prefix):
+    return prefix + "-" + "".join(secrets.choice(ALPHABET) for _ in range(4))
+
+
+def generate_customer_id(connection, registered_at, *, pending=()):
+    prefix = customer_id_prefix(registered_at)
     for _ in range(256):
-        candidate = prefix + "-" + "".join(secrets.choice(ALPHABET) for _ in range(4))
+        candidate = customer_id_candidate(prefix)
         if candidate in pending:
             continue
         if not connection.execute(text("""
@@ -44,6 +53,26 @@ def generate_customer_id(connection, registered_at, *, pending=()):
             return candidate
     # Fail safely rather than returning a duplicate or looping forever.
     raise CustomerIDExhausted("Could not allocate a unique customer ID")
+
+
+def generate_customer_ids(connection, registered_at, count):
+    """Allocate a batch under the same write lock used for individual inserts."""
+    prefix = customer_id_prefix(registered_at)
+    accepted = set()
+    for _ in range(16):
+        remaining = count - len(accepted)
+        if not remaining:
+            return sorted(accepted)
+        candidates = {customer_id_candidate(prefix) for _ in range(remaining)} - accepted
+        collisions = connection.scalars(text("""
+            WITH candidates AS (SELECT value FROM json_each(:codes))
+            SELECT permanent_id FROM customer_id_registry WHERE permanent_id IN (SELECT value FROM candidates)
+            UNION ALL
+            SELECT permanent_id FROM customers
+            WHERE deleted_at IS NULL AND permanent_id IN (SELECT value FROM candidates)
+        """), {"codes": json.dumps(list(candidates))})
+        accepted.update(candidates.difference(collisions))
+    raise CustomerIDExhausted("Could not allocate a batch of unique customer IDs")
 
 
 def customer_id_default(context):

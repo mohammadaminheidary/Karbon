@@ -1,10 +1,10 @@
-from sqlalchemy import String, case, cast, exists, func, or_, select, text
+from sqlalchemy import String, case, cast, exists, func, insert, or_, select, text
 from sqlalchemy.orm import object_session
 
 from models.customer import Customer, utc_now
 from models.finance import FinancialTransaction
 from models.order import Order, OrderPayment
-from services.customer_ids import generate_customer_id
+from services.customer_ids import generate_customer_id, generate_customer_ids
 from services.reference_codes import compact_customer_codes
 from schemas.customer_schema import CustomerSummary, normalize_text
 
@@ -146,6 +146,36 @@ def find_duplicates(db, data, exclude_id=None):
             "matching_phones": [phone for phone in customer.phone_numbers if phone in data.phone_numbers],
         })
     return matches
+
+
+def customer_import_conflicts(db, rows):
+    names = {(row.first_name.lower(), row.last_name.lower()) for row in rows}
+    phones = {phone for row in rows for phone in row.phone_numbers}
+    existing_names, existing_phones = set(), set()
+    if names:
+        records = db.execute(select(Customer.first_name, Customer.last_name, Customer.phone_numbers)
+                             .where(Customer.deleted_at.is_(None)).execution_options(yield_per=500))
+        for first, last, numbers in records:
+            name = (first.lower(), last.lower())
+            if name in names:
+                existing_names.add(name)
+            existing_phones.update(phones.intersection(numbers or ()))
+    return existing_names, existing_phones
+
+
+def insert_customers(db, rows):
+    """Insert validated customers while the caller holds the customer write lock."""
+    if not rows:
+        return
+    first_code = next_code(db)
+    registered_at = utc_now()
+    permanent_ids = generate_customer_ids(db.connection(), registered_at, len(rows))
+    db.execute(insert(Customer), [
+        dict(row.model_dump(exclude={"confirm_duplicate"}),
+             customer_code=first_code + offset, created_at=registered_at, permanent_id=permanent_id)
+        for offset, (row, permanent_id) in enumerate(zip(rows, permanent_ids))
+    ], execution_options={"render_nulls": True})
+
 
 
 def save_customer(db, data, customer_id=None):

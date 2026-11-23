@@ -5,6 +5,7 @@ import concurrent.futures
 from datetime import datetime
 import jdatetime
 from contextlib import closing
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -20,7 +21,10 @@ import urllib.parse
 import urllib.request
 from zoneinfo import ZoneInfo
 
+from openpyxl import Workbook, load_workbook
+
 ROOT = Path(__file__).resolve().parents[2]
+XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 class CustomersIntegrationTests(unittest.TestCase):
@@ -70,16 +74,20 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
 
     @classmethod
     def request(cls, method, path, body=None, authenticated=True):
-        headers = {"Content-Type": "application/json"}
+        workbook = isinstance(body, bytes)
+        headers = {"Content-Type": XLSX_TYPE if workbook else "application/json"}
         if authenticated:
             headers["Authorization"] = f"Bearer {cls.token}"
-        request = urllib.request.Request(cls.base + path, data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method)
+        data = body if workbook else json.dumps(body).encode() if body is not None else None
+        request = urllib.request.Request(cls.base + path, data=data, headers=headers, method=method)
         try:
             response = urllib.request.urlopen(request, timeout=10)
         except urllib.error.HTTPError as error:
             response = error
         with response:
             raw = response.read()
+            if response.headers.get_content_type() == XLSX_TYPE:
+                return response.status, raw
             return response.status, json.loads(raw) if raw else None
 
     def setUp(self):
@@ -99,6 +107,68 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(self.request("GET", "/auth/me")[0], 200)
         self.assertEqual(self.request("GET", "/members")[0], 200)
         self.assertEqual(self.request("POST", "/login", {"username": "customers-test", "password": "wrong"}, False)[0], 401)
+
+    def test_excel_customer_import_preview_concurrent_commit_and_retry(self):
+        self.create(first_name="مشتری", last_name="قبلی", phone_numbers=["09120001111"])
+        status, template = self.request("GET", "/customers/import/template")
+        self.assertEqual(status, 200)
+        with closing(load_workbook(BytesIO(template))) as book:
+            self.assertEqual(list(book.active.values)[0][:3], ("نام", "نام خانوادگی", "شماره تلفن"))
+            self.assertTrue(book.active.sheet_view.rightToLeft)
+
+        book = Workbook()
+        book.active.title = "راهنما"
+        sheet = book.create_sheet("مشتریان")
+        sheet.append(("First Name", "نام خانوادگی", "شماره تلفن ۱", "Mobile 2", "ستون دلخواه", "Gender"))
+        sheet.append(("  مريم  ", "احمدي", 9123456789, "۰۲۱ ۱۲۳۴۵۶۷۸", "یادداشت ثبت", "زن"))
+        sheet["C2"].number_format = "00000000000"
+        sheet.append(("نامعتبر", None, "123"))
+        sheet.append((None,))
+        sheet.append(("مریم", "احمدی", None))
+        sheet.append(("مشتری", "مشترک", "+98 9120001111"))
+        sheet.append(("نوید", "حسینی", "=1+1"))
+        with BytesIO() as source:
+            book.save(source)
+            workbook = source.getvalue()
+        book.close()
+        inspect_path = "/customers/import/inspect"
+        self.assertEqual(self.request("POST", inspect_path, workbook, authenticated=False)[0], 401)
+        self.assertEqual(self.request("POST", inspect_path, b"not a workbook")[0], 422)
+        self.assertEqual(self.request("POST", inspect_path, bytes(8 * 1024 * 1024 + 1))[0], 413)
+        status, metadata = self.request("POST", inspect_path, workbook)
+        self.assertEqual(status, 200, metadata)
+        self.assertEqual([item["name"] for item in metadata["sheets"]], ["راهنما", "مشتریان"])
+        columns = [item["field"] for item in metadata["sheets"][1]["columns"]]
+        self.assertEqual(columns, ["first_name", "last_name", "phone_numbers", "phone_numbers", None, "gender"])
+        columns[4] = "notes"
+        query = urllib.parse.urlencode({"sheet": 1, "columns": columns}, doseq=True)
+
+        def process(action):
+            return self.request("POST", f"/customers/import/{action}?{query}", workbook)
+
+        status, result = process("preview")
+        self.assertEqual(status, 200, result)
+        self.assertEqual((result["valid"], result["duplicate"], result["invalid"]), (1, 2, 2))
+        self.assertEqual([row["row"] for row in result["preview"]], [2, 3, 5, 6, 7])
+        self.assertEqual(result["preview"][0]["values"]["phone_numbers"], ["09123456789", "02112345678"])
+        self.assertEqual(self.request("GET", "/customers")[1]["total"], 1)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            commits = list(executor.map(process, ["commit", "commit"]))
+        self.assertEqual([status for status, _ in commits], [200, 200], commits)
+        self.assertEqual(sorted((result["inserted"], result["duplicate"], result["invalid"]) for _, result in commits),
+                         [(0, 3, 2), (1, 2, 2)])
+        report = next(result["report"] for _, result in commits if result["inserted"])
+        self.assertEqual([entry["row"] for entry in report], [3, 5, 6, 7])
+        self.assertEqual(report[-1]["issues"][0]["field"], "phone_numbers")
+        self.assertIn("فرمول", report[-1]["issues"][0]["message"])
+        status, retry = process("commit")
+        self.assertEqual(status, 200, retry)
+        self.assertEqual((retry["inserted"], retry["duplicate"], retry["invalid"]), (0, 3, 2))
+        customers = self.request("GET", "/customers")[1]["items"]
+        self.assertEqual(len(customers), 2)
+        self.assertEqual((customers[0]["first_name"], customers[0]["gender"], customers[0]["notes"]), ("مریم", "female", "یادداشت ثبت"))
+        self.assertEqual(customers[1]["phone_numbers"], ["09120001111"])
 
     def test_lightweight_options_search_pagination_and_authentication(self):
         one = self.create(first_name="علی", phone_numbers=["09121111111"], notes="private notes")

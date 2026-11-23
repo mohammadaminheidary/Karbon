@@ -1,13 +1,16 @@
 import logging
 from contextlib import contextmanager
+from io import BytesIO
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from database import get_database
 from schemas.customer_schema import CustomerList, CustomerResponse, CustomerWrite
 from security.auth import get_current_user
+from services import customer_import
 from services import customer_service as service
 from services.customer_ids import CustomerIDExhausted
 
@@ -22,6 +25,8 @@ def customer_errors():
         yield
     except service.CustomerNotFound:
         raise HTTPException(404, "مشتری موردنظر پیدا نشد.")
+    except customer_import.InvalidWorkbook as error:
+        raise HTTPException(422, str(error))
     except CustomerIDExhausted:
         raise HTTPException(503, "تولید شناسه یکتای مشتری ممکن نشد؛ دوباره تلاش کنید.")
     except service.CustomerHasOrders:
@@ -59,6 +64,45 @@ def next_code(db: Session = Depends(get_database)):
     with customer_errors():
         # Preview only. POST assigns the authoritative code inside its lock.
         return {"customer_code": service.next_code(db)}
+
+
+async def workbook_body(request: Request):
+    content_type = request.headers.get("content-type", "").split(";", 1)[0]
+    if content_type != customer_import.MIME_TYPE:
+        raise HTTPException(415, "فایل با پسوند ‎.xlsx‎ انتخاب کنید.")
+    with BytesIO() as source:
+        async for chunk in request.stream():
+            if source.tell() + len(chunk) > customer_import.MAX_BYTES:
+                raise HTTPException(413, "حجم فایل اکسل نباید بیش از ۸ مگابایت باشد.")
+            source.write(chunk)
+        source.seek(0)
+        yield source
+
+
+@router.get("/import/template")
+def customer_import_template():
+    return Response(customer_import.template(), media_type=customer_import.MIME_TYPE, headers={
+        "Content-Disposition": 'attachment; filename="customers-template.xlsx"',
+    })
+
+
+@router.post("/import/inspect")
+def inspect_customer_workbook(source=Depends(workbook_body)):
+    with customer_errors():
+        return customer_import.inspect_workbook(source)
+
+
+@router.post("/import/{action}")
+def process_customer_workbook(
+    action: Literal["preview", "commit"],
+    columns: Annotated[list[str], Query(min_length=1, max_length=customer_import.MAX_COLUMNS)],
+    sheet: int = Query(ge=0, lt=customer_import.MAX_SHEETS),
+    source=Depends(workbook_body),
+    db: Session = Depends(get_database),
+):
+    with customer_errors():
+        rows = customer_import.read_rows(source, sheet, columns)
+        return customer_import.import_rows(db, rows, commit=action == "commit")
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
