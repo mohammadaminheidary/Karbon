@@ -1,6 +1,7 @@
 import { loginUser } from "./auth-api.js";
 import { saveAuth } from "./auth-storage.js";
 import { validateLogin } from "../utils/validator.js";
+import { notify } from "../components/notifications.js";
 
 export function initLogin() {
   const form = document.getElementById("loginForm");
@@ -34,7 +35,7 @@ export function initLogin() {
     const validation = validateLogin(username, password);
 
     if (!validation.success) {
-      alert(validation.message);
+      notify(validation.message, { type: "warning" });
       return;
     }
 
@@ -63,12 +64,12 @@ export function initLogin() {
         window.location.href = "../index.html";
         navigating = true;
       } else {
-        alert(response.message);
+        notify(response.message, { type: "error" });
       }
     } catch (error) {
       console.error("Login Error:", error);
 
-      alert("خطا در اتصال به سرور");
+      notify("خطا در اتصال به سرور", { type: "error" });
     } finally {
       // Keep the current surface stable until the dashboard document takes over.
       if (!navigating) resetForm();

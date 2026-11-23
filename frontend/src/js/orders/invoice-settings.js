@@ -1,4 +1,4 @@
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { refreshData } from "../components/api-cache.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { confirmFinanceDelete } from "../finance/delete-dialog.js";
@@ -87,8 +87,9 @@ function render() {
             path: `/orders/${invoice.id}/invoice`,
             description: `فاکتور ${invoice.invoice_code} متعلق به ${customer.name} حذف شود؟ پرداخت‌ها و رسیدهای مرتبط از دفتر مالی حذف می‌شوند و موجودی کالاها بازگردانده می‌شود. این عملیات قابل بازگشت نیست.`,
             onDeleted: () => {
-              notifyNavbar(
+              notify(
                 "فاکتور و پرداخت‌های مرتبط حذف شدند؛ مانده‌ها و موجودی کالاها بروزرسانی شدند.",
+                { type: "success" },
               );
               publishLocalDataChange();
             },

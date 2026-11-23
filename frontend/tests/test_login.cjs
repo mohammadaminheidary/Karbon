@@ -6,7 +6,7 @@ const vm = require("node:vm");
 
 function fixture({ response = { success: true, token: "session" }, saveError } = {}) {
   let resolveLogin, submit;
-  const requests = [], saved = [], alerts = [], events = {}, attributes = {};
+  const requests = [], saved = [], notifications = [], events = {}, attributes = {};
   const button = { disabled: false, innerHTML: "<span>ورود به حساب</span>" };
   const originalContent = button.innerHTML;
   const form = {
@@ -28,7 +28,7 @@ function fixture({ response = { success: true, token: "session" }, saveError } =
       saved.push(data);
     },
     validateLogin: () => ({ success: true }),
-    alert: (message) => alerts.push(message),
+    notify: (message, options) => notifications.push({ message, ...options }),
     console: { error() {} },
     document: { getElementById: (id) => ({
       loginForm: form, username: { value: " user " }, passwordInput: { value: "password" },
@@ -44,7 +44,7 @@ function fixture({ response = { success: true, token: "session" }, saveError } =
   return {
     submit: () => submit({ preventDefault() {} }),
     finish: () => resolveLogin(),
-    button, originalContent, location, requests, saved, alerts, attributes, events,
+    button, originalContent, location, requests, saved, notifications, attributes, events,
   };
 }
 
@@ -84,7 +84,8 @@ for (const [name, options] of [
     await pending;
     assert.equal(f.location.href, "login-page.html");
     assert.equal(f.saved.length, 0);
-    assert.equal(f.alerts.length, 1);
+    assert.equal(f.notifications.length, 1);
+    assert.equal(f.notifications[0].type, "error");
     assert.equal(f.button.disabled, false);
     assert.equal(f.button.innerHTML, f.originalContent);
     assert.equal(f.attributes["aria-busy"], undefined);

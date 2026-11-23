@@ -1,6 +1,6 @@
 import { securityRequest } from "./auth-api.js";
 import { getToken, saveAuth, logout } from "./auth-storage.js";
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 
 let initialized = false;
 let loaded = false;
@@ -106,7 +106,7 @@ async function submit(event) {
     const text =
       "رمز عبور با موفقیت تغییر کرد. برای ورود بعدی از رمز جدید استفاده کنید.";
     message(status, text, "success");
-    notifyNavbar("رمز عبور تغییر کرد.", { role: "status", duration: 5000 });
+    notify("رمز عبور تغییر کرد.", { type: "success", duration: 5000 });
   } catch (error) {
     if (unauthorized(error)) return;
     const fields = {

@@ -1,5 +1,5 @@
 // Loaded on the first layout edit; the initial view still restores saved layouts.
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { number } from "./chart.js";
 import {
   GAP,
@@ -41,13 +41,14 @@ export class LayoutTools {
       this.saved = structuredClone(layouts);
       this.exit();
       this.status.textContent = "";
-      notifyNavbar(
+      notify(
         "چیدمان ذخیره شد؛ در بازدید بعدی همین مرورگر و حساب کاربری بازیابی می‌شود.",
+        { type: "success" },
       );
     } catch {
-      notifyNavbar(
+      notify(
         "ذخیره چیدمان در مرورگر انجام نشد. تغییرات فعلی حفظ شده‌اند؛ دسترسی ذخیره‌سازی مرورگر را بررسی و دوباره تلاش کنید.",
-        { role: "alert" },
+        { type: "error" },
       );
     }
   }
@@ -57,7 +58,7 @@ export class LayoutTools {
     this.breakpoint();
     this.exit();
     this.status.textContent = "";
-    notifyNavbar("تغییرات چیدمان لغو شد.");
+    notify("تغییرات چیدمان لغو شد.");
   }
   constraints(id) {
     const definition = this.definitions.find((def) => def.id === id);

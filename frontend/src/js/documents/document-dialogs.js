@@ -4,12 +4,13 @@ import { node, fullDate, money } from "../finance/finance-utils.js";
 import { confirmFinanceDelete } from "../finance/delete-dialog.js";
 import { disintegrateCustomerCard } from "../customers/customer-card-animation.js";
 import { initializeDocumentForm } from "./document-form.js";
+import { notify } from "../components/notifications.js";
 
-export function initializeDocumentDialogs({ notify, onChanged, onIdle }) {
+export function initializeDocumentDialogs({ onChanged, onIdle }) {
   const $ = (id) => document.getElementById(id);
   let selected,
     detailsVersion = 0;
-  const form = initializeDocumentForm({ notify, onSaved: onChanged, onIdle });
+  const form = initializeDocumentForm({ onSaved: onChanged, onIdle });
   const details = new Dialog("documentDetailsModal", {
     onCancel: () => {
       detailsVersion++;
@@ -122,7 +123,7 @@ export function initializeDocumentDialogs({ notify, onChanged, onIdle }) {
           document.querySelector(`[data-document-id="${item.id}"]`),
         );
         await onChanged({ reset: false });
-        notify("سند حذف شد");
+        notify("سند حذف شد", { type: "success" });
         $("registerDocument").focus({ preventScroll: true });
       },
     });

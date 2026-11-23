@@ -1,4 +1,4 @@
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "./delete-dialog.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -12,6 +12,7 @@ let initialized = false,
   editing = null,
   saving = false,
   loading = false;
+let dismissExpenseNotice;
 
 function resetForm() {
   editing = null;
@@ -75,7 +76,7 @@ async function loadCategories() {
             `کد حساب: ${item.account_code}`;
           $("saveExpenseCategory").textContent = "ذخیره تغییرات";
           $("cancelExpenseCategoryEdit").classList.remove("hidden");
-          notifyNavbar("");
+          dismissExpenseNotice?.();
           $("expenseCategoryTitle").focus();
         });
         const actions = node("div", "flex gap-2");
@@ -140,9 +141,11 @@ export async function initializeExpenseSettings() {
         );
         saved = true;
         resetForm();
-        notifyNavbar("عنوان هزینه ذخیره شد.");
+        dismissExpenseNotice?.();
+        dismissExpenseNotice = notify("عنوان هزینه ذخیره شد.", { type: "success" });
       } catch (error) {
-        notifyNavbar(error.message, { role: "alert" });
+        dismissExpenseNotice?.();
+        dismissExpenseNotice = notify(error.message, { type: "error" });
       } finally {
         saving = false;
         $("expenseCategoryFields").disabled = false;

@@ -1,4 +1,4 @@
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "../finance/delete-dialog.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -13,6 +13,7 @@ let initialized = false,
   editing = null,
   saving = false,
   loading = false;
+let dismissAccountNotice;
 function reset() {
   editing = null;
   $("documentAccountForm").reset();
@@ -67,7 +68,7 @@ async function load() {
           $("documentAccountActive").value = String(item.active);
           $("saveDocumentAccount").textContent = "ذخیره تغییرات";
           $("cancelDocumentAccountEdit").classList.remove("hidden");
-          notifyNavbar("");
+          dismissAccountNotice?.();
           $("documentAccountTitle").focus();
         });
         const remove = node(
@@ -130,10 +131,12 @@ export async function initializeDocumentAccounts() {
           },
         });
         reset();
-        notifyNavbar("حساب سند ذخیره شد.");
+        dismissAccountNotice?.();
+        dismissAccountNotice = notify("حساب سند ذخیره شد.", { type: "success" });
         await load();
       } catch (error) {
-        notifyNavbar(error.message, { role: "alert" });
+        dismissAccountNotice?.();
+        dismissAccountNotice = notify(error.message, { type: "error" });
       } finally {
         saving = false;
         $("documentAccountFields").disabled =
