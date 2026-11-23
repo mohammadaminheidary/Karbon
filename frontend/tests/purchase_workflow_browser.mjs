@@ -67,6 +67,7 @@ async function category(name) {
 async function product(name, categoryId, unit, stock) {
   await page.goto(`${base}/page/settings-page.html#products`);
   await ready();
+  await page.locator("#openCreateProductButton").click();
   await page.waitForFunction(
     () =>
       !document.getElementById("settingsProductUnit").disabled &&

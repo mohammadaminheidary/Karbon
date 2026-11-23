@@ -1,5 +1,5 @@
 import { createNavbarPanelTransition } from "../documents/navbar-panel-transition.js";
-import { getInventoryOptions } from "./inventory-options.js";
+import { categoryIsSelectable, getInventoryOptions, populateCategorySelect } from "./inventory-options.js";
 import { onPageRefresh } from "../components/data-events.js";
 import {
   node,
@@ -38,7 +38,7 @@ export function purchaseIdentity(
   };
 }
 
-export function initializePurchaseEntry() {
+export function initializePurchaseEntry({ onSaved }) {
   const panel = $("purchaseEntryPage");
   const warehouse = document.querySelector(".warehouse");
   const trigger = $("buyItemsButton");
@@ -99,17 +99,10 @@ export function initializePurchaseEntry() {
   }
 
   function renderCategory(row, selected = row.category.value) {
-    const choices = categories.filter((item) => item.active);
-    row.category.replaceChildren(
-      new Option(
-        choices.length ? "انتخاب دسته‌بندی" : "دسته‌بندی فعالی وجود ندارد",
-        "",
-      ),
-      ...choices.map((item) => new Option(item.name, String(item.id))),
-    );
-    row.category.value = choices.some((item) => String(item.id) === selected)
-      ? selected
-      : "";
+    populateCategorySelect(row.category, categories, {
+      current: pendingPayload ? Number(selected) : null,
+      selected,
+    });
   }
 
   function selectProducts(row, selected = "") {
@@ -125,7 +118,7 @@ export function initializePurchaseEntry() {
             : "کالای فعالی وجود ندارد",
         "",
       ),
-      ...products.map((item) => new Option(item.name, String(item.id))),
+      ...products.map((item) => new Option([item.name, item.brand_name].filter(Boolean).join(" · "), String(item.id))),
     );
     row.product.value = products.some((item) => String(item.id) === selected)
       ? selected
@@ -300,8 +293,11 @@ export function initializePurchaseEntry() {
       const result = await financeRequest("/purchases/next-number", {
         cache: "no-store",
       });
-      if (identity === current && !savedPurchase && !pendingPayload)
+      if (identity === current && !savedPurchase && !pendingPayload) {
         $("purchaseInvoiceNumber").value = result.invoice_number;
+        if (result.business_jalali && $("purchaseDate").value === identity.date)
+          $("purchaseDate").value = identity.date = result.business_jalali;
+      }
     } catch {
       // Saving still works when the optional preview is unavailable.
     }
@@ -321,13 +317,12 @@ export function initializePurchaseEntry() {
         financeRequest("/products?for_order=true", { cache: "no-store" }),
       ]);
       if (version !== requestVersion || !opened) return;
+      const selectable = new Set(options.categories.filter(categoryIsSelectable).map((category) => category.id));
       catalog = products.filter(
         (item) =>
           item.stock !== null &&
           item.active &&
-          options.categories.some(
-            (category) => category.active && category.id === item.category_id,
-          ),
+          selectable.has(item.category_id),
       );
       categories = options.categories;
       if (!savedPurchase && !pendingPayload) {
@@ -454,10 +449,10 @@ export function initializePurchaseEntry() {
       savedPurchase.rows.forEach((item, index) => {
         const row = rows[index];
         row.category.replaceChildren(
-          new Option(item.category_name, String(item.category_id)),
+          new Option(item.category_path ?? item.category_name, String(item.category_id)),
         );
         row.product.replaceChildren(
-          new Option(item.product_name, String(item.product_id)),
+          new Option([item.product_name, item.brand_name].filter(Boolean).join(" · "), String(item.product_id)),
         );
         row.unit.value = item.unit;
       });
@@ -465,6 +460,7 @@ export function initializePurchaseEntry() {
       message(
         `خرید ${savedPurchase.invoice_number} با ${number(savedPurchase.row_count)} ردیف ثبت و موجودی کالاها بروزرسانی شد.`,
       );
+      void onSaved();
     } catch (error) {
       if (error.status >= 400 && error.status < 500 && error.status !== 409) {
         pendingPayload = null;

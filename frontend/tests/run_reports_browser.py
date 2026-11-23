@@ -1,4 +1,4 @@
-"""Run real Chromium reporting checks against 15 disposable 1,000-row datasets."""
+"""Run real Chromium reporting checks against disposable 1,000-row datasets."""
 import os
 from pathlib import Path
 import subprocess

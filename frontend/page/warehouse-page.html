@@ -326,7 +326,7 @@
             خلاصه موجودی انبار
           </h2>
           <dl class="warehouse-summary">
-            <div class="orders-stat warehouse-stat">
+            <div class="card-tilt orders-stat warehouse-stat">
               <dt>
                 <span class="warehouse-stat-icon"
                   ><svg
@@ -346,7 +346,7 @@
               <dd aria-label="بدون داده">—</dd>
               <span class="warehouse-stat-note">قلم کالا در انبار</span>
             </div>
-            <div class="orders-stat warehouse-stat">
+            <div class="card-tilt orders-stat warehouse-stat">
               <dt>
                 <span class="warehouse-stat-icon warehouse-warning"
                   ><svg
@@ -366,7 +366,7 @@
               <dd aria-label="بدون داده">—</dd>
               <span class="warehouse-stat-note">پایین‌تر از حداقل موجودی</span>
             </div>
-            <div class="orders-stat warehouse-stat">
+            <div class="card-tilt orders-stat warehouse-stat">
               <dt>
                 <span class="warehouse-stat-icon warehouse-danger"
                   ><svg
@@ -385,7 +385,7 @@
               <dd aria-label="بدون داده">—</dd>
               <span class="warehouse-stat-note">نیازمند تأمین مجدد</span>
             </div>
-            <div class="orders-stat warehouse-stat">
+            <div class="card-tilt orders-stat warehouse-stat">
               <dt>
                 <span class="warehouse-stat-icon"
                   ><svg
@@ -403,7 +403,7 @@
               <dd aria-label="بدون داده">—</dd>
               <span class="warehouse-stat-note">قلم کالای ورودی</span>
             </div>
-            <div class="orders-stat warehouse-stat">
+            <div class="card-tilt orders-stat warehouse-stat">
               <dt>
                 <span class="warehouse-stat-icon"
                   ><svg
@@ -421,7 +421,7 @@
               <dd aria-label="بدون داده">—</dd>
               <span class="warehouse-stat-note">قلم کالای خروجی</span>
             </div>
-            <div class="orders-stat warehouse-stat">
+            <div class="card-tilt orders-stat warehouse-stat">
               <dt>
                 <span class="warehouse-stat-icon"
                   ><svg
@@ -462,7 +462,7 @@
           </dl>
         </section>
         <section
-          class="warehouse-panel"
+          class="card-tilt warehouse-panel"
           aria-labelledby="warehouse-items-title"
         >
           <div class="warehouse-panel-heading">
@@ -515,6 +515,7 @@
               <thead>
                 <tr>
                   <th scope="col">نام کالا / کد</th>
+                  <th scope="col">برند</th>
                   <th scope="col">دسته‌بندی</th>
                   <th scope="col">واحد</th>
                   <th scope="col">موجودی</th>
@@ -523,10 +524,10 @@
                   <th scope="col"><span class="sr-only">جزئیات</span></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="warehouseInventory">
                 <tr>
-                  <td colspan="7" class="warehouse-empty">
-                    داده‌ای برای نمایش وجود ندارد.
+                  <td colspan="8" class="warehouse-empty">
+                    در حال دریافت موجودی…
                   </td>
                 </tr>
               </tbody>

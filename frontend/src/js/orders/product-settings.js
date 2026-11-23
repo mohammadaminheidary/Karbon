@@ -1,60 +1,21 @@
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "../finance/delete-dialog.js";
 import { financeRequest } from "../finance/finance-api.js";
-import {
-  node,
-  money,
-  amountValue,
-  normalizeDigits,
-  bindStrictAmount,
-} from "../finance/finance-utils.js";
+import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { onPageRefresh } from "../components/data-events.js";
-import {
-  getInventoryOptions,
-  populateUnitSelect,
-  populateCategorySelect,
-} from "../warehouse/inventory-options.js";
+import { initializeProductForm } from "./product-form.js";
 
 const $ = (id) => document.getElementById(id);
-let initialized = false,
-  listLoaded = false,
-  renderedProducts,
-  editing = null,
-  saving = false,
-  version = 0;
-let units = [];
-let categories = [];
-const format = (value) => new Intl.NumberFormat("en-US").format(value);
+let form, listLoaded, renderedProducts, version = 0;
 
-function renderUnits(selected = $("settingsProductUnit").value) {
-  populateUnitSelect($("settingsProductUnit"), units, {
-    current: editing?.unit,
-    selected,
-  });
-}
-
-function renderCategories(selected = $("settingsProductCategory").value) {
-  populateCategorySelect($("settingsProductCategory"), categories, {
-    current: editing?.category_id,
-    selected,
-  });
-}
-
-function reset() {
-  editing = null;
-  $("settingsProductForm").reset();
-  $("settingsProductCode").value = "تولید خودکار هنگام ثبت";
-  $("saveSettingsProduct").textContent = "ثبت کالا";
-  $("cancelSettingsProductEdit").hidden = true;
-  renderUnits("");
-  renderCategories("");
-}
+let dismissMessage;
 let messageFailed = false;
 function message(text, failed = false) {
+  dismissMessage?.();
   messageFailed = failed;
-  notifyNavbar(text, { role: failed ? "alert" : "status" });
+  dismissMessage = notify(text, { type: failed ? "error" : "success" });
 }
 async function load() {
   const current = ++version;
@@ -62,32 +23,21 @@ async function load() {
     $("settingsProductsStatus").textContent = "در حال دریافت کالاها…";
   $("settingsProductsList").setAttribute("aria-busy", "true");
   $("refreshProducts").disabled = true;
-  $("settingsProductUnit").disabled = true;
-  $("settingsProductCategory").disabled = true;
   try {
-    const [products, options] = await Promise.all([
-      financeRequest("/products?include_inactive=true"),
-      getInventoryOptions(),
-    ]);
+    const products = await financeRequest("/products?include_inactive=true");
     if (current !== version) return;
-    units = options.units;
-    categories = options.categories;
-    renderUnits();
-    renderCategories();
     listLoaded = true;
     $("settingsProductsStatus").textContent = products.length
       ? `${formatNumber(products.length)} کالا`
       : "هنوز کالایی ثبت نشده است.";
-    if (editing && !products.some((product) => product.id === editing.id))
-      reset();
     if (messageFailed) message("");
-    const signature = JSON.stringify([products, categories]);
+    const signature = JSON.stringify(products);
     if (signature === renderedProducts) return true;
     $("settingsProductsList").replaceChildren(
       ...products.map((product) => {
         const card = node(
           "article",
-          "flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-french-gray/30 bg-white p-5",
+          "card-tilt flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-french-gray/30 bg-white p-5",
         );
         card.dataset.productId = product.id;
         const identity = node("div", "min-w-0");
@@ -95,12 +45,12 @@ async function load() {
           node(
             "h3",
             "font-bold break-words",
-            `${product.product_code} · ${product.name}`,
+            [product.product_code, product.name, product.brand_name].filter(Boolean).join(" · "),
           ),
           node(
             "p",
             "mt-2 text-xs text-mirage/60",
-            `${categories.find((item) => item.id === product.category_id)?.name || "بدون دسته‌بندی"} · ${product.unit} · ${money(product.price)} · موجودی ${product.stock == null ? "بدون کنترل" : formatNumber(product.stock)} · ${product.active ? "فعال" : "غیرفعال"}`,
+            `${product.category_path || "بدون دسته‌بندی"} · ${product.unit} · ${money(product.price)} · موجودی ${product.stock == null ? "بدون کنترل" : formatNumber(product.stock)} · ${product.active ? "فعال" : "غیرفعال"}`,
           ),
         );
         const edit = node(
@@ -109,21 +59,7 @@ async function load() {
           "ویرایش",
         );
         edit.type = "button";
-        edit.addEventListener("click", () => {
-          if (saving) return;
-          editing = product;
-          $("settingsProductCode").value = product.product_code;
-          $("settingsProductName").value = product.name;
-          renderUnits(product.unit);
-          renderCategories(product.category_id);
-          $("settingsProductPrice").value = format(product.price);
-          $("settingsProductStock").value = product.stock ?? "";
-          $("settingsProductActive").value = String(product.active);
-          $("saveSettingsProduct").textContent = "ذخیره تغییرات";
-          $("cancelSettingsProductEdit").hidden = false;
-          message("");
-          $("settingsProductName").focus();
-        });
+        edit.addEventListener("click", () => void form.open(product));
         const remove = node(
           "button",
           "finance-button text-alizarin-crimson",
@@ -137,12 +73,11 @@ async function load() {
           ? "کالای استفاده‌شده در خرید یا سفارش حذف‌نشده قابل حذف نیست؛ می‌توانید آن را غیرفعال کنید."
           : "حذف کالا بدون سابقه سفارش";
         remove.addEventListener("click", () => {
-          if (saving || remove.disabled) return;
+          if (remove.disabled) return;
           confirmFinanceDelete({
             path: `/products/${product.id}`,
             description: `کالا «${product.product_code} · ${product.name}» حذف شود؟ این عملیات قابل بازگشت نیست. کالاهای استفاده‌شده در خرید یا سفارش حذف‌نشده قابل حذف نیستند.`,
             onDeleted: async () => {
-              if (editing?.id === product.id) reset();
               document
                 .querySelector(`[data-product-id="${product.id}"]`)
                 ?.remove();
@@ -187,77 +122,11 @@ async function load() {
   }
 }
 export async function initializeProductSettings() {
-  if (!initialized) {
-    initialized = true;
-    bindStrictAmount($("settingsProductPrice"));
+  if (!form) {
+    form = initializeProductForm({ onSaved: load });
     $("refreshProducts").addEventListener("click", refreshData(load));
-    $("cancelSettingsProductEdit").addEventListener("click", () => {
-      if (!saving) {
-        reset();
-        message("");
-      }
-    });
     onPageRefresh(load, {
       isVisible: () => $("settingsProductsList").getClientRects().length > 0,
-    });
-    $("settingsProductForm").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (saving) return;
-      message("");
-      try {
-        const name = $("settingsProductName").value.trim(),
-          unit = $("settingsProductUnit").value;
-        const categoryId = Number($("settingsProductCategory").value);
-        if (!name || !unit || !categoryId)
-          throw new Error("نام، دسته‌بندی و واحد کالا الزامی است.");
-        if (
-          !categories.some(
-            (item) =>
-              item.id === categoryId &&
-              (item.active || item.id === editing?.category_id),
-          )
-        )
-          throw new Error("دسته‌بندی را از تنظیمات انتخاب کنید.");
-        if (
-          unit !== editing?.unit &&
-          !units.some((item) => item.active && item.name === unit)
-        )
-          throw new Error(
-            "واحد را از فهرست واحدهای فعال در تنظیمات انتخاب کنید.",
-          );
-        const stock = normalizeDigits($("settingsProductStock").value).trim();
-        if (stock && (!/^\d+$/.test(stock) || Number(stock) > 1000000000))
-          throw new Error("موجودی باید عدد صحیح نامنفی باشد.");
-        const body = {
-          name,
-          unit,
-          category_id: categoryId,
-          price: amountValue($("settingsProductPrice").value, {
-            allowZero: true,
-          }),
-          stock: stock ? Number(stock) : null,
-          active: $("settingsProductActive").value === "true",
-          ...(editing ? { revision: editing.revision } : {}),
-        };
-        saving = true;
-        $("settingsProductFields").disabled = true;
-        $("saveSettingsProduct").disabled = true;
-        $("cancelSettingsProductEdit").disabled = true;
-        await financeRequest(`/products${editing ? `/${editing.id}` : ""}`, {
-          method: editing ? "PUT" : "POST",
-          body,
-        });
-        reset();
-        message("کالا و موجودی با موفقیت ذخیره شدند.");
-        await load();
-      } catch (error) {
-        message(error.message, true);
-      } finally {
-        saving = false;
-        $("settingsProductFields").disabled = false;
-        $("saveSettingsProduct").disabled = false;
-        $("cancelSettingsProductEdit").disabled = false;
-      }
     });
   }
   await load();

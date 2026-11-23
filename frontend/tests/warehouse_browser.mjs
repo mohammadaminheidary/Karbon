@@ -58,6 +58,7 @@ try {
   }
   await page.locator('a[href="/page/warehouse-page.html"]').click();
   await ready();
+  assert.equal(await page.locator("#openCreateProductButton, #productFormModal").count(), 0);
   assert.equal(await page.locator("#buyItemsButton svg").count(), 0);
   await open();
   assert.equal(
@@ -77,7 +78,7 @@ try {
   await page.waitForURL("**/settings-page.html#inventory");
   await ready();
   await page.locator("#inventory-categories-name").fill("مواد اولیه آزمایش");
-  await page.locator("#inventory-categories-form button").click();
+  await page.locator("#inventory-categories-submit").click();
   await page
     .locator("#inventory-categories-list")
     .getByText("مواد اولیه آزمایش", { exact: true })
@@ -96,6 +97,7 @@ try {
     .getByText("متر آزمایش", { exact: true })
     .waitFor();
   await page.locator('[data-settings-target="products"]').click();
+  await page.locator("#openCreateProductButton").click();
   await page.locator("#settingsProductCategory:enabled").waitFor();
   await page
     .locator("#settingsProductCategory")

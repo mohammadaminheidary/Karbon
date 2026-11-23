@@ -144,13 +144,16 @@ try {
   const modules = await page
     .locator("#reportModule option")
     .evaluateAll((els) => els.map((e) => e.value));
-  assert.equal(modules.length, 15);
+  assert.equal(modules.length, 18);
   for (const name of modules) {
     const result = await preview(() =>
       page.locator("#reportModule").selectOption(name),
     );
     assert.equal(result.total, name === "customers" ? 999 : 1000);
     assert.equal(result.items.length, 50);
+    if (name === "products") assert.equal(result.items[0].values["brand_id.name"], "برند 1");
+    if (["order_items", "purchases", "purchase_items"].includes(name))
+      assert.equal(result.items[0].values.brand_name, "برند 1");
   }
   await preview(() => page.locator("#reportModule").selectOption("customers"));
   await page.locator("#reportTable tbody input").first().check();
@@ -498,7 +501,7 @@ try {
   assert.equal(await page.locator("#reportDetailsError").isVisible(), true);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: Reports-only navbar width (other module navbars unchanged), visible IDs, report cards/details, confirmed deletion/cancel/error/retry, automatic counts across tabs, responsive navbar labels at 125%, icon refresh, standalone history from 9 module entry points, saved metadata and original downloads after reload, refresh error recovery, all 15 datasets, pagination, cross-page selection, select-all exclusions, real XLSX/PDF downloads, fields, Persian dates, filters, error recovery, focus, mobile and reduced motion.",
+    "PASS: Reports-only navbar width (other module navbars unchanged), visible IDs, report cards/details, confirmed deletion/cancel/error/retry, automatic counts across tabs, responsive navbar labels at 125%, icon refresh, standalone history from 9 module entry points, saved metadata and original downloads after reload, refresh error recovery, all 18 datasets, brand columns, pagination, cross-page selection, select-all exclusions, real XLSX/PDF downloads, fields, Persian dates, filters, error recovery, focus, mobile and reduced motion.",
   );
 } finally {
   await browser.close();

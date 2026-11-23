@@ -140,6 +140,7 @@ try {
   });
   // Create through the actual product form, using the central dropdown.
   await page.locator('[data-settings-target="products"]').click();
+  await page.locator("#openCreateProductButton").click();
   await page.locator("#settingsProductUnit:enabled").waitFor();
   assert.equal(
     await page.locator("#settingsProductUnit").evaluate((e) => e.tagName),
@@ -233,6 +234,7 @@ try {
   );
   // New products exclude the unit; editing its owner keeps it explicitly labelled.
   await page.locator('[data-settings-target="products"]').click();
+  await page.locator("#openCreateProductButton").click();
   await page.waitForFunction(
     () =>
       document.getElementById("settingsProductUnit").options.length > 1 &&
@@ -245,10 +247,12 @@ try {
       .then((a) => a.some((t) => t.includes(name))),
     false,
   );
+  await page.locator("#cancelSettingsProductEdit").click();
   await page
     .locator(`[data-product-id="${product.id}"]`)
     .getByRole("button", { name: "ویرایش", exact: true })
     .click();
+  await page.locator("#settingsProductUnit:enabled").waitFor();
   assert.equal(await page.locator("#settingsProductUnit").inputValue(), name);
   assert.match(
     await page.locator("#settingsProductUnit option:checked").textContent(),
@@ -320,9 +324,8 @@ try {
   );
   await page.goto(base + "/page/settings-page.html#products");
   await ready();
-  await page.waitForFunction(() =>
-    document.querySelector('#settingsProductsList[aria-busy="false"]'),
-  );
+  await page.locator("#openCreateProductButton").click();
+  await page.locator('#settingsProductForm[aria-busy="false"]').waitFor();
   assert.equal(await page.locator("#settingsProductUnit").isDisabled(), true);
   // Re-enable and verify purchase availability and an order's derived unit.
   const unit = options.units.find((u) => u.name === name);

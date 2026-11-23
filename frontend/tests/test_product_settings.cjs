@@ -43,13 +43,6 @@ async function scenario(metadata) {
     "settingsProductsStatus",
     "settingsProductsList",
     "refreshProducts",
-    "settingsProductForm",
-    "settingsProductCode",
-    "saveSettingsProduct",
-    "cancelSettingsProductEdit",
-    "settingsProductPrice",
-    "settingsProductUnit",
-    "settingsProductCategory",
   ];
   const els = Object.fromEntries(ids.map((id) => [id, new Element()]));
   let notification;
@@ -77,16 +70,17 @@ async function scenario(metadata) {
     },
     Intl,
     console,
-    notifyNavbar: (message, options) => (notification = { message, ...options }),
+    notify: (message, options) => {
+      if (!message) return;
+      notification = { message, ...options };
+      return () => { notification = undefined; };
+    },
     node: (...args) => new Element(...args),
     money: String,
     formatNumber: String,
-    bindStrictAmount() {},
     onPageRefresh() {},
     refreshData: (callback) => callback,
-    getInventoryOptions: async () => ({ units: [], categories: [] }),
-    populateUnitSelect() {},
-    populateCategorySelect() {},
+    initializeProductForm: () => ({ open() {} }),
     financeRequest: async () => {
       if (fail) throw new Error("fixture refresh failure");
       return products;
@@ -149,12 +143,12 @@ async function scenario(metadata) {
     assert.match(test.notification.message, /حذف شد/);
     assert.match(test.notification.message, /بروزرسانی/);
     assert.equal(test.els.refreshProducts.disabled, false);
-    assert.equal(test.notification.role, "alert");
+    assert.equal(test.notification.type, "error");
     assert.equal(test.els.settingsProductsStatus.textContent, "");
     test.recoverRefresh();
     await test.els.refreshProducts.listeners.click();
     assert.equal(test.els.settingsProductsList.children.length, 0);
-    assert.equal(test.notification.message, "");
+    assert.equal(test.notification, undefined);
     assert.equal(test.els.settingsProductsList.attrs["aria-busy"], "false");
     console.log(
       "PASS: successful deletion removes the product even if refresh fails, with visible retry error",

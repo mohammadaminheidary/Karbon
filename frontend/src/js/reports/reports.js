@@ -1,6 +1,7 @@
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { request, downloadBlob } from "./report-api.js";
 import { normalizeJalaliDate } from "../customers/customer-utils.js";
+import { onPageRefresh } from "../components/data-events.js";
 
 const defaults = {
   "customers-page.html": "customers",
@@ -78,6 +79,14 @@ function createReports() {
       controller?.abort();
       version++;
     },
+  });
+
+  onPageRefresh(async () => {
+    for (const row of $("reportFilters").children) row.refreshChoices();
+    await load();
+  }, {
+    isVisible: () => dialog.active && !dialog.closing && schemaReady && !exporting
+      && ["products", "brands", "inventory_options", "purchases", "purchase_items", "order_items"].includes(moduleName),
   });
 
   window.addEventListener("resize", () => {
@@ -274,7 +283,7 @@ function createReports() {
           type: "checkbox",
           value: c.name,
         });
-        input.checked = !c.related;
+        input.checked = !c.related || ["brand_id.name", "category_id.main_name", "category_id.name", "parent_id.name"].includes(c.name);
         input.addEventListener("change", () => {
           update();
           void load();
@@ -380,6 +389,7 @@ function createReports() {
     };
     row.append(fields, op, value, list, remove);
     $("reportFilters").append(row);
+    row.refreshChoices = choices;
     row.filter = () => {
       const c = schema.columns.find((c) => c.name === fields.value);
       let v = value.value;
