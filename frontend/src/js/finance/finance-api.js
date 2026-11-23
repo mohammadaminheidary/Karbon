@@ -6,13 +6,13 @@ const API_URL = "http://127.0.0.1:8000/api";
 
 export async function financeRequest(
   path,
-  { method = "GET", body, signal, cache } = {},
+  { method = "GET", body, signal, cache, timeoutMs = 15000, responseType = "json" } = {},
 ) {
   const controller = new AbortController();
   const cancel = () => controller.abort();
   if (signal?.aborted) cancel();
   signal?.addEventListener("abort", cancel, { once: true });
-  const timeout = setTimeout(cancel, 15000);
+  const timeout = setTimeout(cancel, timeoutMs);
   try {
     const token = getToken();
     if (!token) {
@@ -28,13 +28,14 @@ export async function financeRequest(
         cache,
         signal: controller.signal,
         headers: {
-          Accept: "application/json",
+          Accept: responseType === "blob" ? "*/*" : "application/json",
           Authorization: `Bearer ${token}`,
           ...(body ? { "Content-Type": "application/json" } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
       });
-      data = response.status === 204 ? null : await response.json();
+      if (response.ok && responseType === "blob") data = await response.blob();
+      else data = response.status === 204 ? null : await response.json();
     } catch (error) {
       if (signal?.aborted) throw error;
       throw new Error("ارتباط با سرور برقرار نشد. دوباره تلاش کنید.");

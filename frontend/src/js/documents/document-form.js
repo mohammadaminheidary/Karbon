@@ -1,4 +1,5 @@
 import { createNavbarPanelTransition } from "./navbar-panel-transition.js";
+import { notify } from "../components/notifications.js";
 import { financeRequest, getBanks } from "../finance/finance-api.js";
 import {
   node,
@@ -10,7 +11,7 @@ import {
   bindStrictAmount,
 } from "../finance/finance-utils.js";
 
-export function initializeDocumentForm({ notify, onSaved, onIdle }) {
+export function initializeDocumentForm({ onSaved, onIdle }) {
   const $ = (id) => document.getElementById(id);
   const curtain = $("documentCurtain"),
     navbar = $("mainNavbar");
@@ -92,6 +93,8 @@ export function initializeDocumentForm({ notify, onSaved, onIdle }) {
       banks = bankAccounts;
       accounts = documentAccounts;
       $("documentNumber").textContent = preview.number;
+      if (!editing && preview.business_jalali && $("documentDate").value === formatJalaliInput(todayKey()))
+        $("documentDate").value = preview.business_jalali;
       rows.forEach((row) => {
         renderSources(row);
         renderBanks(row);
@@ -345,7 +348,9 @@ export function initializeDocumentForm({ notify, onSaved, onIdle }) {
     }
     if (result) {
       closeForm();
-      notify(edited ? "سند و تراکنش‌ها ویرایش شدند." : "سند ثبت شد");
+      notify(edited ? "سند و تراکنش‌ها ویرایش شدند." : "سند ثبت شد", {
+        type: "success",
+      });
       await onSaved({ reset: !edited });
     }
   });

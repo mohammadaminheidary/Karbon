@@ -1,6 +1,8 @@
 import { Dialog } from "../components/dialog.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { onExternalDataChange } from "../components/data-events.js";
+import { notify } from "../components/notifications.js";
+import { showFinalInvoice } from "./invoice-export.js";
 import { financeRequest, getBanks } from "../finance/finance-api.js";
 import { getCustomerOptions as getCustomers, getCustomer } from "../customers/customer-api.js";
 import {
@@ -52,6 +54,7 @@ export function initializeOrderDialogs(onSaved) {
     banks = [],
     customer = null,
     draftId,
+    defaultBusinessDate,
     saving = false,
     loading = false,
     referencesReady = false;
@@ -318,16 +321,19 @@ export function initializeOrderDialogs(onSaved) {
 
   function productOptions(select) {
     const value = select.value;
-    select.replaceChildren(
-      new Option("انتخاب کالا", ""),
-      ...products.map(
-        (p) =>
-          new Option(
-            `${p.name}${p.stock == null ? "" : ` · موجودی ${formatNumber(p.stock)}`}`,
-            p.id,
-          ),
-      ),
-    );
+    const groups = new Map();
+    for (const product of products) {
+      if (!groups.has(product.category_id)) {
+        const group = node("optgroup");
+        group.label = product.category_path || "بدون دسته‌بندی";
+        groups.set(product.category_id, group);
+      }
+      groups.get(product.category_id).append(new Option(
+        [product.name, product.brand_name, product.stock == null ? null : `موجودی ${formatNumber(product.stock)}`].filter(Boolean).join(" · "),
+        product.id,
+      ));
+    }
+    select.replaceChildren(new Option("انتخاب کالا", ""), ...groups.values());
     select.value = value;
   }
   function renumber() {
@@ -521,7 +527,7 @@ export function initializeOrderDialogs(onSaved) {
   function renderPaymentMethods() {
     $("paymentMethods").replaceChildren(
       ...methods.map(([key, label, icon]) => {
-        const card = node("div", "orders-method");
+        const card = node("div", "orders-method card-tilt");
         card.innerHTML = `<label class="orders-method-choice"><input type="checkbox" id="pay-${key}" ${key === "pos" ? "checked" : ""} /><span class="orders-method-icon" aria-hidden="true">${icon}</span><span>${label}</span></label><div id="pay-${key}-fields" class="orders-method-fields" ${key === "pos" ? "" : "hidden"}><label>مبلغ (تومان)<input id="pay-${key}-amount" inputmode="numeric" dir="ltr" maxlength="21" value="0" /></label>${key === "cash" ? `<p class="orders-hint">حساب مقصد: صندوق نقدی</p>` : `<label>حساب مقصد<select id="pay-${key}-bank"></select></label>`}</div>`;
         if (key !== "cash") {
           const available = banks.filter((b) => b.active && !b.is_cash);
@@ -620,7 +626,7 @@ export function initializeOrderDialogs(onSaved) {
       $("paymentInvoiceTotal").textContent = money(invoiceValues().total);
       if (!paymentStarted) {
         renderPaymentMethods();
-        $("paymentDate").value = today();
+        $("paymentDate").value = defaultBusinessDate;
         $("pay-pos-amount").value = formatted(invoiceValues().total);
         paymentStarted = true;
       }
@@ -665,7 +671,12 @@ export function initializeOrderDialogs(onSaved) {
       paymentDialog.close();
       createDialog.close();
       discard();
+      notify(
+        `سفارش ${saved.order_number} ثبت شد؛ پرداختی ${money(saved.paid)} و مانده ${money(saved.remaining)}.`,
+        { type: "success" },
+      );
       onSaved(saved);
+      showFinalInvoice(saved.id);
     } catch (err) {
       if (err.status && err.status < 500) submitted = null;
       error(payment, err.message);
@@ -696,6 +707,10 @@ export function initializeOrderDialogs(onSaved) {
       banks = accounts;
       referencesReady = true;
       if (!manualNumber) $("orderNumber").value = next.order_number;
+      if (next.business_jalali) {
+        if ($("orderDate").value === defaultBusinessDate) $("orderDate").value = next.business_jalali;
+        defaultBusinessDate = next.business_jalali;
+      }
       create.querySelectorAll(".item-product").forEach((select) => {
         productOptions(select);
         const row = select.closest(".orders-item-row");
@@ -734,15 +749,18 @@ export function initializeOrderDialogs(onSaved) {
   };
   onExternalDataChange(refreshReferences);
   document.addEventListener("visibilitychange", refreshReferences);
-  return async function openCreateOrder() {
+  return async function openCreateOrder({ customer: initialCustomer = null } = {}) {
     if (saving || createDialog.active) return;
     if (submitted) {
       openDialog(paymentDialog);
+      if (initialCustomer && submitted.customer_id !== initialCustomer.id) {
+        error(payment, "مشتری جدید ذخیره شد. ابتدا ثبت سفارش قبلی را که نتیجه‌اش مشخص نیست، پیگیری کنید.");
+      }
       return;
     }
     draftId = crypto.randomUUID();
     submitted = null;
-    customer = null;
+    customer = initialCustomer;
     paymentStarted = false;
     manualNumber = false;
     create.querySelector("form").reset();
@@ -752,10 +770,12 @@ export function initializeOrderDialogs(onSaved) {
     clearInvalid(create);
     clearInvalid(payment);
     $("paymentStatus").textContent = "";
+    if (customer) $("orderCustomerSearch").value = `${customer.customer_code} · ${fullName(customer)}`;
     renderCustomer();
     customerDropdown(false);
     $("orderInvoiceCode").value = "هنگام ثبت نهایی تولید می‌شود";
-    $("orderDate").value = today();
+    defaultBusinessDate = today();
+    $("orderDate").value = defaultBusinessDate;
     $("orderDiscount").value = "0";
     $("orderItems").replaceChildren();
     addRow();

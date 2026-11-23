@@ -3,6 +3,7 @@ import { initializeNavbar } from "../components/navbar.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { financeRequest } from "../finance/finance-api.js";
+import { fiscalLabel } from "../fiscal-years/fiscal-api.js";
 import { dashboardPalette } from "../dashboard/theme.js";
 import { LayoutEditor } from "../dashboard/layout-editor.js";
 import {
@@ -96,6 +97,13 @@ function render(result, reset) {
       shortLabel: dateLabel(point.date),
     }));
   $("dashboardContent").hidden = false;
+  $("dashboardFiscalYear").hidden = !d.fiscal_year;
+  if (d.fiscal_year) {
+    setText("dashboardFiscalYear", `سال مالی ${fiscalLabel(d.fiscal_year)}`);
+    setText("dashboardBankNote", `مانده افتتاحیه حساب‌ها ${exact(d.banks.opening_balance)} تومان`);
+    $("dashboardPurchases").hidden = false;
+    setText("dashboardPurchases", `${exact(d.purchases.count)} فاکتور خرید · ${exact(d.purchases.value)} تومان در بازه`);
+  }
   setText(
     "periodCaption",
     `${fullDate(d.period.start)} تا ${fullDate(d.period.end)} · مقایسه با ${fullDate(d.period.previous_start)} تا ${fullDate(d.period.previous_end)}`,
@@ -126,7 +134,7 @@ function render(result, reset) {
     d.inventory.products.map((p) => ({
       label: p.name,
       value: p.value,
-      detail: `${exact(p.stock)} ${p.unit} × ${exact(p.price)} تومان${p.active ? "" : " · غیرفعال"}`,
+      detail: [p.brand_name, p.category_path, `${exact(p.stock)} ${p.unit} × ${exact(p.price)} تومان`, p.active ? null : "غیرفعال"].filter(Boolean).join(" · "),
     })),
     {
       series: [series("value", "ارزش موجودی", "primary")],
@@ -151,7 +159,7 @@ function render(result, reset) {
     [
       "سفارش‌های فعال",
       exact(d.orders.active_total),
-      `${exact(d.orders.total)} سفارش در کل سوابق`,
+      `${exact(d.orders.total)} سفارش ${d.fiscal_year ? "در سال مالی فعال" : "در کل سوابق"}`,
       "primary",
     ],
     [
@@ -422,7 +430,7 @@ function renderProductSales(rows, reset) {
     rows.map((p) => ({
       label: `${p.name} (${p.unit})`,
       gross: p.gross,
-      detail: `${exact(p.quantity)} ${p.unit}`,
+      detail: [p.brand_name, `${exact(p.quantity)} ${p.unit}`].filter(Boolean).join(" · "),
     })),
     {
       series: [series("gross", "فروش ناخالص", "primary")],

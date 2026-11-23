@@ -340,6 +340,7 @@
     <main class="min-h-screen overflow-x-hidden navigation-content">
       <div class="mx-auto w-full max-w-[1700px] px-4 py-7 sm:px-7 xl:px-9">
         <h1 class="sr-only">مالی</h1>
+        <p id="financeFiscalOpening" class="mb-3 text-sm text-mirage/65" hidden></p>
 
 
         <div id="financeError" class="hidden">
@@ -369,7 +370,7 @@
           aria-label="خلاصه مالی روز انتخاب‌شده"
         >
           <article
-            class="rounded-2xl border border-eucalyptus/20 bg-eucalyptus/10 p-5"
+            class="card-tilt rounded-2xl border border-eucalyptus/20 bg-eucalyptus/10 p-5"
           >
             <p class="text-sm font-bold text-eucalyptus">جمع درآمد</p>
             <p id="totalIncome" class="mt-3 text-xl font-black text-eucalyptus">
@@ -377,7 +378,7 @@
             </p>
           </article>
           <article
-            class="rounded-2xl border border-alizarin-crimson/20 bg-alizarin-crimson/10 p-5"
+            class="card-tilt rounded-2xl border border-alizarin-crimson/20 bg-alizarin-crimson/10 p-5"
           >
             <p class="text-sm font-bold text-alizarin-crimson">جمع هزینه</p>
             <p
@@ -388,7 +389,7 @@
             </p>
           </article>
           <article
-            class="rounded-2xl border border-california/20 bg-california/10 p-5"
+            class="card-tilt rounded-2xl border border-california/20 bg-california/10 p-5"
           >
             <p class="text-sm font-bold text-california">مانده روز</p>
             <p
@@ -400,7 +401,7 @@
           </article>
         </section>
         <section
-          class="mt-7 rounded-2xl border border-french-gray/30 bg-white p-4 sm:p-5"
+          class="card-tilt mt-7 rounded-2xl border border-french-gray/30 bg-white p-4 sm:p-5"
           aria-label="تقویم مالی"
         >
           <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -432,7 +433,7 @@
         </section>
         <div id="financeDayContent" class="mt-7 space-y-6" aria-busy="true">
           <section
-            class="rounded-2xl border border-french-gray/30 bg-white p-4 sm:p-6"
+            class="card-tilt rounded-2xl border border-french-gray/30 bg-white p-4 sm:p-6"
           >
             <div class="flex flex-wrap items-center justify-between gap-3">
               <h2 class="font-bold">روند مالی روز</h2>
@@ -454,7 +455,7 @@
             </p>
           </section>
           <section
-            class="overflow-hidden rounded-2xl border border-french-gray/30 bg-white"
+            class="card-tilt overflow-hidden rounded-2xl border border-french-gray/30 bg-white"
           >
             <div
               class="flex items-center justify-between gap-3 border-b border-french-gray/30 p-5"

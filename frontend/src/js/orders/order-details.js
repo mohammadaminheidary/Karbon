@@ -4,10 +4,12 @@ import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { showFinalInvoice } from "./invoice-export.js";
 import { onExternalDataChange } from "../components/data-events.js";
+import { fiscalLabel, fiscalRequest } from "../fiscal-years/fiscal-api.js";
 
 let root,
   dialog,
   currentOrderId,
+  currentOptions,
   version = 0;
 const methodNames = {
   pos: "کارت‌خوان",
@@ -18,6 +20,7 @@ const paymentNames = {
   settled: "تسویه‌شده",
   partial: "پرداخت ناقص",
   unpaid: "بدون پرداخت",
+  not_issued: "صادرنشده در تاریخ قطع حساب",
 };
 const $ = (id) => root.querySelector(`#${id}`);
 
@@ -35,7 +38,7 @@ function setup() {
   });
   const refresh = () => {
     if (!document.hidden && root.getAttribute("aria-hidden") === "false")
-      showOrderDetails(currentOrderId);
+      showOrderDetails(currentOrderId, currentOptions);
   };
   onExternalDataChange(refresh);
   document.addEventListener("visibilitychange", refresh);
@@ -58,17 +61,18 @@ function values(entries, classes = "orders-customer-details") {
   });
   return list;
 }
-function render(order) {
+function render(order, year) {
   const content = $("orderDetailsContent");
   const meta = section("اطلاعات سفارش");
   meta.append(
     values([
+      ...(year ? [["بایگانی سال مالی", fiscalLabel(year)]] : []),
       ["کد فاکتور", order.invoice_code],
       ["شماره سفارش", order.order_number],
       ["تاریخ شمسی", order.jalali_date],
       ["وضعیت سفارش", order.status === "completed" ? "تکمیل‌شده" : "فعال"],
       ["وضعیت پرداخت", paymentNames[order.payment_status]],
-      ["تاریخ پرداخت", order.jalali_payment_date],
+      ["سررسید اصلی", order.jalali_payment_date],
     ]),
   );
   const customer = section("اطلاعات مشتری");
@@ -103,7 +107,7 @@ function render(order) {
     const row = node("tr");
     for (const text of [
       formatNumber(item.position),
-      `${item.product_name}${item.product_code ? ` · ${item.product_code}` : ""}`,
+      [item.product_name, item.product_code, item.category_path, item.brand_name].filter(Boolean).join(" · "),
       formatNumber(item.quantity),
       item.unit,
       money(item.unit_price),
@@ -137,6 +141,8 @@ function render(order) {
         ["مبلغ", money(payment.amount)],
         ["حساب مقصد", payment.account_name],
         ["شناسه تراکنش", formatNumber(payment.transaction_id)],
+        ["تاریخ دریافت", payment.jalali_date],
+        ["شماره پیگیری", payment.tracking_number],
       ]),
     ),
   );
@@ -149,9 +155,10 @@ function render(order) {
     content.append(description);
   }
 }
-export async function showOrderDetails(orderId) {
+export async function showOrderDetails(orderId, options = {}) {
   setup();
   currentOrderId = orderId;
+  currentOptions = options;
   const current = ++version;
   $("orderDetailsTitle").textContent = "جزئیات سفارش";
   $("orderDetailsStatus").textContent = "در حال دریافت جزئیات سفارش…";
@@ -162,19 +169,25 @@ export async function showOrderDetails(orderId) {
   root.inert = false;
   dialog.open();
   try {
-    const order = await financeRequest(`/orders/${orderId}`);
+    const { year, kind = "orders", version: archivedVersion } = options;
+    const query = archivedVersion ? `?version=${archivedVersion}` : "";
+    const order = year
+      ? await fiscalRequest(`/${year}/records/${kind}/${orderId}${query}`)
+      : await financeRequest(`/orders/${orderId}`);
     if (current !== version) return;
-    $("orderDetailsTitle").textContent = `جزئیات سفارش ${order.order_number}`;
-    render(order);
+    $("orderDetailsTitle").textContent = kind === "invoices"
+      ? `فاکتور ${order.invoice_code}`
+      : `جزئیات سفارش ${order.order_number}`;
+    render(order, year);
     $("orderDetailsStatus").textContent = "";
     $("exportOrderDetails").disabled = false;
-    $("exportOrderDetails").onclick = () => showFinalInvoice(order.id);
+    $("exportOrderDetails").onclick = () => showFinalInvoice(order.id, options);
   } catch (error) {
     if (current !== version) return;
     $("orderDetailsStatus").textContent = "";
     $("orderDetailsError").textContent = error.message;
     $("orderDetailsError").hidden = false;
     $("retryOrderDetails").hidden = false;
-    $("retryOrderDetails").onclick = () => showOrderDetails(orderId);
+    $("retryOrderDetails").onclick = () => showOrderDetails(orderId, options);
   }
 }

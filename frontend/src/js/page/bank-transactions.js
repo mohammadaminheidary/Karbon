@@ -194,6 +194,8 @@ async function loadChart() {
         `هزینه: ${money(data.summary.expense)}`,
       ),
     );
+    if (data.bank.opening_balance_locked)
+      $("chartSummary").append(node("p", "font-bold", `افتتاحیه: ${money(data.bank.opening_balance)}`));
     renderChart(data);
     renderedChart = signature;
   } catch (error) {

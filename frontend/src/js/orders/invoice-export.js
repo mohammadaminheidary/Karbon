@@ -3,6 +3,7 @@ import { financeRequest } from "../finance/finance-api.js";
 import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { onExternalDataChange } from "../components/data-events.js";
+import { fiscalRequest } from "../fiscal-years/fiscal-api.js";
 
 const WIDTH = 794,
   HEIGHT = 1123,
@@ -172,7 +173,10 @@ export async function renderInvoice(invoice, scale = 3) {
       let value = item[column.key];
       if (["unit_price", "total", "quantity", "position"].includes(column.key))
         value = formatNumber(value);
-      return wrap(ctx, value, column.right - column.left - 16);
+      const width = column.right - column.left - 16;
+      const lines = wrap(ctx, value, width);
+      if (column.key === "product_name" && item.brand_name) lines.push(...wrap(ctx, `برند: ${item.brand_name}`, width));
+      return lines;
     });
     if (item.product_code) cells[1].push(item.product_code);
     const height = Math.max(...cells.map((lines) => lines.length)) * 20 + 20;
@@ -381,6 +385,7 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 let currentInvoiceId;
+let currentArchive;
 let root,
   dialog,
   pages = [],
@@ -404,7 +409,7 @@ function setup() {
   });
   const refresh = () => {
     if (!document.hidden && root.getAttribute("aria-hidden") === "false")
-      showFinalInvoice(currentInvoiceId);
+      showFinalInvoice(currentInvoiceId, currentArchive);
   };
   onExternalDataChange(refresh);
   document.addEventListener("visibilitychange", refresh);
@@ -470,9 +475,10 @@ function setButtons(disabled) {
     button.disabled = exporting;
   });
 }
-export async function showFinalInvoice(orderId) {
+export async function showFinalInvoice(orderId, archive = {}) {
   setup();
   currentInvoiceId = orderId;
+  currentArchive = archive;
   const current = ++version;
   pages = [];
   setButtons(true);
@@ -488,7 +494,10 @@ export async function showFinalInvoice(orderId) {
   dialog.open();
   const newUrls = [];
   try {
-    const saved = await financeRequest(`/orders/${orderId}/invoice`);
+    const query = archive.version ? `?version=${archive.version}` : "";
+    const saved = archive.year
+      ? await fiscalRequest(`/${archive.year}/records/invoices/${orderId}/issued${query}`)
+      : await financeRequest(`/orders/${orderId}/invoice`);
     const rendered = await renderInvoice(saved);
     if (current !== version) return;
     const previews = [],
@@ -527,7 +536,7 @@ export async function showFinalInvoice(orderId) {
       invoice.customer.name,
       ...invoice.items.map(
         (item) =>
-          `${item.product_name} ${item.quantity} ${item.unit} ${money(item.unit_price)}`,
+          [item.product_name, item.brand_name, `${item.quantity} ${item.unit} ${money(item.unit_price)}`].filter(Boolean).join(" · "),
       ),
       `تخفیف ${money(invoice.discount)}، مبلغ نهایی ${money(invoice.total)}، پرداختی ${money(invoice.paid)}، مانده ${money(invoice.remaining)}`,
       ...invoice.payments.map(
@@ -547,6 +556,6 @@ export async function showFinalInvoice(orderId) {
     root.querySelector("#finalInvoiceStatus").textContent = error.message;
     const retry = root.querySelector("#retryFinalInvoice");
     retry.hidden = false;
-    retry.onclick = () => showFinalInvoice(orderId);
+    retry.onclick = () => showFinalInvoice(orderId, archive);
   }
 }

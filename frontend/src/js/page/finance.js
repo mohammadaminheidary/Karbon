@@ -2,7 +2,7 @@ import { startPage } from "../components/page-ready.js";
 import { transactionActions } from "../finance/transaction-actions.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { initializeNavbar } from "../components/navbar.js";
-import { createNavbarNotification } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { bankLogo } from "../finance/bank-accounts.js";
 import { CurtainDialog } from "../components/curtain-dialog.js";
 import { protectPage } from "../guards/auth-guard.js";
@@ -26,11 +26,15 @@ import {
   formatJalaliInput,
   normalizeJalaliDate,
 } from "../finance/finance-utils.js";
+import { fiscalLabel, getFiscalDate } from "../fiscal-years/fiscal-api.js";
 
 initializeNavbar();
 const $ = (id) => document.getElementById(id);
-const titleIsland = document.querySelector(".navbar-title-island");
-const notifyFinance = createNavbarNotification(titleIsland);
+let fiscalPeriod;
+const periodDay = (day) => !fiscalPeriod?.managed ? day
+  : day < fiscalPeriod.start_date ? fiscalPeriod.start_date
+  : day > fiscalPeriod.end_date ? fiscalPeriod.end_date : day;
+const activeToday = () => periodDay(todayKey(fiscalPeriod?.timezone));
 let selectedDay = todayKey(),
   calendarCenter = selectedDay;
 let dayController,
@@ -53,7 +57,7 @@ const dialog = new CurtainDialog("transactionModal", {
 });
 
 function showError(error) {
-  notifyFinance(error.message);
+  notify(error.message, { type: "error" });
   $("financeError").classList.remove("hidden");
 }
 
@@ -70,6 +74,7 @@ function clearDay() {
 }
 
 async function selectDay(day) {
+  day = periodDay(day);
   selectedDay = day;
   $("selectedDateLabel").textContent = fullDate(day);
   dayController?.abort();
@@ -133,16 +138,20 @@ async function loadCalendar({ scroll = false } = {}) {
       node("p", "p-5 text-sm text-mirage/45", "در حال دریافت تقویم..."),
     );
   try {
+    const start = periodDay(shiftDay(center, -7));
+    const end = periodDay(shiftDay(center, 6));
+    $("previousDays").disabled = Boolean(fiscalPeriod?.managed && start === fiscalPeriod.start_date);
+    $("nextDays").disabled = Boolean(fiscalPeriod?.managed && end === fiscalPeriod.end_date);
     const days = await getFinanceCalendar(
-      shiftDay(center, -7),
-      shiftDay(center, 6),
+      start,
+      end,
     );
     if (version !== calendarVersion) return;
     $("financeCalendar").replaceChildren(
       ...days.map((day) => {
         const button = node(
           "button",
-          "w-[170px] shrink-0 rounded-2xl border p-3 text-right transition-colors hover:border-persian-blue/40",
+          "card-tilt w-[170px] shrink-0 rounded-2xl border p-3 text-right transition-[color,background-color,border-color,transform] hover:border-french-gray/70",
         );
         button.type = "button";
         button.dataset.date = day.date;
@@ -155,7 +164,7 @@ async function loadCalendar({ scroll = false } = {}) {
           node(
             "p",
             "text-xs text-mirage/45",
-            weekday + (day.date === todayKey() ? " · امروز" : ""),
+            weekday + (day.date === todayKey(fiscalPeriod?.timezone) ? " · امروز" : ""),
           ),
           node("p", "mt-2 font-black", fullDate(day.date)),
         );
@@ -576,7 +585,9 @@ async function submitTransaction(event) {
   }
   if (!result) return;
   dialog.close();
-  notifyFinance(`${kind === "income" ? "درآمد" : "هزینه"} با موفقیت ثبت شد.`);
+  notify(`${kind === "income" ? "درآمد" : "هزینه"} با موفقیت ثبت شد.`, {
+    type: "success",
+  });
   calendarCenter = result.transaction_date;
   await Promise.all([
     selectDay(result.transaction_date),
@@ -586,6 +597,26 @@ async function submitTransaction(event) {
 
 async function initialize() {
   if (!(await protectPage())) return;
+  async function refreshFiscalPeriod() {
+    try {
+      const previous = fiscalPeriod;
+      fiscalPeriod = await getFiscalDate();
+      if (!previous || previous.year !== fiscalPeriod.year)
+        calendarCenter = selectedDay = fiscalPeriod.business_date;
+      if (fiscalPeriod.managed) {
+        const accounts = await getBanks();
+        const opening = accounts.reduce((balance, bank) => balance + BigInt(bank.opening_balance), 0n);
+        $("financeFiscalOpening").textContent =
+          `سال مالی ${fiscalLabel(fiscalPeriod.year)} · جمع مانده افتتاحیه حساب‌ها ${money(opening)}`;
+        $("financeFiscalOpening").hidden = false;
+      } else {
+        $("financeFiscalOpening").hidden = true;
+      }
+    } catch (error) {
+      showError(error);
+    }
+  }
+  await refreshFiscalPeriod();
   $("recordIncome").addEventListener("click", () => openTransaction("income"));
   $("recordExpense").addEventListener("click", () =>
     openTransaction("expense"),
@@ -608,21 +639,21 @@ async function initialize() {
     Promise.all([selectDay(selectedDay), loadCalendar()]),
   );
   $("selectToday").addEventListener("click", () => {
-    calendarCenter = todayKey();
+    calendarCenter = activeToday();
     selectDay(calendarCenter);
     loadCalendar({ scroll: true });
   });
   $("previousDays").addEventListener("click", () => {
-    calendarCenter = shiftDay(calendarCenter, -14);
+    calendarCenter = periodDay(shiftDay(calendarCenter, -14));
     loadCalendar();
   });
   $("nextDays").addEventListener("click", () => {
-    calendarCenter = shiftDay(calendarCenter, 14);
+    calendarCenter = periodDay(shiftDay(calendarCenter, 14));
     loadCalendar();
   });
-  let lastToday = todayKey();
+  let lastToday = activeToday();
   function tick() {
-    const today = todayKey();
+    const today = activeToday();
     if (today !== lastToday) {
       if (selectedDay === lastToday) {
         calendarCenter = today;
@@ -652,7 +683,10 @@ async function initialize() {
       tick();
     }
   });
-  onPageRefresh(() => Promise.all([selectDay(selectedDay), loadCalendar()]));
+  onPageRefresh(async () => {
+    await refreshFiscalPeriod();
+    await Promise.all([selectDay(selectedDay), loadCalendar()]);
+  });
   await Promise.all([selectDay(selectedDay), loadCalendar({ scroll: true })]);
 }
 

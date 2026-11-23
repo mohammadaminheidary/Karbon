@@ -1,4 +1,4 @@
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { refreshData } from "../components/api-cache.js";
 import { confirmFinanceDelete } from "./delete-dialog.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -165,7 +165,7 @@ function renderAccount(bank, onEdit, mode, onDelete) {
     row.append(identity, owner, numbers, actions);
     return row;
   }
-  const article = node("a", "bank-account rounded-2xl");
+  const article = node("a", "bank-account card-tilt rounded-2xl");
   article.dataset.bankId = bank.id;
   article.href = `/page/bank-transactions-page.html?bank=${bank.id}`;
   article.setAttribute(
@@ -174,7 +174,7 @@ function renderAccount(bank, onEdit, mode, onDelete) {
   );
   const glass = node("span", "navbar-glass");
   glass.setAttribute("aria-hidden", "true");
-  article.append(glass);
+  const surface = node("div", "bank-account-surface card-tilt-surface");
   const face = node("div", "bank-card-face");
   const top = node("div", "relative flex items-center justify-between gap-3");
   const identity = node("div", "min-w-0");
@@ -238,8 +238,11 @@ function renderAccount(bank, onEdit, mode, onDelete) {
       money(bank.balance),
     ),
   );
+  if (bank.opening_balance_locked)
+    balance.append(node("p", "mt-1 text-xs text-mirage/65", `افتتاحیه ${money(bank.opening_balance)}`));
   face.append(balance);
-  article.append(face);
+  surface.append(glass, face);
+  article.append(surface);
   return article;
 }
 
@@ -250,7 +253,8 @@ export async function initializeBankAccounts() {
     return;
   }
   const $ = (id) => document.getElementById(id);
-  const mode = $("bankCards").dataset.display || "cards";
+  const cards = $("bankCards");
+  const mode = cards.dataset.display || "cards";
   const root = node("dialog", "bottom-curtain finance-surface");
   root.id = "bankModal";
   root.setAttribute("aria-hidden", "true");
@@ -316,8 +320,8 @@ export async function initializeBankAccounts() {
       renderedAccounts = signature;
       if ($("bankTotalBalance")) {
         const totalBalance = accounts.reduce(
-          (total, account) => total + account.balance,
-          0,
+          (total, account) => total + BigInt(account.balance),
+          0n,
         );
         $("bankTotalBalance").textContent = money(totalBalance);
       }
@@ -410,6 +414,7 @@ export async function initializeBankAccounts() {
     $("bankOpening").value = new Intl.NumberFormat("en-US").format(
       editing?.opening_balance || 0,
     );
+    $("bankOpening").readOnly = Boolean(editing?.opening_balance_locked);
     $("bankActive").value = String(editing?.active ?? true);
     $("bankLogoPreview").classList.add("hidden");
     $("bankSelect").replaceChildren(new Option("انتخاب بانک", ""));
@@ -452,11 +457,12 @@ export async function initializeBankAccounts() {
         card_number: field("bankCardNumber", validateCardNumber),
         sheba_number: field("bankShebaNumber", validateSheba),
         account_number: normalizeDigits($("bankAccount").value.trim()) || null,
-        opening_balance: field("bankOpening", (value) =>
-          amountValue(value || "0", { signed: true, allowZero: true }),
-        ),
         active: $("bankActive").value === "true",
       };
+      if (!editing?.opening_balance_locked) {
+        payload.opening_balance = field("bankOpening", (value) =>
+          amountValue(value || "0", { signed: true, allowZero: true }));
+      }
       saving = true;
       busy();
       saved = await financeRequest(`/banks${editing ? `/${editing.id}` : ""}`, {
@@ -472,9 +478,10 @@ export async function initializeBankAccounts() {
     }
     if (!saved) return;
     dialog.close();
-    notifyNavbar(editing
-      ? "تغییرات حساب ذخیره شد."
-      : "حساب بانکی با موفقیت اضافه شد.");
+    notify(
+      editing ? "تغییرات حساب ذخیره شد." : "حساب بانکی با موفقیت اضافه شد.",
+      { type: "success" },
+    );
     await load();
   });
   // Group four digits while preserving the caret when editing in the middle.

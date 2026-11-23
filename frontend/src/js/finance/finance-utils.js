@@ -17,9 +17,12 @@ const todayFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 export const money = value => `${moneyFormatter.format(value)} تومان`;
 export const fullDate = value => fullDateFormatter.format(new Date(`${value}T12:00:00+03:30`));
-export function todayKey() {
+export function todayKey(timeZone = "Asia/Tehran") {
+  const formatter = timeZone === "Asia/Tehran" ? todayFormatter : new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  });
   const parts = Object.fromEntries(
-    todayFormatter.formatToParts(new Date())
+    formatter.formatToParts(new Date())
       .map((part) => [part.type, part.value]),
   );
   return `${parts.year}-${parts.month}-${parts.day}`;

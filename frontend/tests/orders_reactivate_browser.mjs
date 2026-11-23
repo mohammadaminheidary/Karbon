@@ -87,7 +87,7 @@ try {
       card("completed", order.id).locator("[data-reactivate-order]");
     assert.equal(await button().textContent(), "بازگشت به سفارشات فعال");
     assert.equal(await button().getAttribute("class"), "orders-primary");
-    // A failed request keeps the card and allows a retry through navbar alerts.
+    // A failed request shows a popup and keeps the card available for retry.
     await page.route(
       `**/api${path}/reactivate`,
       (route) =>
@@ -101,7 +101,7 @@ try {
     await button().click();
     await page.waitForFunction(() =>
       document
-        .querySelector('.navbar-notification[role="alert"]')
+        .querySelector('.notification-popup[data-type="error"]')
         ?.textContent.includes("خطای آزمایشی"),
     );
     assert.equal(await button().isEnabled(), true);
@@ -145,7 +145,7 @@ try {
       "action does not open card details",
     );
     assert.ok(
-      await page.locator('.navbar-notification[role="status"]').textContent(),
+      await page.locator('.notification-popup[data-type="success"]').textContent(),
       "success notification",
     );
     await page.unroute(`**/api${path}/reactivate`);

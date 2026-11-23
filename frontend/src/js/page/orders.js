@@ -1,4 +1,4 @@
-import { notifyNavbar } from "../components/navbar-notification.js";
+import { notify } from "../components/notifications.js";
 import { startPage } from "../components/page-ready.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { initializeNavbar } from "../components/navbar.js";
@@ -7,7 +7,6 @@ import { financeRequest } from "../finance/finance-api.js";
 import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { onPageRefresh } from "../components/data-events.js";
-import { showFinalInvoice } from "../orders/invoice-export.js";
 import { showOrderDetails } from "../orders/order-details.js";
 
 initializeNavbar();
@@ -119,7 +118,7 @@ async function loadOrders(more = false) {
     }
     panel.replaceChildren(
       ...records.map((order) => {
-        const card = node("article", "orders-record");
+        const card = node("article", "orders-record card-tilt");
         card.dataset.orderId = order.id;
         card.append(
           node(
@@ -187,10 +186,13 @@ async function loadOrders(more = false) {
               await financeRequest(`/orders/${order.id}/complete`, {
                 method: "POST",
               });
-              notifyNavbar(`سفارش ${order.order_number} به سفارشات تکمیل‌شده منتقل شد.`);
+              notify(
+                `سفارش ${order.order_number} به سفارشات تکمیل‌شده منتقل شد.`,
+                { type: "success" },
+              );
               await loadOrders();
             } catch (failure) {
-              notifyNavbar(failure.message, { role: "alert" });
+              notify(failure.message, { type: "error" });
             } finally {
               finishOrderStatusChange(order.id);
             }
@@ -220,10 +222,13 @@ async function loadOrders(more = false) {
               await financeRequest(`/orders/${order.id}/reactivate`, {
                 method: "POST",
               });
-              notifyNavbar(`سفارش ${order.order_number} به سفارشات فعال بازگردانده شد.`);
+              notify(
+                `سفارش ${order.order_number} به سفارشات فعال بازگردانده شد.`,
+                { type: "success" },
+              );
               await loadOrders();
             } catch (failure) {
-              notifyNavbar(failure.message, { role: "alert" });
+              notify(failure.message, { type: "error" });
             } finally {
               finishOrderStatusChange(order.id);
             }
@@ -264,13 +269,9 @@ async function loadOrders(more = false) {
 async function initializeOrdersPage() {
   if (!(await protectPage())) return;
   initializeTabs();
-  const openCreateOrder = initializeOrderDialogs((saved) => {
-    notifyNavbar(`سفارش ${saved.order_number} ثبت شد؛ پرداختی ${money(saved.paid)} و مانده ${money(saved.remaining)}.`);
-    loadOrders();
-    showFinalInvoice(saved.id);
-  });
+  const openCreateOrder = initializeOrderDialogs(() => loadOrders());
   createOrderButton.disabled = false;
-  createOrderButton.addEventListener("click", openCreateOrder);
+  createOrderButton.addEventListener("click", () => openCreateOrder());
   await loadOrders();
   onPageRefresh(() => loadOrders());
 }
