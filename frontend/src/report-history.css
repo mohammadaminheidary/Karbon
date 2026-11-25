@@ -1,9 +1,4 @@
-.reports-page .navbar-dock {
-  grid-template-columns: minmax(0, 245px) minmax(0, max-content) 185px;
-}
 .reports-page .navbar-title-island .navbar-page-title {
-  overflow: visible;
-  text-overflow: clip;
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -19,36 +14,47 @@
 .reports-page .navbar-title-island .orders-create span {
   display: inline;
 }
-@media (max-width: 1023px) {
-  .reports-page .navbar-dock {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+
+@media (min-width: 1325px) {
+  .reports-page .navbar-title-island {
+    /* Give the action room on the outside, keeping the dock centered. */
+    justify-self: end;
+    width: 245px;
+    max-width: none;
   }
 }
-@media (max-width: 639px) {
-  .reports-page {
-    --navbar-clearance: calc(260px + env(safe-area-inset-bottom, 0px));
-  }
-  .reports-page .navbar-dock {
-    width: 350px;
-  }
+
+@media (1205px < width < 1325px), (max-width: 639px) {
   .reports-page .navbar-title-island.orders-title-island {
     flex-direction: column;
-    gap: 4px;
+    gap: 1px;
+    padding-block: 2px;
   }
   .reports-page .navbar-title-island.orders-title-island .navbar-page-title {
     flex: none;
     width: 100%;
   }
   .reports-page .navbar-title-island .orders-create {
+    min-height: 32px;
+  }
+}
+
+@media (max-width: 639px) {
+  .reports-page {
+    --navbar-clearance: calc(260px + env(safe-area-inset-bottom, 0px));
+  }
+  .reports-page .navbar-title-island .orders-create {
     max-width: 100%;
     white-space: normal;
   }
 }
+
 @media (max-width: 337px) {
   .reports-page {
     --navbar-clearance: calc(262px + env(safe-area-inset-bottom, 0px));
   }
 }
+
 .reports-workspace {
   max-width: 1280px;
   margin-inline: auto;

@@ -1,7 +1,6 @@
 import { startPage } from "../components/page-ready.js";
 import { refreshData } from "../components/api-cache.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
-import { initializeNavbar } from "../components/navbar.js";
 import { notify } from "../components/notifications.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { protectPage } from "../guards/auth-guard.js";
@@ -21,7 +20,6 @@ import {
 } from "../tasks/tasks-api.js";
 import { initializeTaskDrag } from "../tasks/task-drag.js";
 
-initializeNavbar();
 const $ = (id) => document.getElementById(id);
 const curtain = $("taskCurtain");
 const details = $("taskDetails");

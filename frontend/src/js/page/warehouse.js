@@ -1,5 +1,4 @@
 import { startPage } from "../components/page-ready.js";
-import { initializeNavbar } from "../components/navbar.js";
 import { initializePurchaseEntry } from "../warehouse/purchase-entry.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { financeRequest } from "../finance/finance-api.js";
@@ -37,7 +36,6 @@ function inventoryRow(product) {
     node("td", "", product.category_path ?? "—"),
     node("td", "", product.unit),
     node("td", "warehouse-quantity", formatNumber(product.stock)),
-    node("td", "", "—"),
     status,
     node("td"),
   );
@@ -54,7 +52,6 @@ function inventoryMessage(message) {
 
 startPage(async () => {
   if (!(await protectPage())) return false;
-  initializeNavbar();
   const inventory = document.getElementById("warehouseInventory");
   let version = 0;
   async function loadInventory() {

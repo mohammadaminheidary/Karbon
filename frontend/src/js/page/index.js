@@ -1,5 +1,4 @@
 import { startPage } from "../components/page-ready.js";
-import { initializeNavbar } from "../components/navbar.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { financeRequest } from "../finance/finance-api.js";
@@ -14,7 +13,6 @@ import {
   element,
 } from "../dashboard/chart.js";
 
-initializeNavbar();
 const $ = (id) => document.getElementById(id);
 const colors = dashboardPalette();
 const series = (key, label, color) => ({ key, label, color: colors[color] });

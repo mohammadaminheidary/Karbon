@@ -1,24 +1,48 @@
 import { initializeNavigation } from "./navigation.js";
 import { initializeDockMagnification } from "./dock-magnification.js";
 import { initializeNavbarActiveHighlight } from "./navbar-active-highlight.js";
+import { initializeNavbarIndicator } from "./navbar-indicator.js";
 import { notify } from "./notifications.js";
-import { getToken, logout } from "../auth/auth-storage.js";
 
-import { revokeSession } from "../auth/auth-api.js";
+const handoffKey = "karbon-navbar-handoff";
 
-let cleanupNavbar;
-
-export function initializeNavbar() {
+function initializeNavbar() {
   const host = document.getElementById("navbarHost");
-  if (!host) return;
-  if (host.querySelector("#mainNavbar") && cleanupNavbar) return cleanupNavbar;
-  cleanupNavbar?.();
-  if (!host.querySelector("#mainNavbar")) return;
-  const navbar = host.querySelector("nav");
+  const navbar = host?.querySelector("#mainNavbar");
+  if (!navbar) return;
   const controller = new AbortController();
   const { signal } = controller;
-  initializeDockMagnification(navbar, { signal });
+  const { captureZoom, restoreZoom } = initializeDockMagnification(navbar, { signal });
   initializeNavbarActiveHighlight(navbar, { signal });
+  const { moveTo, captureIndicator, restoreIndicator } =
+    initializeNavbarIndicator(navbar, { signal });
+
+  window.addEventListener("pageswap", ({ activation, viewTransition }) => {
+    const destination = activation?.entry?.url;
+    if (!viewTransition || !destination) return;
+    try {
+      sessionStorage.setItem(handoffKey, JSON.stringify({
+        destination,
+        zoom: captureZoom(),
+        indicator: captureIndicator(),
+      }));
+    } catch {
+      // The destination can render the dock even when storage is unavailable.
+    }
+  }, { signal });
+  window.addEventListener("pagereveal", ({ viewTransition }) => {
+    if (!viewTransition) return;
+    let handoff;
+    try {
+      handoff = JSON.parse(sessionStorage.getItem(handoffKey));
+      sessionStorage.removeItem(handoffKey);
+    } catch {
+      return;
+    }
+    if (handoff?.destination !== window.location.href) return;
+    restoreZoom(handoff.zoom);
+    restoreIndicator(handoff.indicator);
+  }, { signal });
   host.querySelector("#logoutButton").addEventListener(
     "click",
     async () => {
@@ -26,6 +50,10 @@ export function initializeNavbar() {
       if (button.disabled) return;
       button.disabled = true;
       try {
+        const [{ revokeSession }, { getToken, logout }] = await Promise.all([
+          import("../auth/auth-api.js"),
+          import("../auth/auth-storage.js"),
+        ]);
         await revokeSession(getToken());
         logout();
         window.location.replace("/page/login-page.html");
@@ -63,7 +91,11 @@ export function initializeNavbar() {
     },
     { signal },
   );
-  const resetNavigation = initializeNavigation(navbar, { signal });
+  const resetNavigation = initializeNavigation(navbar, {
+    signal,
+    onNavigate: moveTo,
+    onReset: () => moveTo(navbar.querySelector('[aria-current="page"]')),
+  });
   const links = [...navbar.querySelectorAll("a")];
   const title = host.querySelector(".navbar-page-title");
   const clock = host.querySelector(".navbar-clock");
@@ -97,10 +129,11 @@ export function initializeNavbar() {
     let activeLink;
     links.forEach((link) => {
       if (link.getAttribute("href") === activePath) {
-        link.setAttribute("aria-current", "page");
+        if (!link.hasAttribute("aria-current")) link.setAttribute("aria-current", "page");
         activeLink = link;
       } else link.removeAttribute("aria-current");
     });
+    moveTo(activeLink);
     const label =
       path === "/page/bank-transactions-page.html"
         ? "تراکنش‌های حساب"
@@ -108,8 +141,8 @@ export function initializeNavbar() {
           ? "جزئیات گزارش"
           : activeLink?.getAttribute("aria-label") ||
             document.title.split("|").pop().trim();
-    title.textContent = label;
-    title.title = label;
+    if (title.textContent !== label) title.textContent = label;
+    if (title.title !== label) title.title = label;
   }
 
   function updateClock() {
@@ -135,11 +168,6 @@ export function initializeNavbar() {
   }
 
   function startClock() {
-    // A history snapshot may outlive logout or a login in another tab.
-    if (!getToken()) {
-      window.location.replace("/page/login-page.html");
-      return;
-    }
     updateRoute();
     updateClock();
     if (!document.hidden && timer === undefined)
@@ -150,9 +178,7 @@ export function initializeNavbar() {
     stopClock();
     resetNavigation();
     controller.abort();
-    if (cleanupNavbar === cleanup) cleanupNavbar = undefined;
   }
-  cleanupNavbar = cleanup;
 
   window.addEventListener("popstate", updateRoute, { signal });
   window.addEventListener("pagehide", stopClock, { signal });
@@ -166,5 +192,6 @@ export function initializeNavbar() {
     { signal },
   );
   startClock();
-  return cleanup;
 }
+
+initializeNavbar();

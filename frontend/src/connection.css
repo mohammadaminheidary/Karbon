@@ -1,4 +1,11 @@
 /* Theme tokens come directly from Settings, including live cross-tab changes. */
+.connection-screen,
+.upcoming-page {
+  color: #152039;
+  background: #f7f9fc;
+  font-family: var(--font-sans);
+  isolation: isolate;
+}
 .connection-screen {
   position: fixed;
   inset: 0;
@@ -10,11 +17,14 @@
   margin: 0;
   padding: 0;
   border: 0;
-  color: #152039;
-  background: #f7f9fc;
-  font-family: var(--font-sans);
-  isolation: isolate;
   overflow: auto;
+}
+.upcoming-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 .connection-screen[open] {
   display: flex;
@@ -93,8 +103,7 @@ html[data-connection-state="disconnected"][data-auth-state="pending"]::after {
   animation-delay: -4s;
   animation-duration: 18s;
 }
-/* Decorative only: the atmosphere already sits behind the content and ignores
-   pointer input. Fade the digits at both edges to preserve text contrast. */
+/* Fade the decorative text at both edges to preserve contrast. */
 .connection-glitch {
   position: absolute;
   top: 50%;
@@ -116,9 +125,13 @@ html[data-connection-state="disconnected"][data-auth-state="pending"]::after {
   );
   mask-image: linear-gradient(transparent, #000 25%, #000 60%, transparent);
 }
+.upcoming-page .connection-glitch {
+  font-size: clamp(5.25rem, 20vw, 22rem);
+  letter-spacing: normal;
+}
 .connection-glitch::before,
 .connection-glitch::after {
-  content: "404";
+  content: attr(data-text);
   position: absolute;
   inset: 0;
   opacity: 0;
@@ -252,7 +265,8 @@ html[data-connection-state="disconnected"][data-auth-state="pending"]::after {
   line-height: 1.6;
   letter-spacing: -0.04em;
 }
-#connectionDescription {
+#connectionDescription,
+.upcoming-description {
   margin: 14px 0 28px;
   color: #637086;
   font-size: 0.875rem;

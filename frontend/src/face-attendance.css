@@ -240,6 +240,15 @@
 .face-check-in {
   flex-shrink: 0;
 }
+@media (max-width: 639px) {
+  .navbar-title-island:has(.face-check-in) .navbar-page-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .face-check-in {
+    padding-inline: 8px;
+  }
+}
 @media (max-width: 767px) {
   .face-content {
     padding: 20px 16px;

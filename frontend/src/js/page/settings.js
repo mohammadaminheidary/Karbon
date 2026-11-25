@@ -1,6 +1,5 @@
 import { notify } from "../components/notifications.js";
 import { startPage } from "../components/page-ready.js";
-import { initializeNavbar } from "../components/navbar.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { initializeAppearanceSettings } from "../components/appearance-settings.js";
 const initializeDocumentAccounts = lazyTool(() => import("../documents/account-settings.js"), "initializeDocumentAccounts");
@@ -25,8 +24,6 @@ function lazyTool(load, name) {
     }
   };
 }
-
-initializeNavbar();
 
 import {
   protectPage,

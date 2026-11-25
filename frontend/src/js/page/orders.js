@@ -1,15 +1,12 @@
 import { notify } from "../components/notifications.js";
 import { startPage } from "../components/page-ready.js";
 import { protectPage } from "../guards/auth-guard.js";
-import { initializeNavbar } from "../components/navbar.js";
 import { initializeOrderDialogs } from "../orders/order-dialogs.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { showOrderDetails } from "../orders/order-details.js";
-
-initializeNavbar();
 
 const createOrderButton = document.querySelector(".orders-create");
 

@@ -1,11 +1,13 @@
 // Keep native history, downloads, modified clicks and page-specific module
 // lifetimes. A click on the current route must not destroy its DOM and state.
-export function initializeNavigation(navbar, { signal } = {}) {
+export function initializeNavigation(navbar, { signal, onNavigate, onReset } = {}) {
   let pendingURL;
   let pendingTimer;
   const reset = () => {
+    const wasNavigating = Boolean(pendingURL);
     pendingURL = undefined;
     clearTimeout(pendingTimer);
+    if (wasNavigating) onReset?.();
   };
   window.addEventListener("pageshow", reset, { signal });
   window.addEventListener("pagehide", reset, { signal });
@@ -44,6 +46,7 @@ export function initializeNavigation(navbar, { signal } = {}) {
       if (url.pathname !== current.pathname || url.search !== current.search) {
         pendingURL = url.href;
         clearTimeout(pendingTimer);
+        onNavigate?.(link);
         // Permit retry if the browser cancels or cannot complete navigation.
         pendingTimer = setTimeout(reset, 1500);
       }

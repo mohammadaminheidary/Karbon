@@ -8,10 +8,7 @@ import {
   shiftDay,
   node,
 } from "../finance/finance-utils.js";
-import { initializeNavbar } from "../components/navbar.js";
 import { initializeFaceCheckIn } from "../attendance/face-panel.js";
-
-initializeNavbar();
 
 import { protectPage } from "../guards/auth-guard.js";
 import { logout } from "../auth/auth-storage.js";

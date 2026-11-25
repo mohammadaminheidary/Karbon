@@ -21,6 +21,8 @@ PAGES = {
     "page/bank-transactions-page.html": "تراکنش‌های حساب",
     "page/reports-page.html": "گزارش و خروجی",
     "page/report-details-page.html": "جزئیات گزارش",
+    "page/vision-page.html": "چشم‌انداز",
+    "page/production-page.html": "تولید",
     "page/settings-page.html": "تنظیمات",
     "page/warehouse-page.html": "انبار",
 }

@@ -1,12 +1,10 @@
 import { startPage } from "../components/page-ready.js";
-import { initializeNavbar } from "../components/navbar.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { node, fullDate } from "../finance/finance-utils.js";
 import { initializeDocumentDialogs } from "../documents/document-dialogs.js";
 
-initializeNavbar();
 const $ = (id) => document.getElementById(id);
 const number = new Intl.NumberFormat("fa-IR");
 const pageSize = 15;

@@ -14,6 +14,7 @@ export function initializeDockMagnification(navbar, { signal }) {
   let gap;
   let pointer;
   let amount;
+  let restoredZoom = false;
 
   function clearZoom() {
     frame.cancel();
@@ -22,6 +23,7 @@ export function initializeDockMagnification(navbar, { signal }) {
 
   function reset() {
     pointer = undefined;
+    restoredZoom = false;
     clearZoom();
   }
 
@@ -50,6 +52,11 @@ export function initializeDockMagnification(navbar, { signal }) {
   function layoutRows() {
     const style = getComputedStyle(navbar);
     itemSize = parseFloat(style.getPropertyValue("--dock-item-size"));
+    if (!itemSize) {
+      document.querySelector('link[rel="stylesheet"]')
+        ?.addEventListener("load", layoutRows, { once: true, signal });
+      return;
+    }
     gap = parseFloat(style.getPropertyValue("--dock-item-gap"));
     const inset = [style.paddingLeft, style.paddingRight, style.borderLeftWidth, style.borderRightWidth]
       .reduce((sum, length) => sum + parseFloat(length), 0);
@@ -88,8 +95,23 @@ export function initializeDockMagnification(navbar, { signal }) {
 
   function move(event) {
     if (!motion.matches || event.pointerType === "touch") return;
+    restoredZoom = false;
     pointer = event;
     refresh();
+  }
+
+  function captureZoom() {
+    if ((!pointer && !restoredZoom) || !amount || !motion.matches) return;
+    return items.map((item) => getComputedStyle(item).getPropertyValue(zoomProperty));
+  }
+
+  function restoreZoom(zooms) {
+    if (!zooms || zooms.length !== items.length || !amount || !motion.matches) return;
+    navbar.setAttribute("data-dock-handoff", "");
+    items.forEach((item, index) => item.style.setProperty(zoomProperty, zooms[index]));
+    navbar.getBoundingClientRect();
+    navbar.removeAttribute("data-dock-handoff");
+    restoredZoom = true;
   }
 
   const pointerOptions = { passive: true, signal };
@@ -97,6 +119,9 @@ export function initializeDockMagnification(navbar, { signal }) {
   navbar.addEventListener("pointermove", move, pointerOptions);
   navbar.addEventListener("pointerleave", reset, pointerOptions);
   navbar.addEventListener("pointercancel", reset, pointerOptions);
+  document.addEventListener("pointermove", (event) => {
+    if (restoredZoom && !navbar.contains(event.target)) reset();
+  }, pointerOptions);
   motion.addEventListener(
     "change",
     () => {
@@ -114,4 +139,5 @@ export function initializeDockMagnification(navbar, { signal }) {
   signal.addEventListener("abort", reset, { once: true });
   layoutRows();
   syncPreferences();
+  return { captureZoom, restoreZoom };
 }

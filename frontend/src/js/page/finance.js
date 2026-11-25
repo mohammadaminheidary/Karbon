@@ -1,7 +1,6 @@
 import { startPage } from "../components/page-ready.js";
 import { transactionActions } from "../finance/transaction-actions.js";
 import { onPageRefresh } from "../components/data-events.js";
-import { initializeNavbar } from "../components/navbar.js";
 import { notify } from "../components/notifications.js";
 import { bankLogo } from "../finance/bank-accounts.js";
 import { CurtainDialog } from "../components/curtain-dialog.js";
@@ -28,7 +27,6 @@ import {
 } from "../finance/finance-utils.js";
 import { fiscalLabel, getFiscalDate } from "../fiscal-years/fiscal-api.js";
 
-initializeNavbar();
 const $ = (id) => document.getElementById(id);
 let fiscalPeriod;
 const periodDay = (day) => !fiscalPeriod?.managed ? day

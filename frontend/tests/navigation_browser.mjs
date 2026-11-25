@@ -43,14 +43,58 @@ const idleCustomers = () =>
   );
 const externalChange = () =>
   page.evaluate(() => window.dispatchEvent(new Event("karbon-data-change")));
+const navbar = page.locator("#mainNavbar");
+const navbarLink = (path) => navbar.locator(`a[href="${path}"]`);
+const upcomingSections = { vision: "چشم‌انداز", production: "تولید" };
+const pageReady = () => page.waitForFunction(
+  () => document.documentElement.dataset.pageState === "ready",
+);
+const waitForIndicator = () => page.waitForFunction(() => {
+  const indicator = document.querySelector(".navbar-indicator[data-positioned]");
+  const active = document.querySelector('#mainNavbar [aria-current="page"]');
+  if (!indicator || !active || indicator.getAnimations().length) return false;
+  const dot = indicator.getBoundingClientRect();
+  const item = active.getBoundingClientRect();
+  return Math.abs(dot.left + dot.width / 2 - item.left - item.width / 2) < 1 &&
+    dot.top >= item.bottom;
+});
+
+function assertSameBounds(before, after) {
+  for (const property of ["x", "y", "width", "height"]) {
+    assert.ok(
+      Math.abs(before[property] - after[property]) < 1,
+      `navbar ${property} changed from ${before[property]} to ${after[property]}`,
+    );
+  }
+}
+
 try {
   await page.goto(`${base}/page/login-page.html`);
   await page.locator("#username").fill("customers-test");
   await page.locator("#passwordInput").fill("test-password");
   await page.locator('button[type="submit"]').click();
   await page.waitForURL("**/index.html");
-  await page.locator('#mainNavbar a[href="/page/customers-page.html"]').click();
+  await pageReady();
+  const restBounds = await navbar.boundingBox();
+  const customers = navbarLink("/page/customers-page.html");
+  await customers.hover();
+  await page.waitForFunction(
+    (width) => {
+      const dock = document.getElementById("mainNavbar");
+      return dock.getBoundingClientRect().width > width &&
+        !dock.getAnimations({ subtree: true }).some(
+          (animation) => animation.transitionProperty === "--dock-item-zoom",
+        );
+    },
+    restBounds.width,
+  );
+  const hoveredBounds = await navbar.boundingBox();
+  await customers.evaluate((link) => link.click());
+  await page.waitForURL("**/customers-page.html");
   await idleCustomers();
+  assertSameBounds(hoveredBounds, await navbar.boundingBox());
+  await waitForIndicator();
+  await page.mouse.move(30, 30);
   assert.equal(await page.locator("#customersList > *").count(), 12);
   await page.locator("#loadMoreCustomersButton").click();
   await page.waitForFunction(
@@ -139,21 +183,24 @@ try {
     "attendance",
     "daily-tasks",
     "documents",
+    "reports",
     "banks",
+    ...Object.keys(upcomingSections),
     "settings",
+    "warehouse",
     "orders",
     "customers",
   ]) {
-    await page.locator(`#mainNavbar a[href="/page/${name}-page.html"]`).click();
+    await navbarLink(`/page/${name}-page.html`).evaluate((link) => link.click());
     await page.waitForURL(`**/page/${name}-page.html`);
     await page.locator("#mainNavbar").waitFor({ state: "visible" });
-    await page.waitForFunction(
-      () => document.documentElement.dataset.pageState === "ready",
-    );
+    await pageReady();
     await page.waitForFunction(
       () => !document.querySelector('[aria-busy="true"]'),
     );
     assert.equal(await page.locator("#mainNavbar").count(), 1);
+    assertSameBounds(restBounds, await navbar.boundingBox());
+    assert.equal(await navbar.locator(".navbar-indicator").count(), 1);
     assert.equal(await page.locator("main").isVisible(), true);
     await page.waitForFunction(
       () => typeof window.firstPaintHasNavbar === "boolean",
@@ -169,6 +216,24 @@ try {
         .evaluate((node) => getComputedStyle(node).animationName),
       "none",
     );
+    if (upcomingSections[name]) {
+      const heading = page.getByRole("heading", {
+        name: `${upcomingSections[name]} در حال ساخت است`,
+      });
+      assert.equal(await heading.isVisible(), true);
+      assert.equal(
+        await page.getByText("این بخش در به‌روزرسانی‌های بعدی اضافه می‌شود.").isVisible(),
+        true,
+      );
+      assert.equal(
+        await navbarLink(`/page/${name}-page.html`).getAttribute("aria-current"),
+        "page",
+      );
+      await waitForIndicator();
+      await page.getByRole("link", { name: "بازگشت به داشبورد" }).click();
+      await page.waitForURL("**/index.html");
+      await pageReady();
+    }
     if (name === "settings") {
       for (const section of [
         "members",
@@ -220,11 +285,51 @@ try {
   await page.unroute("**/api/banks/*/transactions?*");
   await page.locator('#mainNavbar a[href="/page/customers-page.html"]').click();
   await idleCustomers();
+
+  // Hold the first document response so we can retarget midway through a slide.
+  await page.mouse.move(30, 30);
+  await waitForIndicator();
+  await page.route("**/page/orders-page.html", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await route.continue().catch(() => {});
+  });
+  const retarget = await page.evaluate(async () => {
+    const dot = document.querySelector(".navbar-indicator");
+    document.querySelector('#mainNavbar a[href="/page/orders-page.html"]').click();
+    const [slide] = document.querySelector(".navbar-indicator").getAnimations();
+    await new Promise((resolve) => setTimeout(resolve, 65));
+    const elapsed = slide?.currentTime;
+    const before = dot.getBoundingClientRect();
+    document.querySelector('#mainNavbar a[href="/page/reports-page.html"]').click();
+    return {
+      elapsed,
+      sameNode: dot === document.querySelector(".navbar-indicator"),
+      distance: Math.abs(dot.getBoundingClientRect().x - before.x),
+    };
+  });
+  assert.ok(retarget.elapsed > 0 && retarget.elapsed < 240, "first slide must be in progress");
+  assert.equal(retarget.sameNode, true);
+  assert.ok(retarget.distance < 1, "retargeting must continue from the visible point");
+  await page.waitForURL("**/reports-page.html");
+  await pageReady();
+  await waitForIndicator();
+  await page.unroute("**/page/orders-page.html");
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await navbarLink("/page/settings-page.html").evaluate((link) => link.click());
+  await page.waitForURL("**/settings-page.html");
+  await pageReady();
+  assert.equal(
+    await navbar.locator(".navbar-indicator").evaluate((dot) => dot.getAnimations().length),
+    0,
+  );
+  await waitForIndicator();
+
   assert.deepEqual(errors, []);
   if (process.env.KARBON_SCREENSHOT)
     await page.screenshot({ path: process.env.KARBON_SCREENSHOT });
   console.log(
-    "PASS: page links, same-route state, slow/error refresh, unchanged DOM, pagination, Back/Forward, and all navigation destinations",
+    "PASS: navigation destinations, state and history, stable dock geometry, one sliding indicator, rapid retargeting, and reduced motion",
   );
 } catch (error) {
   console.error(JSON.stringify({ url: page.url(), errors }));

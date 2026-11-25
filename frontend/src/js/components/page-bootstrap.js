@@ -19,10 +19,20 @@
     document.addEventListener("animationcancel", onEntranceEnd);
   }
 
+  // The browser can cancel a handoff if another navigation wins.
+  const observeHandoff = ({ viewTransition }) => {
+    viewTransition?.ready.catch(() => {});
+  };
+  window.addEventListener("pageswap", observeHandoff);
+  window.addEventListener("pagereveal", observeHandoff);
+
   const protectedPage = window.location.pathname !== "/page/login-page.html";
   if (protectedPage) {
     document.documentElement.dataset.authState = "pending";
-    const conceal = () => { document.documentElement.dataset.authState = "pending"; };
+    const conceal = () => {
+      page.dataset.authState = "pending";
+      delete page.dataset.navbarHandoff;
+    };
     const hasSession = () => {
       try {
         const token = JSON.parse(localStorage.getItem("karbon_auth"))?.token;
@@ -30,13 +40,31 @@
       } catch { return false; }
     };
     if (!hasSession()) window.location.replace("/page/login-page.html");
+    window.addEventListener("pagereveal", ({ viewTransition }) => {
+      if (!viewTransition) return;
+      if (!hasSession()) {
+        viewTransition.skipTransition();
+        return;
+      }
+      page.dataset.navbarHandoff = "";
+    });
     window.addEventListener("pagehide", conceal);
+    window.addEventListener("pageshow", (event) => {
+      if (event.persisted && !hasSession()) window.location.replace("/page/login-page.html");
+    });
     window.addEventListener("storage", (event) => {
       if (event.key === "karbon_auth" || event.key === null) {
         conceal();
         window.location.replace("/page/login-page.html");
       }
     });
+  } else {
+    // Login and logout use the normal, protected document boundary.
+    const skipTransition = ({ viewTransition }) => {
+      viewTransition?.skipTransition();
+    };
+    window.addEventListener("pageswap", skipTransition);
+    window.addEventListener("pagereveal", skipTransition);
   }
   let loaded = false;
   let leaving = false;
@@ -101,6 +129,10 @@
   );
   document.addEventListener("DOMContentLoaded", () => {
     if (failure) showFailure(failure.text, failure.kind);
+    if (!protectedPage) return;
+    import("./floating-back-button.js").then(({ mountFloatingBackButton }) => {
+      mountFloatingBackButton();
+    });
   });
   // Cancellation of an outgoing document's imports is normal navigation.
   document.addEventListener("click", (event) => {
@@ -138,6 +170,7 @@
   }, 150);
   timeout = setTimeout(() => showFailure(message, "timeout"), 20000);
   window.addEventListener("karbon:page-ready", () => {
+    delete page.dataset.navbarHandoff;
     document.documentElement.dataset.pageState = "ready";
     clearTimeout(timeout);
     if (failure?.kind === "timeout") {

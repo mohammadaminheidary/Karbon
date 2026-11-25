@@ -1,7 +1,6 @@
 import { startPage } from "../components/page-ready.js";
 import { transactionActions } from "../finance/transaction-actions.js";
 import { onPageRefresh } from "../components/data-events.js";
-import { initializeNavbar } from "../components/navbar.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { bankLogo, formatCardNumber } from "../finance/bank-accounts.js";
@@ -15,7 +14,6 @@ import {
   bindAmount,
 } from "../finance/finance-utils.js";
 
-initializeNavbar();
 const $ = (id) => document.getElementById(id);
 const bankId = new URLSearchParams(window.location.search).get("bank");
 const validBank = /^[1-9]\d*$/.test(bankId || "");

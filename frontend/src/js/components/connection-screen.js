@@ -17,7 +17,7 @@ export function showConnectionScreen(retry, checking = false) {
         <span class="connection-orb connection-orb-two"></span>
         <span class="connection-orb connection-orb-three"></span>
         <span class="connection-orb connection-orb-four"></span>
-        <span class="connection-glitch" dir="ltr">404</span>
+        <span class="connection-glitch" data-text="404" dir="ltr">404</span>
       </div>
       <header class="connection-header">
         <span class="connection-brand" lang="en" dir="ltr"><span class="connection-brand-mark" aria-hidden="true">k</span>karbon<span class="connection-brand-dot">.</span></span>
