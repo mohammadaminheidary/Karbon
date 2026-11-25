@@ -7,8 +7,7 @@ import tempfile
 import json
 
 from fastapi import HTTPException
-from sqlalchemy import select, func
-
+from database import read_snapshot
 from services import report_service as reports
 
 FONT = Path(__file__).resolve().parents[2] / "frontend/assets/fonts/vazirmatn/Vazirmatn-Variable.woff2"
@@ -38,8 +37,8 @@ def font_bytes():
 def export(db, name, request, fmt, destination):
     ds = reports.dataset(db, name)
     names = reports.selected(ds, request)
-    reports.snapshot(db)
-    total = db.scalar(select(func.count()).select_from(ds.source).where(*reports.conditions(ds, request)))
+    read_snapshot(db)
+    total = reports.count(db, ds, request)
     if total > MAX_ROWS:
         raise HTTPException(422, "حداکثر ۵۰٬۰۰۰ رکورد در هر خروجی؛ بازه یا فیلتر را محدود کنید.")
     info = reports.schema(db, name)

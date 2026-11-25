@@ -36,7 +36,7 @@
   gap: 5px;
   font-size: 0.85rem;
 }
-.reports-content :is(input:not([type="checkbox"]), select, button) {
+.reports-content :is(input:not([type="checkbox"], [data-date-part]), select, button:not(.dialog-close-button)) {
   border: 1px solid #b6c0c680;
   border-radius: 12px;
   padding: 9px 12px;
@@ -52,7 +52,7 @@
   opacity: 0.45;
   cursor: default;
 }
-.reports-content :is(input, select, button, summary):focus-visible {
+.reports-content :is(input:not([data-date-part]), select, button, summary):focus-visible {
   outline: 2px solid var(--color-persian-blue);
   outline-offset: 3px;
 }
@@ -88,6 +88,11 @@
 .reports-content .reports-search {
   flex: 1;
   min-width: 180px;
+}
+.report-date-filter {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
 }
 .reports-columns {
   display: grid;
@@ -175,7 +180,7 @@
   .reports-content {
     padding: 18px 14px;
   }
-  .reports-controls > label:not(.reports-check),
+  .reports-controls > :is(label:not(.reports-check), .segmented-date-label),
   .reports-content footer > label {
     width: 100%;
   }

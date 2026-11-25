@@ -4,14 +4,16 @@ Columns and joins are reflected from the connected database, not a parallel
 schema. No authentication or biometric tables can enter this catalog.
 """
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 from functools import lru_cache
 import json
 
 from fastapi import HTTPException
 from sqlalchemy import (MetaData, Table, select, func, or_, cast, String,
-                        Date, DateTime, Time, Boolean, Integer, Numeric, JSON)
+                        BigInteger, Date, DateTime, Time, Boolean, Integer, Numeric, JSON, type_coerce)
 from config import recovery_settings
+from database import read_snapshot
+from services.receivables import active_bounds, invoice_positions
 
 TABLES = {
     "customers": "مشتریان", "orders": "سفارش‌ها", "order_items": "اقلام سفارش",
@@ -38,6 +40,7 @@ LABELS = dict(
     brand_id="شناسه برند", brand_name="برند", requires_brand="نیاز به برند",
     purchase_id="شناسه خرید", purchase_date="تاریخ خرید", purchase_price="قیمت خرید",
     invoice_number="شماره فاکتور خرید", category_name="نام دسته‌بندی", category_parent_name="نام دستهٔ اصلی",
+    last_edit_id="شناسه آخرین ویرایش", last_edit_fingerprint="اثر انگشت آخرین ویرایش",
     method="روش پرداخت", code="کد", name="نام", logo_url="نشانی نشان", active="فعال",
     account_number="شماره حساب", opening_balance="مانده افتتاحیه", bank="بانک", card_number="شماره کارت",
     sheba_number="شماره شبا", title="عنوان", display_code="کد نمایشی", transaction_number="شماره تراکنش",
@@ -82,6 +85,7 @@ class Dataset:
     source: object
     columns: dict
     descriptors: list
+    balance_source: object = None
 
 
 def catalog(engine):
@@ -125,7 +129,13 @@ def _catalog(engine, generation):
                     "شناسه دستهٔ اصلی")
                 add("category_id.main_name", func.coalesce(parent.c.name, alias.c.name, type_=String()),
                     "دستهٔ اصلی")
-        result[name] = Dataset(table, source, columns, descriptors)
+        balance_source = None
+        if name == "orders":
+            balances = invoice_positions(active_bounds()[1])
+            balance_source = source.outerjoin(balances, balances.c.id == table.c.id)
+            for key, label in {"total": "مبلغ فاکتور", "paid": "پرداخت‌شده فاکتور", "remaining": "مانده فاکتور"}.items():
+                add(f"balance.{key}", type_coerce(balances.c[key], BigInteger()).label(key), label)
+        result[name] = Dataset(table, source, columns, descriptors, balance_source)
     return result
 
 
@@ -140,7 +150,12 @@ def schema(db, name):
     ds = dataset(db, name)
     return dict(name=name, title=TABLES[name], columns=ds.descriptors,
                 primary_key=next(iter(ds.table.primary_key)).name,
-                supports_deleted="deleted_at" in ds.table.c)
+                supports_deleted=deleted_column(ds) is not None)
+
+
+def deleted_column(ds):
+    parent = {"purchase_items": "purchase_id", "order_items": "order_id", "order_payments": "order_id"}.get(ds.table.name)
+    return ds.columns.get(f"{parent}.deleted_at" if parent else "deleted_at")
 
 
 def typed(column, value):
@@ -177,8 +192,11 @@ def typed(column, value):
 
 def conditions(ds, request):
     clauses = []
-    if "deleted_at" in ds.table.c and not request.include_deleted:
-        clauses.append(ds.table.c.deleted_at.is_(None))
+    deleted = deleted_column(ds)
+    if deleted is not None and not request.include_deleted:
+        clauses.append(deleted.is_(None))
+        if ds.table.name == "order_payments":
+            clauses.append(ds.columns["transaction_id.deleted_at"].is_(None))
     if request.search:
         # Treat wildcard characters literally, and never interpolate SQL identifiers.
         searchable = [c for c in ds.table.c if type_name(c) in {"text", "integer"}]
@@ -227,16 +245,20 @@ def selected(ds, request):
 
 
 def query(ds, request, names):
-    return select(*(ds.columns[n].label(n) for n in names)).select_from(ds.source).where(
+    source = source_for(ds, set(names) | {f.field for f in request.filters})
+    return select(*(ds.columns[n].label(n) for n in names)).select_from(source).where(
         *conditions(ds, request)).order_by(*ds.table.primary_key)
 
 
-def snapshot(db):
-    # sqlite3's legacy transaction mode does not BEGIN on SELECT. Bind count and
-    # rows to the same read snapshot without altering the connection globally.
-    connection = db.connection()
-    if connection.dialect.name == "sqlite" and not connection.connection.driver_connection.in_transaction:
-        connection.exec_driver_sql("BEGIN")
+def source_for(ds, fields):
+    if ds.balance_source is not None and any(field.startswith("balance.") for field in fields):
+        return ds.balance_source
+    return ds.source
+
+
+def count(db, ds, request):
+    return db.scalar(select(func.count()).select_from(source_for(ds, [f.field for f in request.filters]))
+                     .where(*conditions(ds, request)))
 
 
 def preview(db, name, request):
@@ -245,8 +267,8 @@ def preview(db, name, request):
     pk = next(iter(ds.table.primary_key)).name
     # The PK is returned separately for selection even when its column is hidden.
     fetch_names = list(dict.fromkeys([pk, *names]))
-    snapshot(db)
-    total = db.scalar(select(func.count()).select_from(ds.source).where(*conditions(ds, request)))
+    read_snapshot(db)
+    total = count(db, ds, request)
     rows = db.execute(query(ds, request, fetch_names).offset(request.offset).limit(request.limit)).mappings()
     def safe(v):
         # JS cannot represent 64-bit integers exactly; retain their decimal representation.
@@ -270,6 +292,6 @@ def options(db, name, field, search="", offset=0):
     clauses = [col.is_not(None)]
     if search:
         clauses.append(or_(*(cast(c, String).contains(search, autoescape=True) for c in [col, *related])))
-    values = db.execute(select(col, *related).select_from(ds.source).where(*clauses).distinct().order_by(col).offset(offset).limit(101)).all()
+    values = db.execute(select(col, *related).select_from(source_for(ds, [field])).where(*clauses).distinct().order_by(col).offset(offset).limit(101)).all()
     return dict(values=[scalar(v[0]) for v in values[:100]], has_more=len(values)>100,
                 choices=[dict(value=scalar(v[0]), label=" · ".join(str(scalar(x)) for x in v if x is not None)) for v in values[:100]])

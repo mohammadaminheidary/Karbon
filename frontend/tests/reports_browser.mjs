@@ -1,3 +1,4 @@
+import { fillDate } from "./date-input-helpers.mjs";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const assert = require("node:assert/strict");
@@ -96,6 +97,9 @@ try {
       `original navbar on ${path}`,
     );
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(
+      () => document.querySelectorAll("#mainNavbar .navbar-row").length === 3,
+    );
     assert.equal(
       await page
         .locator(".navbar-dock")
@@ -206,18 +210,18 @@ try {
   // Filter dates use the app's Persian calendar while preserving stored dates.
   await preview(() => page.locator("#reportModule").selectOption("orders"));
   await page.locator("details").first().locator("summary").click();
-  await page.locator("#reportFrom").fill("۱۴۰۵/۰۸/۰۹");
-  await page.locator("#reportTo").fill("۱۴۰۵/۰۸/۰۹");
+  await fillDate(page, "reportFrom", "۱۴۰۵/۰۸/۰۹");
+  await fillDate(page, "reportTo", "۱۴۰۵/۰۸/۰۹");
   await page.locator("#reportAddFilter").click();
   const filter = page.locator(".reports-filter-row");
   await filter.locator("select").first().selectOption("status");
-  await filter.locator("input").fill("active");
+  await filter.locator("input:visible").fill("active");
   const filtered = await preview(() =>
     page.getByRole("button", { name: "اعمال فیلترها", exact: true }).click(),
   );
   assert.equal(filtered.total, 500);
   assert.match(await page.locator("#reportSelectionCount").textContent(), /۰/);
-  await page.locator("#reportFrom").fill("۱۴۰۵/۰۸/۱۰");
+  await fillDate(page, "reportFrom", "۱۴۰۵/۰۸/۱۰");
   const bad = page.waitForResponse((r) => r.url().endsWith("/preview"));
   await page
     .getByRole("button", { name: "اعمال فیلترها", exact: true })

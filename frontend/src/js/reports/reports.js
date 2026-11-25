@@ -1,6 +1,7 @@
+import { mountDateInput, normalizeGregorianDate } from "../components/date-input.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { request, downloadBlob } from "./report-api.js";
-import { normalizeJalaliDate } from "../customers/customer-utils.js";
+import { normalizeDigits, normalizeJalaliDate } from "../customers/customer-utils.js";
 import { onPageRefresh } from "../components/data-events.js";
 
 const defaults = {
@@ -43,7 +44,7 @@ function createReports() {
     "aria-hidden": "true",
   });
   root.innerHTML = `<form class="navbar-panel-content reports-content" aria-labelledby="reportsTitle">
-    <header><div><h2 id="reportsTitle">گزارش جدید</h2><p>گزارش از اطلاعات ثبت‌شده در پایگاه داده</p></div><button type="button" data-dialog-close aria-label="بستن گزارش">×</button></header>
+    <header><div><h2 id="reportsTitle">گزارش جدید</h2><p>گزارش از اطلاعات ثبت‌شده در پایگاه داده</p></div><button type="button" data-dialog-close aria-label="بستن گزارش" class="dialog-close-button"></button></header>
     <div class="reports-controls"><label class="reports-search">نام گزارش<input id="reportName" maxlength="200" placeholder="نام پیش‌فرض بر اساس ماژول"></label><label>ماژول<select id="reportModule"></select></label><label class="reports-search">جست‌وجو<input id="reportSearch" type="search" placeholder="جست‌وجو در اطلاعات ماژول"></label><label id="reportDeletedLabel" class="reports-check" hidden><input type="checkbox" id="reportDeleted">شامل رکوردهای حذف‌شده</label></div>
     <details><summary>فیلترها</summary><div class="reports-controls" id="reportDateFilters"><label>ستون تاریخ<select id="reportDateField"></select></label><label>از تاریخ شمسی<input id="reportFrom" inputmode="numeric" dir="ltr" placeholder="۱۴۰۵/۰۱/۰۱"></label><label>تا تاریخ شمسی<input id="reportTo" inputmode="numeric" dir="ltr" placeholder="۱۴۰۵/۱۲/۲۹"></label></div>
     <div id="reportFilters"></div><div class="reports-controls"><button type="button" id="reportAddFilter">افزودن فیلتر</button><button type="submit" class="reports-primary">اعمال فیلترها</button><button type="button" id="reportReset">پاک کردن فیلترها</button></div></details>
@@ -58,6 +59,8 @@ function createReports() {
   document.body.append(root);
   const $ = (id) => root.querySelector(`#${id}`);
   const form = root.querySelector("form");
+  const reportFrom = mountDateInput($("reportFrom"));
+  const reportTo = mountDateInput($("reportTo"));
   let schema,
     moduleName,
     applied = {},
@@ -86,7 +89,8 @@ function createReports() {
     await load();
   }, {
     isVisible: () => dialog.active && !dialog.closing && schemaReady && !exporting
-      && ["products", "brands", "inventory_options", "purchases", "purchase_items", "order_items"].includes(moduleName),
+      && ["products", "brands", "inventory_options", "purchases", "purchase_items", "order_items",
+          "orders", "order_payments", "customers", "financial_transactions", "bank_accounts"].includes(moduleName),
   });
 
   window.addEventListener("resize", () => {
@@ -261,8 +265,7 @@ function createReports() {
     $("reportFilters").replaceChildren();
     $("reportColumnList").replaceChildren();
     $("reportSearch").value = "";
-    $("reportFrom").value = "";
-    $("reportTo").value = "";
+    reportFrom.value = reportTo.value = "";
     $("reportDeleted").checked = false;
     update();
     $("reportStatus").textContent = "در حال دریافت ستون‌ها…";
@@ -337,11 +340,29 @@ function createReports() {
       id: `reportFilterOptions${++filterId}`,
     });
     value.setAttribute("list", list.id);
+    const dateFields = node("div", undefined, { class: "report-date-filter" });
+    const calendar = node("select", undefined, { "aria-label": "تقویم فیلتر" });
+    calendar.append(new Option("شمسی", "jalali"), new Option("میلادی", "gregorian"));
+    const dateInput = node("input", undefined, { "aria-label": "تاریخ فیلتر" });
+    const clock = node("input", undefined, {
+      "aria-label": "ساعت فیلتر", placeholder: "ساعت (اختیاری)", dir: "ltr",
+    });
+    dateFields.append(calendar, dateInput, clock);
+    const date = mountDateInput(dateInput);
     const remove = node("button", "حذف", {
       type: "button",
       "aria-label": "حذف فیلتر",
     });
     let optionVersion = 0;
+    function updateValueControls(column) {
+      const isDate = ["date", "datetime"].includes(column.type);
+      const disabled = op.value === "is_null";
+      value.hidden = isDate;
+      value.disabled = isDate || disabled;
+      dateFields.hidden = !isDate;
+      clock.hidden = column.type !== "datetime";
+      date.disabled = calendar.disabled = clock.disabled = disabled || !isDate;
+    }
     async function choices() {
       const current = ++optionVersion,
         name = moduleName;
@@ -351,7 +372,7 @@ function createReports() {
       ).disabled = !["date", "datetime", "time", "integer", "number"].includes(
         c.type,
       );
-      value.disabled = op.value === "is_null";
+      updateValueControls(c);
       if (value.disabled) return;
       try {
         const data = await request(
@@ -371,12 +392,13 @@ function createReports() {
       }
     }
     fields.addEventListener("change", () => {
-      value.value = "";
+      value.value = date.value = clock.value = "";
       op.value = "eq";
+      calendar.value = "jalali";
       void choices();
     });
     op.addEventListener("change", () => {
-      value.disabled = op.value === "is_null";
+      void choices();
     });
     let timer;
     value.addEventListener("input", () => {
@@ -387,12 +409,20 @@ function createReports() {
       clearTimeout(timer);
       row.remove();
     };
-    row.append(fields, op, value, list, remove);
+    row.append(fields, op, value, dateFields, list, remove);
     $("reportFilters").append(row);
     row.refreshChoices = choices;
     row.filter = () => {
       const c = schema.columns.find((c) => c.name === fields.value);
       let v = value.value;
+      if (["date", "datetime"].includes(c.type) && op.value !== "is_null") {
+        if (!date.value) throw new Error("تاریخ فیلتر را وارد کنید.");
+        v = calendar.value === "jalali"
+          ? normalizeJalaliDate(date.value)
+          : normalizeGregorianDate(date.value.replaceAll("/", "-"));
+        const time = normalizeDigits(clock.value).trim();
+        if (c.type === "datetime" && time) v += `T${time}`;
+      }
       if (c.type === "boolean" && op.value !== "is_null") {
         if (!["true", "false"].includes(v))
           throw new Error("برای مقدار فعال، true یا false انتخاب کنید.");
@@ -413,11 +443,8 @@ function createReports() {
       const field = $("reportDateField").value,
         c = schema.columns.find((c) => c.name === field);
       if (field)
-        for (const [id, op] of [
-          ["reportFrom", "gte"],
-          ["reportTo", "lte"],
-        ]) {
-          let value = normalizeJalaliDate($(id).value);
+        for (const [date, op] of [[reportFrom, "gte"], [reportTo, "lte"]]) {
+          let value = normalizeJalaliDate(date.value);
           if (!value) continue;
           if (c.type === "datetime")
             value += op === "gte" ? "T00:00:00" : "T23:59:59.999999";
@@ -438,7 +465,7 @@ function createReports() {
   $("reportAddFilter").onclick = addFilter;
   $("reportReset").onclick = () => {
     $("reportFilters").replaceChildren();
-    $("reportFrom").value = $("reportTo").value = $("reportSearch").value = "";
+    reportFrom.value = reportTo.value = $("reportSearch").value = "";
     $("reportDeleted").checked = false;
     applied = {};
     void load(true);
