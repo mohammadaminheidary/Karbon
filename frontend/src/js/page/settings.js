@@ -13,6 +13,7 @@ const initializeInvoiceSettings = lazyTool(() => import("../orders/invoice-setti
 const initializeSecuritySettings = lazyTool(() => import("../auth/security-settings.js"), "initializeSecuritySettings");
 const initializeCustomerImport = lazyTool(() => import("../customers/customer-import.js"), "initializeCustomerImport");
 const initializeBackupSettings = lazyTool(() => import("../components/backup-settings.js"), "initializeBackupSettings");
+const initializeFactoryReset = lazyTool(() => import("../auth/factory-reset.js"), "initializeFactoryReset");
 const initializeFiscalYears = lazyTool(() => import("../fiscal-years/fiscal-settings.js"), "initializeFiscalYears");
 const openFaceRegistration = lazyTool(() => import("../attendance/face-panel.js"), "openFaceRegistration");
 
@@ -65,6 +66,7 @@ const settingsSections = new Map([
   ["appearance", null],
   ["security", initializeSecuritySettings],
   ["backup", initializeBackupSettings],
+  ["factory-reset", initializeFactoryReset],
   ["fiscal-year", initializeFiscalYears],
   ["data-import", initializeCustomerImport],
 ]);

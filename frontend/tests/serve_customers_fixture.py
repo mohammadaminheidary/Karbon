@@ -25,6 +25,7 @@ parser.add_argument("--frontend-port", type=int, default=5501)
 parser.add_argument("--customers", type=int, default=0)
 parser.add_argument("--finance", action="store_true", help="Create finance references in the disposable database")
 parser.add_argument("--invoice-designer", action="store_true", help="Add an administrator to the disposable database")
+parser.add_argument("--factory-reset", action="store_true", help="Seed an administrator and predictable CAPTCHA for the disposable reset test")
 parser.add_argument("--orders", action="store_true", help="Seed products only in the disposable database")
 parser.add_argument("--members", type=int, default=0, help="Seed members only in the disposable database")
 parser.add_argument("--bank-ledger", type=int, default=0, help="Seed account ledger rows only in the disposable database")
@@ -98,6 +99,9 @@ with tempfile.TemporaryDirectory(prefix="karbon-browser-test-") as directory:
     env = dict(os.environ, KARBON_DATABASE_PATH=str(Path(directory) / "test.db"), KARBON_JWT_SECRET=secrets.token_urlsafe(32))
     bootstrap = f'''
 import app
+if {args.factory_reset!r}:
+    from routes import factory_reset
+    factory_reset.choice = lambda _: "A"
 from database import SessionLocal
 from models.user import User
 from models.member import Member
@@ -114,7 +118,7 @@ import uvicorn
 app.app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:{args.frontend_port}"], allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type", "Authorization"], expose_headers=["Retry-After"])
 with SessionLocal() as db:
     db.add(User(username="customers-test", password_hash=hash_password("test-password")))
-    if {args.invoice_designer!r}:
+    if {args.invoice_designer or args.factory_reset!r}:
         db.add(User(username="admin", password_hash=hash_password("test-password")))
     for index in range({args.members}):
         db.add(Member(first_name=f"عضو {{index + 1}}", last_name="آزمایشی", phone=f"0912{{index + 1:07d}}"))

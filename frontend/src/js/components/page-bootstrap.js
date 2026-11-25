@@ -2,6 +2,19 @@
 // The HTML owns the shell; a failed import must never leave an endless spinner.
 (() => {
   const page = document.documentElement;
+  const resetKey = "karbon-reset-generation";
+  const clearPreviousSession = () => {
+    try {
+      const generation = localStorage.getItem(resetKey);
+      if (!generation || sessionStorage.getItem(resetKey) === generation) return;
+      Object.keys(sessionStorage).filter((key) => /^karbon[-_]/.test(key)).forEach((key) => sessionStorage.removeItem(key));
+      sessionStorage.setItem(resetKey, generation);
+    } catch { /* Storage can be disabled by browser policy. */ }
+  };
+  clearPreviousSession();
+  window.addEventListener("storage", (event) => {
+    if (event.key === resetKey) clearPreviousSession();
+  });
   const navigation = performance.getEntriesByType("navigation")[0];
   const fromKarbon = document.referrer.startsWith(`${window.location.origin}/`);
   if (

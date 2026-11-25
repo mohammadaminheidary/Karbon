@@ -31,6 +31,7 @@ from routes.faces import router as faces_router
 from routes.dashboard import router as dashboard_router
 from routes.reports import router as reports_router
 from routes.backup import router as backup_router
+from routes.factory_reset import router as factory_reset_router
 from services.database_setup import initialize_database
 from routes.fiscal_years import router as fiscal_years_router
 from services.database_maintenance import DatabaseMaintenanceMiddleware, database_access
@@ -79,6 +80,8 @@ app.add_middleware(PrivateResponseMiddleware)
 
 @app.exception_handler(RequestValidationError)
 async def private_face_validation(request, error):
+    if request.url.path.startswith("/api/settings/factory-reset"):
+        return JSONResponse({"detail": "اطلاعات فرم بازنشانی نامعتبر است."}, status_code=422)
     if request.url.path.startswith("/api/settings/backup"):
         return JSONResponse({"detail": "اطلاعات درخواست پشتیبان نامعتبر است."}, status_code=422)
     if request.url.path.startswith("/api/settings/fiscal-years/") and request.url.path.endswith("/close"):
@@ -203,6 +206,7 @@ app.include_router(faces_router)
 app.include_router(dashboard_router)
 app.include_router(reports_router)
 app.include_router(backup_router)
+app.include_router(factory_reset_router)
 app.include_router(fiscal_years_router)
 
 

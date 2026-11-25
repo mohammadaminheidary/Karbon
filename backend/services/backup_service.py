@@ -23,6 +23,7 @@ from sqlalchemy import create_engine, inspect
 import config
 from database import Base
 from models.fiscal_year import FISCAL_TABLES
+from models.factory_reset import CHALLENGE_COLUMNS, FactoryResetChallenge, upgrade_factory_reset_challenges
 from models.inventory import ProductionRun
 from services.invoice_settings_service import INVOICE_COLUMNS, SETTINGS_TABLES, initialize_invoice_storage
 from security.face_templates import template_key
@@ -202,9 +203,11 @@ def validate_database(path, recovery):
                 continue
             if legacy_invoices and table.name in invoice_names:
                 continue
-            if table is ProductionRun.__table__ and table.name not in table_names:
+            if table in (ProductionRun.__table__, FactoryResetChallenge.__table__) and table.name not in table_names:
                 continue
             required = set(table.columns.keys())
+            if table is FactoryResetChallenge.__table__:
+                required -= CHALLENGE_COLUMNS.keys()
             if table.name == "purchases":
                 required -= PURCHASE_REVISION_COLUMNS.keys()
             if table.name == "fiscal_inventory_changes":
@@ -361,10 +364,11 @@ def restore_snapshot(snapshot, recovery):
         if not inspect(staged).has_table("fiscal_years"):
             Base.metadata.create_all(staged, tables=FISCAL_TABLES)
         Base.metadata.create_all(staged, tables=SETTINGS_TABLES)
-        Base.metadata.create_all(staged, tables=[ProductionRun.__table__])
+        Base.metadata.create_all(staged, tables=[ProductionRun.__table__, FactoryResetChallenge.__table__])
         with staged.begin() as connection:
             connection.exec_driver_sql("BEGIN IMMEDIATE")
             upgrade_purchase_revisions(connection)
+            upgrade_factory_reset_challenges(connection)
         initialize_invoice_storage(staged)
         upgrade_product_constraints(staged)
         initialize_fiscal_storage(staged, zone=ZoneInfo(recovery["timezone"]))
