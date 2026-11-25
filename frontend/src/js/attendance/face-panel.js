@@ -38,7 +38,7 @@ class FacePanel {
     this.root.className = "bottom-curtain face-panel";
     this.root.setAttribute("aria-hidden", "true");
     this.root.innerHTML = `<form class="navbar-panel-content face-content" aria-labelledby="memberFaceTitle">
-      <header class="face-header"><div><h2 id="memberFaceTitle"></h2><p id="memberFaceDescription"></p></div><button type="button" data-dialog-close class="face-close" aria-label="بستن">×</button></header>
+      <header class="face-header"><div><h2 id="memberFaceTitle"></h2><p id="memberFaceDescription"></p></div><button type="button" data-dialog-close class="dialog-close-button" aria-label="بستن"></button></header>
       <section id="faceScanSection">
         <p class="face-privacy">سه تصویر ثبت چهره و الگوی آن به‌صورت رمزگذاری‌شده نگهداری می‌شوند و هر زمان قابل حذف‌اند. تصاویر شناسایی فقط برای پردازش محلی استفاده می‌شوند.</p>
         <label id="faceConsentLabel" class="face-consent"><input id="faceConsent" type="checkbox" />با رضایت عضو، چهره او برای ثبت ورود ذخیره شود.</label>

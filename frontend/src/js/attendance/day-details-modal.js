@@ -129,16 +129,11 @@ function ensureModal() {
 
   headerText.append(eyebrow, title);
 
-  const closeButton = createElement(
-    "button",
-    "flex h-9 w-9 items-center justify-center rounded-xl bg-alabaster text-xl text-mirage/45 transition-colors hover:text-mirage",
-  );
+  const closeButton = createElement("button", "dialog-close-button");
 
   closeButton.type = "button";
 
   closeButton.setAttribute("aria-label", "بستن");
-
-  closeButton.textContent = "×";
 
   closeButton.addEventListener("click", closeDayDetailsModal);
 

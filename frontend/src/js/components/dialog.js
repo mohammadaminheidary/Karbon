@@ -28,16 +28,23 @@ function syncBackground() {
 }
 
 export class Dialog {
-  constructor(id, { canClose = () => true, onCancel = () => {} } = {}) {
+  constructor(id, { canClose = () => true, onCancel = () => {}, animateNativeClose = false,
+    restoreFocus = (previousFocus) => previousFocus } = {}) {
     this.root = document.getElementById(id);
     this.panel = this.root.querySelector(
-      '[role="dialog"], [role="alertdialog"]',
+      '[data-dialog-panel], [role="dialog"], [role="alertdialog"]',
     );
     this.panel.tabIndex = -1;
     this.canClose = canClose;
     this.onCancel = onCancel;
+    this.animateNativeClose = animateNativeClose;
+    this.restoreFocus = restoreFocus;
     this.root.querySelectorAll("[data-dialog-close]").forEach((button) => {
       button.addEventListener("click", () => this.cancel());
+    });
+    if (animateNativeClose) this.root.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      this.cancel();
     });
     this.root.addEventListener("keydown", (event) => {
       if (stack.at(-1) !== this) return;
@@ -49,7 +56,7 @@ export class Dialog {
       if (event.key !== "Tab") return;
       const controls = [
         ...this.panel.querySelectorAll(
-          'button, input, select, textarea, a[href], [tabindex="0"]',
+          'button, input, select, textarea, summary, a[href], [tabindex="0"]',
         ),
       ].filter(
         (element) => !element.disabled && element.getClientRects().length,
@@ -80,6 +87,7 @@ export class Dialog {
   }
 
   open(focusTarget) {
+    if (this.closing) return;
     clearTimeout(this.closeTimer);
     if (!stack.includes(this)) {
       this.previousFocus = document.activeElement;
@@ -94,38 +102,53 @@ export class Dialog {
     }
     syncBackground();
     requestAnimationFrame(() => {
+      if (this.closing || !stack.includes(this)) return;
       this.panel.classList.remove("scale-95", "opacity-0");
       this.panel.classList.add("scale-100", "opacity-100");
-      (focusTarget || this.panel).focus();
+      (focusTarget || this.panel).focus({ preventScroll: true });
     });
   }
 
   cancel() {
-    if (!this.canClose()) return;
+    if (this.closing || !this.canClose()) return;
     this.onCancel();
     this.close();
   }
 
   close() {
-    const index = stack.indexOf(this);
-    if (index < 0) return;
-    stack.splice(index, 1);
+    if (this.closing || !stack.includes(this)) return;
     this.panel.classList.remove("scale-100", "opacity-100");
     this.panel.classList.add("scale-95", "opacity-0");
+    if (this.animateNativeClose && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      this.closing = true;
+      this.panel.inert = true;
+      this.root.classList.add("is-closing");
+      this.closeTimer = setTimeout(() => this.finishClose(), 200);
+      return;
+    }
+    this.finishClose();
+  }
+
+  finishClose() {
+    stack.splice(stack.indexOf(this), 1);
+    this.closing = false;
+    this.root.classList.remove("is-closing");
     this.root.setAttribute("aria-hidden", "true");
     if (this.root.tagName === "DIALOG") this.root.close();
     syncBackground();
     this.root.inert = true;
-    if (
-      this.previousFocus?.isConnected &&
-      !this.previousFocus.closest("[inert]") &&
-      !this.previousFocus.disabled
-    )
-      this.previousFocus.focus();
+    const target = this.restoreFocus(this.previousFocus);
+    if (target?.isConnected && !target.closest("[inert]") && !target.disabled)
+      target.focus({ preventScroll: true });
     else stack.at(-1)?.panel.focus();
-    this.closeTimer = setTimeout(() => {
+    const hide = () => {
       this.root.classList.add("hidden");
       this.root.classList.remove("flex");
-    }, 200);
+    };
+    if (this.animateNativeClose) {
+      this.panel.inert = false;
+      hide();
+    }
+    else this.closeTimer = setTimeout(hide, 200);
   }
 }

@@ -472,6 +472,35 @@ html:has(> body > .navigation-content) {
   transform: translateY(0);
 }
 
+.dialog-close-button {
+  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-mirage/40 transition-colors hover:bg-alizarin-crimson/10 hover:text-alizarin-crimson;
+}
+
+.dialog-close-button::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 6l12 12M18 6 6 18' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+@media (forced-colors: active) {
+  .dialog-close-button::before {
+    background: ButtonText;
+    forced-color-adjust: none;
+  }
+}
+
+.dialog-close-tooltip {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: 100000;
+  margin: 0;
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
 @media (hover: hover) {
   .navbar-item:hover {
     color: var(--color-persian-blue);
@@ -565,7 +594,8 @@ html:has(> body > .navigation-content) {
 @media (prefers-reduced-motion: reduce) {
   .navbar-item,
   .navbar-item::before,
-  .navbar-tooltip {
+  .navbar-tooltip,
+  .dialog-close-button {
     transition: none;
   }
 }

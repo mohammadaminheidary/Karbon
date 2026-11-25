@@ -1777,9 +1777,7 @@
       <div role="dialog" aria-modal="true" aria-labelledby="customerImportTitle" class="finance-surface min-w-0 w-full">
         <header class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-french-gray/30 bg-white px-4 py-3 sm:px-6">
           <h2 id="customerImportTitle" class="text-lg font-black">ورود مشتریان از اکسل</h2>
-          <button type="button" data-dialog-close class="grid size-10 shrink-0 place-items-center rounded-xl text-mirage/65 hover:bg-mirage/10" aria-label="بستن پنجره ورود مشتریان">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" class="size-5"><path d="m6 6 12 12M18 6 6 18"/></svg>
-          </button>
+          <button type="button" data-dialog-close class="dialog-close-button" aria-label="بستن پنجره ورود مشتریان"></button>
         </header>
         <div class="p-4 sm:p-6">
           <p id="customerImportHelp" class="text-sm text-mirage/70">فایل ‎.xlsx‎ را انتخاب کنید. ردیف اول باید عنوان ستون‌ها باشد. فقط نام و نام خانوادگی الزامی‌اند.</p>
@@ -1837,10 +1835,9 @@
           <button
             id="closeMemberFormButton"
             type="button"
-            class="flex h-9 w-9 items-center justify-center rounded-xl border border-french-gray/30 text-xl text-mirage/50 hover:bg-alabaster"
-          >
-            ×
-          </button>
+            class="dialog-close-button"
+            aria-label="بستن"
+          ></button>
         </div>
 
         <form id="memberForm" class="p-6" novalidate>
