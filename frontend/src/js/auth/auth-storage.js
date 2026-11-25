@@ -1,6 +1,24 @@
 import { invalidateApiCache } from "../components/api-cache.js";
 
 const AUTH_KEY = "karbon_auth";
+const REMEMBERED_USERNAME_KEY = "karbon_remembered_username";
+
+export function getRememberedUsername() {
+  try {
+    return localStorage.getItem(REMEMBERED_USERNAME_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setRememberedUsername(username) {
+  try {
+    if (username === null) localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+    else localStorage.setItem(REMEMBERED_USERNAME_KEY, username);
+  } catch {
+    // Browsers can block local preferences independently of form interaction.
+  }
+}
 
 export function saveAuth(data) {
   if (

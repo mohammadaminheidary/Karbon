@@ -1,5 +1,5 @@
 import { loginUser } from "./auth-api.js";
-import { saveAuth } from "./auth-storage.js";
+import { getRememberedUsername, saveAuth, setRememberedUsername } from "./auth-storage.js";
 import { validateLogin } from "../utils/validator.js";
 import { notify } from "../components/notifications.js";
 
@@ -12,8 +12,25 @@ export function initLogin() {
   }
 
   const loginButton = form.querySelector("button[type='submit']");
+  const usernameInput = document.getElementById("username");
+  const rememberUsername = document.getElementById("rememberUsername");
   const buttonContent = loginButton.innerHTML;
   let submitting = false;
+
+  function restoreUsernamePreference() {
+    const remembered = getRememberedUsername();
+    rememberUsername.checked = remembered !== null;
+    if (remembered) usernameInput.value = remembered;
+  }
+  function saveUsernamePreference() {
+    setRememberedUsername(rememberUsername.checked ? usernameInput.value.trim() : null);
+  }
+  restoreUsernamePreference();
+  rememberUsername.addEventListener("change", saveUsernamePreference);
+  usernameInput.addEventListener("input", () => {
+    if (rememberUsername.checked) saveUsernamePreference();
+  });
+
   function resetForm() {
     submitting = false;
     loginButton.disabled = false;
@@ -21,13 +38,17 @@ export function initLogin() {
     form.removeAttribute("aria-busy");
   }
   window.addEventListener("pageshow", (event) => {
-    if (event.persisted) resetForm();
+    if (event.persisted) {
+      resetForm();
+      restoreUsernamePreference();
+    }
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (submitting) return;
 
-    const username = document.getElementById("username").value.trim();
+    const username = usernameInput.value.trim();
+    saveUsernamePreference();
 
     const password = document.getElementById("passwordInput").value;
 

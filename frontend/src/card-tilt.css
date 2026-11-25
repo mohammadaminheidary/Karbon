@@ -22,7 +22,7 @@
         z-index: 3;
         border-radius: inherit;
         background: radial-gradient(
-          ellipse 55% 70% at var(--card-light-x, 50%) var(--card-light-y, 50%),
+          var(--card-light-shape, ellipse 55% 70%) at var(--card-light-x, 50%) var(--card-light-y, 50%),
           rgb(255 255 255 / 18%),
           rgb(255 255 255 / 5%) 56%,
           transparent
@@ -31,6 +31,10 @@
         pointer-events: none;
         transition: opacity 190ms ease-out;
       }
+    }
+
+    #loginForm {
+      --card-light-shape: circle clamp(9rem, 42vw, 13rem);
     }
   }
 
