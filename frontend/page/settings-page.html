@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="../src/inventory-settings.css" />
     <link rel="stylesheet" href="../src/face-attendance.css" />
     <link rel="stylesheet" href="../src/settings.css" />
+    <link rel="stylesheet" href="../src/invoice-settings.css" />
     <script type="module" data-page-entry blocking="render" src="../src/js/page/settings.js"></script>
   </head>
 
@@ -512,6 +513,12 @@
                     <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3ZM9 7h6M9 11h6M9 15h3" /></svg
                   ><span>فاکتورها</span>
                 </button>
+                <button type="button" id="settings-tab-invoice-settings" aria-controls="settings-panel-invoice-settings"
+                  data-settings-target="invoice-settings" class="settings-nav-button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                    <path d="M5 3h11l3 3v15H5zM8 9h8M8 13h5M8 17h7" />
+                  </svg><span>تنظیمات فاکتور</span>
+                </button>
               </div>
               <div class="settings-nav-group">
                 <p class="settings-nav-label">کالا و انبار</p>
@@ -792,6 +799,17 @@
                         ><strong>فاکتورها</strong
                         ><span>جستجو و مدیریت فاکتورهای مشتریان</span></span
                       ><span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button>
+                  <button type="button" data-open-settings-section="invoice-settings" class="settings-category-card card-tilt">
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                          <path d="M5 3h11l3 3v15H5zM8 9h8M8 13h5M8 17h7" />
+                        </svg>
+                      </span>
+                      <span class="settings-category-copy"><strong>تنظیمات فاکتور</strong><span>طراحی قالب، اطلاعات فروشگاه و چاپ</span></span>
+                      <span class="settings-card-arrow" aria-hidden="true">‹</span>
                     </span>
                   </button>
                 </div>
@@ -1093,6 +1111,9 @@
               <div id="settingsInvoicesList" class="mt-4 space-y-4"></div>
               <button id="settingsInvoicesMore" type="button" class="finance-button mt-5 border border-french-gray/40" hidden>نمایش بیشتر</button>
             </section>
+
+            <section id="settings-panel-invoice-settings" aria-labelledby="settings-tab-invoice-settings"
+              data-settings-panel="invoice-settings" class="finance-surface hidden min-w-0 w-full max-w-full"></section>
 
             <section id="settings-panel-products" aria-labelledby="settings-tab-products" data-settings-panel="products" data-card-tilt-section="products"
               class="finance-surface hidden min-w-0 w-full max-w-full"

@@ -24,6 +24,7 @@ parser.add_argument("--backend-port", type=int, default=8000)
 parser.add_argument("--frontend-port", type=int, default=5501)
 parser.add_argument("--customers", type=int, default=0)
 parser.add_argument("--finance", action="store_true", help="Create finance references in the disposable database")
+parser.add_argument("--invoice-designer", action="store_true", help="Add an administrator to the disposable database")
 parser.add_argument("--orders", action="store_true", help="Seed products only in the disposable database")
 parser.add_argument("--members", type=int, default=0, help="Seed members only in the disposable database")
 parser.add_argument("--bank-ledger", type=int, default=0, help="Seed account ledger rows only in the disposable database")
@@ -113,6 +114,8 @@ import uvicorn
 app.app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:{args.frontend_port}"], allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type", "Authorization"], expose_headers=["Retry-After"])
 with SessionLocal() as db:
     db.add(User(username="customers-test", password_hash=hash_password("test-password")))
+    if {args.invoice_designer!r}:
+        db.add(User(username="admin", password_hash=hash_password("test-password")))
     for index in range({args.members}):
         db.add(Member(first_name=f"عضو {{index + 1}}", last_name="آزمایشی", phone=f"0912{{index + 1:07d}}"))
     for index in range({args.customers}):

@@ -8,6 +8,7 @@ const initializeBankAccounts = lazyTool(() => import("../finance/bank-accounts.j
 const initializeInventorySettings = lazyTool(() => import("../warehouse/inventory-settings.js"), "initializeInventorySettings");
 const initializeBrandSettings = lazyTool(() => import("../warehouse/brand-settings.js"), "initializeBrandSettings");
 const initializeProductSettings = lazyTool(() => import("../orders/product-settings.js"), "initializeProductSettings");
+const initializeInvoiceDesignSettings = lazyTool(() => import("../invoices/invoice-settings.js"), "initializeInvoiceDesignSettings");
 const initializeInvoiceSettings = lazyTool(() => import("../orders/invoice-settings.js"), "initializeInvoiceSettings");
 const initializeSecuritySettings = lazyTool(() => import("../auth/security-settings.js"), "initializeSecuritySettings");
 const initializeCustomerImport = lazyTool(() => import("../customers/customer-import.js"), "initializeCustomerImport");
@@ -60,6 +61,7 @@ const settingsSections = new Map([
   ["units", initializeInventorySettings],
   ["brands", initializeBrandSettings],
   ["invoices", initializeInvoiceSettings],
+  ["invoice-settings", initializeInvoiceDesignSettings],
   ["appearance", null],
   ["security", initializeSecuritySettings],
   ["backup", initializeBackupSettings],
