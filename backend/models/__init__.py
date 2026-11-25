@@ -9,7 +9,7 @@ from .attendance import Attendance
 from .customer import Customer
 from .finance import BankAccount, BankDirectory, ExpenseCategory, FinancialTransaction
 from .order import Product, Order, OrderItem, OrderPayment
-from . import fiscal_year
+from . import fiscal_year, invoice_settings
 
 
 __all__ = [

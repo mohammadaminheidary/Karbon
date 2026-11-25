@@ -9,7 +9,7 @@ from config import app_timezone
 from models.document import Document
 from models.finance import FinancialTransaction
 from models.fiscal_year import FiscalBankOpening, FiscalExport, FiscalSnapshot, FiscalYear, InventoryChange, InventoryHistory
-from models.inventory import Purchase
+from models.inventory import ProductionRun, Purchase
 from models.order import Order, Product
 
 
@@ -19,7 +19,7 @@ class FiscalPeriodError(Exception):
 
 DATED_TABLES = (
     ("orders", "invoice_date"), ("financial_transactions", "transaction_date"),
-    ("documents", "date"), ("purchases", "purchase_date"),
+    ("documents", "date"), ("purchases", "purchase_date"), ("production_runs", "production_date"),
 )
 DATED_CHILDREN = (
     ("order_items", "order_id", "orders", "invoice_date"),
@@ -88,13 +88,6 @@ def in_active_period(column):
 def bank_openings(db, year):
     return dict(db.execute(select(FiscalBankOpening.bank_id, FiscalBankOpening.balance)
                            .where(FiscalBankOpening.year == year)).all())
-
-
-def stock_change(db, product, day, delta, tracked=None):
-    history = db.get(InventoryHistory, 1)
-    db.add(InventoryChange(product_id=product.id, business_date=max(day, history.available_from),
-                           delta=delta, tracked=tracked, name=product.name,
-                           product_code=product.product_code, unit=product.unit))
 
 
 def locked_date_sql(column):
@@ -166,10 +159,56 @@ def upgrade_snapshot_versions(connection):
     connection.exec_driver_sql("DROP TABLE fiscal_snapshots_v1")
 
 
+def upgrade_inventory_references(connection):
+    columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(fiscal_inventory_changes)")}
+    if "posted_at" not in columns:
+        connection.exec_driver_sql("ALTER TABLE fiscal_inventory_changes ADD COLUMN posted_at DATETIME")
+    if "reference" not in columns:
+        connection.exec_driver_sql("ALTER TABLE fiscal_inventory_changes ADD COLUMN reference VARCHAR(100)")
+        # The legacy journal has no source IDs. A negative movement with no
+        # tracking-state change came from a sale. Link only complete groups of
+        # equal product, date and quantity, including voided invoices.
+        connection.exec_driver_sql("""
+            WITH order_quantities AS (
+                SELECT o.id AS order_id, i.product_id, MAX(o.invoice_date, h.available_from) AS day,
+                       -SUM(i.quantity) AS delta
+                FROM orders o JOIN order_items i ON i.order_id = o.id
+                CROSS JOIN fiscal_inventory_history h
+                WHERE h.id = 1 GROUP BY o.id, i.product_id
+            ), sales AS (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY product_id, day, delta ORDER BY order_id) AS seq,
+                       COUNT(*) OVER (PARTITION BY product_id, day, delta) AS size
+                FROM order_quantities
+            ), changes AS (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY product_id, business_date, delta ORDER BY id) AS seq,
+                       COUNT(*) OVER (PARTITION BY product_id, business_date, delta) AS size
+                FROM fiscal_inventory_changes WHERE tracked IS NULL AND delta < 0
+            ), matches AS (
+                SELECT c.id, 'sale:' || s.order_id || ':issue' AS reference FROM changes c JOIN sales s
+                  ON s.product_id = c.product_id AND s.day = c.business_date AND s.delta = c.delta
+                 AND s.size = c.size AND s.seq = c.seq
+            )
+            UPDATE fiscal_inventory_changes AS c
+            SET reference = COALESCE((SELECT reference FROM matches WHERE id = c.id), 'legacy:' || c.id)
+        """)
+    connection.exec_driver_sql("""CREATE UNIQUE INDEX IF NOT EXISTS ux_inventory_change_reference_product
+        ON fiscal_inventory_changes(reference, product_id)""")
+    connection.exec_driver_sql("""CREATE INDEX IF NOT EXISTS ix_inventory_change_product_id
+        ON fiscal_inventory_changes(product_id, id)""")
+    connection.exec_driver_sql("""CREATE TRIGGER IF NOT EXISTS inventory_change_requires_reference
+        BEFORE INSERT ON fiscal_inventory_changes WHEN NEW.reference IS NULL OR NEW.reference = ''
+        BEGIN SELECT RAISE(ABORT, 'missing inventory reference'); END""")
+    for action in ("UPDATE", "DELETE"):
+        connection.exec_driver_sql(f"""CREATE TRIGGER IF NOT EXISTS inventory_change_no_{action.lower()}
+            BEFORE {action} ON fiscal_inventory_changes
+            BEGIN SELECT RAISE(ABORT, 'inventory journal is append-only'); END""")
+
+
 def initialize_fiscal_storage(engine, zone=None):
     with Session(engine) as db:
         db.execute(text("BEGIN IMMEDIATE"))
         upgrade_snapshot_versions(db.connection())
+        upgrade_inventory_references(db.connection())
         if active_period(db):
             install_guards(db.connection())
         if db.get(InventoryHistory, 1) is None:
@@ -181,7 +220,7 @@ def initialize_fiscal_storage(engine, zone=None):
             available_from = max(filter(None, (today, last_sale, last_purchase)))
             db.add(InventoryHistory(id=1, available_from=available_from))
             for product in db.scalars(select(Product).where(Product.deleted_at.is_(None))):
-                db.add(InventoryChange(product_id=product.id, business_date=available_from,
+                db.add(InventoryChange(reference="opening", product_id=product.id, business_date=available_from,
                                        delta=product.stock or 0, tracked=product.stock is not None,
                                        name=product.name, product_code=product.product_code, unit=product.unit))
         db.commit()
@@ -192,7 +231,8 @@ def observed_years(db):
     earliest = latest = year_of(business_today())
     for column, deleted in ((Order.invoice_date, Order.deleted_at),
                             (FinancialTransaction.transaction_date, FinancialTransaction.deleted_at),
-                            (Document.date, Document.deleted_at), (Purchase.purchase_date, None)):
+                            (Document.date, Document.deleted_at), (Purchase.purchase_date, Purchase.deleted_at),
+                            (ProductionRun.production_date, ProductionRun.deleted_at)):
         query = select(func.min(column), func.max(column))
         if deleted is not None:
             query = query.where(deleted.is_(None))

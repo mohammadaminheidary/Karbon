@@ -5,6 +5,7 @@
 @import "./reports.css";
 @import "./card-tilt.css";
 @import "./date-input.css";
+@import "./invoice-paper.css";
 
 @font-face {
   font-family: "Vazirmatn";

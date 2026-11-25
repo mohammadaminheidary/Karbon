@@ -574,11 +574,21 @@
               ساعت هنگام ثبت، به وقت تهران از سیستم خوانده می‌شود.
             </p>
             <label class="sm:col-span-2"
-              >عنوان
+              ><span id="transactionSourceLabel">مشتری</span>
               <select id="transactionSource" class="finance-field" required>
                 <option value="">انتخاب کنید</option>
               </select></label
             >
+            <div id="transactionCustomer" class="sm:col-span-2" hidden>
+              <dl class="orders-customer-details">
+                <div><dt>نام و نام خانوادگی</dt><dd id="transactionCustomerName"></dd></div>
+                <div><dt>شماره تماس</dt><dd id="transactionCustomerPhone"></dd></div>
+                <div class="col-span-2 sm:col-span-1"><dt>آدرس</dt><dd id="transactionCustomerAddress"></dd></div>
+                <div><dt>مجموع مبالغ فاکتورها</dt><dd id="transactionCustomerInvoiced" class="font-bold"></dd></div>
+                <div><dt>بدهی باقی‌مانده</dt><dd id="transactionCustomerDebt" class="font-bold text-alizarin-crimson"></dd></div>
+              </dl>
+              <p id="transactionCustomerStatus" class="mt-1 text-xs text-mirage/60" role="status" hidden></p>
+            </div>
             <label
               >کد حساب
               <input
@@ -598,7 +608,14 @@
                 required
                 autocomplete="off"
             /></label>
-            <label class="sm:col-span-2"
+            <fieldset id="transactionPayment" class="sm:col-span-2" hidden disabled>
+              <legend class="text-sm font-bold">روش پرداخت</legend>
+              <div id="transactionPaymentMethods" class="orders-payment-methods"></div>
+            </fieldset>
+            <p id="transactionCashAccount" class="text-xs text-mirage/60 sm:col-span-2" hidden>
+              حساب مقصد: صندوق نقدی
+            </p>
+            <label id="transactionBankField" class="sm:col-span-2"
               >بانک
               <select id="transactionBank" class="finance-field" required>
                 <option value="">انتخاب بانک</option>

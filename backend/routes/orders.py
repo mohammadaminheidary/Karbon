@@ -1,12 +1,12 @@
 from typing import Literal
 from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy.orm import Session
-from database import get_database
+from database import get_database, read_snapshot
 from security.auth import get_current_user
 from routes.finance import finance_errors
-from schemas.order_schema import OrderWrite, ProductWrite, ProductEdit, SettlementWrite
+from schemas.order_schema import OrderWrite, OrderEdit, ProductWrite, ProductEdit, SettlementWrite
 from schemas.finance_schema import FinanceDelete
-from services import order_service as service
+from services import order_service as service, invoice_settings_service as design
 from services.fiscal_period import active_period, effective_day, jalali
 
 router = APIRouter(prefix="/api", tags=["Orders"], dependencies=[Depends(get_current_user)])
@@ -15,10 +15,12 @@ router = APIRouter(prefix="/api", tags=["Orders"], dependencies=[Depends(get_cur
 @router.get("/settings/invoices")
 def invoices(search: str = Query("", max_length=200), skip: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100), db: Session = Depends(get_database)):
     with finance_errors():
+        read_snapshot(db)
         return service.list_invoices(db, search, skip, limit)
 
 
 @router.delete("/orders/{order_id}/invoice")
+@router.delete("/orders/{order_id}")
 def delete_invoice(data: FinanceDelete, order_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database), user=Depends(get_current_user)):
     with finance_errors():
         return service.delete_invoice(db, order_id, data, user)
@@ -43,9 +45,12 @@ def delete_product(data: FinanceDelete, product_id: int = Path(gt=0, le=92233720
 
 
 @router.get("/orders/{order_id}/invoice")
-def final_invoice(order_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database)):
+def final_invoice(order_id: int = Path(gt=0, le=9223372036854775807), include_balance: bool = False,
+                  db: Session = Depends(get_database)):
     with finance_errors():
-        return service.invoice(db, order_id)
+        if include_balance:
+            read_snapshot(db)
+        return service.invoice(db, order_id, include_balance=include_balance)
 
 
 @router.post("/orders/{order_id}/payments", status_code=201)
@@ -63,12 +68,13 @@ def create_product(data: ProductWrite, db: Session = Depends(get_database)):
 @router.get("/orders/next-number")
 def next_number(db: Session = Depends(get_database)):
     with finance_errors():
-        return {"order_number": service.next_number(db), "business_jalali": jalali(effective_day(active_period(db)))}
+        return {"order_number": service.next_number(db), **design.workflow_settings(db, "sale"), "business_jalali": jalali(effective_day(active_period(db)))}
 
 
 @router.get("/orders")
 def orders(status: Literal["active", "completed"] = "active", skip: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100), db: Session = Depends(get_database)):
     with finance_errors():
+        read_snapshot(db)
         return service.list_orders(db, status, skip, limit)
 
 
@@ -81,7 +87,14 @@ def create_order(data: OrderWrite, db: Session = Depends(get_database)):
 @router.get("/orders/{order_id}")
 def order_details(order_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database)):
     with finance_errors():
-        return service.order_details(db, order_id)
+        read_snapshot(db)
+        return service.order_details(db, order_id, editing=True)
+
+
+@router.put("/orders/{order_id}")
+def edit_order(data: OrderEdit, order_id: int = Path(gt=0, le=9223372036854775807), db: Session = Depends(get_database)):
+    with finance_errors():
+        return service.edit_order(db, order_id, data)
 
 
 @router.post("/orders/{order_id}/complete")

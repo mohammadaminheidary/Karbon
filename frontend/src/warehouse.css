@@ -384,7 +384,7 @@
   cursor: pointer;
 }
 .warehouse-surface .warehouse-buy:focus-visible,
-.purchase-page :is(button, a, input, select):focus-visible {
+.purchase-page :is(button, a, input:not([data-date-part]), select):focus-visible {
   outline: 2px solid var(--color-persian-blue);
   outline-offset: 3px;
 }
@@ -443,9 +443,8 @@ html:has(body.warehouse-surface) {
   background: color-mix(in srgb, var(--color-persian-blue) 4%, transparent);
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
 }
-.purchase-metadata label span {
+.purchase-metadata #purchaseDateHint {
   display: block;
-  margin-top: 8px;
   color: #64748b;
   font-size: 0.6875rem;
 }
@@ -463,7 +462,7 @@ html:has(body.warehouse-surface) {
   font-size: 0.8125rem;
   font-weight: 600;
 }
-.purchase-page :is(input, select) {
+.purchase-page :is(input:not([data-date-part]), select) {
   display: block;
   width: 100%;
   min-width: 0;
@@ -476,7 +475,7 @@ html:has(body.warehouse-surface) {
   font: inherit;
   font-size: 0.8125rem;
 }
-.purchase-page input[readonly] {
+.purchase-page input[readonly]:not([data-date-part]) {
   background: rgb(255 255 255 / 65%);
   color: #475569;
   font-size: 0.75rem;

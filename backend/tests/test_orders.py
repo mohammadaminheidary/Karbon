@@ -78,6 +78,43 @@ class OrdersIntegrationTests(unittest.TestCase):
         self.assertEqual((summary["total_orders"],summary["paid"],summary["debt"]),(4000,600,3400))
         self.assertEqual(self.request("GET","/orders?status=completed")[1]["items"],[])
 
+    def test_edit_order_and_cancel_use_the_current_items_and_payments(self):
+        order = self.post("/orders", self.payload(delivery_address="نشانی اولیه"))
+        path = f'/orders/{order["id"]}'
+        original = self.request("GET", path)[1]
+        edit = self.payload(
+            revision=original["revision"], description="سفارش اصلاح شد",
+            delivery_address="نشانی جدید", order_number="EDIT-100",
+            items=[{"product_id": self.product["id"], "quantity": 3, "unit_price": 1200}],
+            payments=[{"method": "cash", "amount": 700}],
+        )
+        self.assertEqual(self.request("PUT", path, {**edit, "payments": [{"method": "cash", "amount": 4000}]})[0], 422)
+        self.assertEqual(self.request("GET", path)[1], original)
+        status, saved = self.request("PUT", path, edit)
+        self.assertEqual(status, 200, saved)
+        self.assertEqual((saved["revision"], saved["total"], saved["paid"], saved["remaining"]), (1, 3100, 700, 2400))
+        self.assertEqual((saved["invoice_code"], saved["order_number"], saved["delivery_address"]),
+                         (order["invoice_code"], "EDIT-100", "نشانی جدید"))
+        self.assertEqual(self.request("GET", path)[1], saved)
+        self.assertEqual(self.request("GET", f"{path}/invoice")[1]["items"], saved["items"])
+        self.assertEqual(self.request("PUT", path, edit), (200, saved))
+        self.assertEqual(self.request("PUT", path, {**edit, "request_id": str(uuid4())})[0], 409)
+        with closing(sqlite3.connect(self.database)) as db:
+            stock = db.execute("SELECT stock FROM products WHERE id=?", (self.product["id"],)).fetchone()[0]
+            self.assertEqual(stock, 7)
+            original_snapshot = db.execute(
+                "SELECT json_extract(invoice_snapshot, '$.delivery_address') FROM orders WHERE id=?", (order["id"],),
+            ).fetchone()[0]
+            self.assertEqual(original_snapshot, "نشانی اولیه")
+        confirm = {"password": "test-password", "confirmed": True}
+        self.assertEqual(self.request("DELETE", path, confirm)[0], 200)
+        self.assertEqual(self.request("DELETE", path, confirm)[0], 200)
+        self.assertEqual(self.request("GET", path)[0], 404)
+        with closing(sqlite3.connect(self.database)) as db:
+            stock = db.execute("SELECT stock FROM products WHERE id=?", (self.product["id"],)).fetchone()[0]
+            self.assertEqual(stock, 10)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM financial_transactions WHERE deleted_at IS NULL").fetchone()[0], 0)
+
     def test_customer_summary_counts_ignore_search_and_pagination(self):
         empty = self.request("GET", "/customers")[1]
         self.assertEqual((empty["total_customers"], empty["unsettled_customers"], empty["settled_customers"]), (1, 0, 0))
@@ -109,7 +146,7 @@ class OrdersIntegrationTests(unittest.TestCase):
         invalid = [
             {"discount":-1}, {"discount":2501}, {"discount":True}, {"discount":"500"}, {"discount":1.5},
             {"invoice_date":"1404/12/30"}, {"payment_date":"2026-10-14"}, {"total":1}, {"invoice_code":"fake"},
-            {"customer_id":99999}, {"items":[]}, {"items":[{"product_id":self.product["id"],"quantity":11,"unit_price":1}]},
+            {"customer_id":99999}, {"items":[]},
             {"items":[{"product_id":99999,"quantity":1,"unit_price":1}]},
             {"payments":[{"method":"pos","bank_id":self.bank["id"],"amount":2001}]},
             {"payments":[{"method":"cash","bank_id":self.bank["id"],"amount":1}]},
@@ -143,12 +180,14 @@ class OrdersIntegrationTests(unittest.TestCase):
         two = {**one,"request_id":str(uuid4())}
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(lambda payload:self.request("POST","/orders",payload),[one,two]))
-        self.assertEqual(sorted(status for status,_ in results),[201,409])
+        self.assertEqual(sorted(status for status,_ in results),[201,201])
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute("SELECT stock FROM products WHERE id=?", (self.product["id"],)).fetchone()[0], -2)
 
     def test_duplicate_number_product_inactive_bank_and_aggregated_stock(self):
         self.post("/orders",self.payload(order_number="CUSTOM-1"))
         self.assertEqual(self.request("POST","/orders",self.payload(order_number="CUSTOM-1"))[0],409)
-        self.assertEqual(self.request("POST","/orders",self.payload(items=[{"product_id":self.product["id"],"quantity":5,"unit_price":1000}]*2))[0],409)
+        self.assertEqual(self.request("POST","/orders",self.payload(items=[{"product_id":self.product["id"],"quantity":5,"unit_price":1000}]*2))[0],201)
         with closing(sqlite3.connect(self.database)) as db, db:
             db.execute("UPDATE products SET active=0 WHERE id=?",(self.product["id"],))
         self.assertEqual(self.request("POST","/orders",self.payload())[0],409)

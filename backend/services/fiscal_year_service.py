@@ -11,7 +11,7 @@ from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.orm import defer
 
 import config
-from database import SessionLocal
+from database import SessionLocal, read_snapshot
 from models.customer import Customer
 from models.finance import FinancialTransaction as Tx
 from models.fiscal_year import (
@@ -19,15 +19,15 @@ from models.fiscal_year import (
     FiscalInvoiceOpening, FiscalSnapshot, FiscalYear, InventoryChange,
 )
 from models.document import Document
-from models.inventory import Purchase
-from models.order import Order, OrderPayment
+from models.inventory import ProductionRun, Purchase
+from models.order import Order
 from schemas.customer_schema import normalize_text
 from services import backup_service
 from services.database_maintenance import DatabaseBusy, lock_file, lock_path
-from services.finance_service import FinanceError, require
+from services.finance_service import FinanceError, cash_account, require
 from services.fiscal_period import active_period, effective_day, install_guards, jalali, observed_years, year_dates, year_of
 from services.fiscal_snapshot import capture, group_rows
-from services.order_service import cash_account
+from services.receivables import invoice_positions
 from services.report_service import canonical
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,10 @@ def successor_activity(db, year):
             Order.deleted_at.is_(None), Order.invoice_date.between(start, end))),
         "transactions": db.scalar(select(func.count(Tx.id)).where(
             Tx.deleted_at.is_(None), Tx.transaction_date.between(start, end))),
-        "purchases": db.scalar(select(func.count(Purchase.id)).where(Purchase.purchase_date.between(start, end))),
+        "purchases": db.scalar(select(func.count(Purchase.id)).where(
+            Purchase.deleted_at.is_(None), Purchase.purchase_date.between(start, end))),
+        "production": db.scalar(select(func.count(ProductionRun.id)).where(
+            ProductionRun.deleted_at.is_(None), ProductionRun.production_date.between(start, end))),
     }
 
 
@@ -113,7 +116,7 @@ def has_successor_activity(db, period):
     return db.scalar(select(or_(*(
         select(column).where(column.between(period.start_date, period.end_date)).exists()
         for column in (Order.invoice_date, Tx.transaction_date, Purchase.purchase_date,
-                       Document.date, InventoryChange.business_date)
+                       Document.date, ProductionRun.production_date, InventoryChange.business_date)
     ))))
 
 
@@ -294,29 +297,25 @@ def publish_exports(year, version):
 
 
 def amount_at_opening(db, customer_id):
+    read_snapshot(db)
     period = active_period(db)
     require(db, Customer, customer_id, "مشتری")
     if period is None:
         return {"year": None, "receivable": 0, "credit": 0, "invoices": []}
     opening = db.get(FiscalCustomerOpening, (period.year, customer_id))
-    opening_rows = select(FiscalInvoiceOpening.order_id).where(
-        FiscalInvoiceOpening.year == period.year, FiscalInvoiceOpening.customer_id == customer_id,
-    )
-    receipts = select(OrderPayment.order_id, func.sum(Tx.amount).label("paid")).join(Tx).where(
-        OrderPayment.order_id.in_(opening_rows), Tx.deleted_at.is_(None), Tx.transaction_date <= period.end_date,
-    ).group_by(OrderPayment.order_id).subquery()
+    positions = invoice_positions(period.end_date, [customer_id])
     invoices = []
-    query = select(FiscalInvoiceOpening, Order, func.coalesce(receipts.c.paid, 0)).join(
+    query = select(FiscalInvoiceOpening, Order, positions.c.remaining).join(
         Order, Order.id == FiscalInvoiceOpening.order_id,
-    ).outerjoin(receipts, receipts.c.order_id == Order.id).where(
+    ).join(positions, positions.c.id == Order.id).where(
         FiscalInvoiceOpening.year == period.year, FiscalInvoiceOpening.customer_id == customer_id,
     ).order_by(Order.invoice_date, Order.id)
-    for row, order, paid in db.execute(query):
-        total = order.subtotal - order.discount
+    for row, order, outstanding in db.execute(query):
+        total = order.total
         invoices.append({
             "order_id": order.id, "order_number": order.order_number, "invoice_code": order.invoice_code,
             "source_year": row.source_year, "issue_date": jalali(order.invoice_date), "due_date": jalali(order.payment_date),
-            "total": total, "paid": row.paid, "amount": row.amount, "outstanding": max(total - paid, 0),
+            "total": total, "paid": row.paid, "amount": row.amount, "outstanding": outstanding,
         })
     return {"year": period.year, "receipt_date": jalali(effective_day(period)),
             "receivable": opening.receivable if opening else 0, "credit": opening.credit if opening else 0,
@@ -324,20 +323,31 @@ def amount_at_opening(db, customer_id):
 
 
 def archive_search(data, kind, search, skip, limit):
-    customers = {c["id"]: c for c in data["customers"]}
+    customers = {c["id"]: c for c in data["customers"]} if kind != "customers" else {}
+    customer_key = "supplier_id" if kind == "purchases" else "customer_id"
+    period_only = kind not in {"customers", "purchases"}
     term = normalize_text(search).casefold()
-    result = []
+    items, total = [], 0
     for raw in reversed(data[kind]):
-        if kind != "customers" and not raw["in_period"]:
+        if period_only and not raw["in_period"]:
             continue
-        customer = raw if kind == "customers" else customers.get(raw.get("customer_id"))
-        name = f"{customer['first_name']} {customer['last_name']}" if customer else ""
-        identity = [name, customer["customer_code"], customer["permanent_id"], *customer["phone_numbers"]] if customer else []
-        refs = [raw.get(key) for key in ("order_number", "invoice_code", "transaction_number", "tracking_number",
-                                       "title", "description", "jalali_date", "bank_name")]
-        if term in normalize_text(" ".join(str(v) for v in [*identity, *refs] if v is not None)).casefold():
-            result.append({**raw, "customer_name": name})
-    return {"items": result[skip:skip + limit], "total": len(result)}
+        in_page = total >= skip and len(items) < limit
+        if term or in_page:
+            customer = raw if kind == "customers" else customers.get(raw.get(customer_key))
+            name = f"{customer['first_name']} {customer['last_name']}" if customer else ""
+            if term:
+                identity = [name, customer["customer_code"], customer["permanent_id"], *customer["phone_numbers"]] if customer else []
+                refs = [raw.get(key) for key in (
+                    "order_number", "invoice_code", "invoice_number", "transaction_number", "tracking_number",
+                    "title", "description", "jalali_date", "bank_name",
+                )]
+                searchable = " ".join(str(value) for value in [*identity, *refs] if value is not None)
+                if term not in normalize_text(searchable).casefold():
+                    continue
+            if in_page:
+                items.append({**raw, "customer_name": name})
+        total += 1
+    return {"items": items, "total": total}
 
 
 def order_at_cutoff(data, order_id):
@@ -348,8 +358,14 @@ def order_at_cutoff(data, order_id):
     c = next(c for c in data["customers"] if c["id"] == order["customer_id"])
     customer = invoice["issued_customer"] or {"code": c["customer_code"], "name": f"{c['first_name']} {c['last_name']}",
                                               "phone_numbers": c["phone_numbers"], "address": c["address"]}
-    payments = [{**tx, "transaction_id": tx["id"], "account_name": tx["bank_name"]}
-                for tx in data["transactions"] if tx["order_id"] == order_id]
+    transactions = {tx["id"]: tx for tx in data["transactions"]}
+    payments = []
+    for allocation in data["allocations"]:
+        if allocation["order_id"] == order_id:
+            tx = transactions[allocation["transaction_id"]]
+            payments.append({**tx, "transaction_id": tx["id"], "account_name": tx["bank_name"],
+                             "order_id": order_id, "amount": allocation["amount"], "method": allocation["method"]})
+    payments.sort(key=lambda row: (row["transaction_date"], row["transaction_time"], row["transaction_id"]))
     if order["invoice_date"] > data["period"]["end_date"]:
         payment_status = "not_issued"
     else:

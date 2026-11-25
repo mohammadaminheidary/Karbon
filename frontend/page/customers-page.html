@@ -12,6 +12,7 @@
 
     <link rel="stylesheet" href="../src/output.css" />
     <link rel="stylesheet" href="../src/orders.css" />
+    <link rel="stylesheet" href="../src/customer-details.css" />
     <script type="module" data-page-entry blocking="render" src="../src/js/page/customers.js"></script>
   </head>
 
@@ -332,85 +333,84 @@
     >
       <div class="mx-auto w-full max-w-[1700px] px-7 py-7 xl:px-9">
         <h1 class="sr-only">مشتریان</h1>
-        <section
-          class="grid grid-cols-1 gap-5 sm:grid-cols-3"
-          aria-label="خلاصه مشتریان"
-        >
-          <dl class="card-tilt orders-stat">
-            <dt>کل مشتریان</dt>
-            <dd id="totalCustomersCount" aria-live="polite">—</dd>
-          </dl>
-          <dl class="card-tilt orders-stat">
-            <dt>مشتریان تسویه‌نشده</dt>
-            <dd id="unsettledCustomersCount" aria-live="polite">—</dd>
-          </dl>
-          <dl class="card-tilt orders-stat">
-            <dt>مشتریان تسویه‌شده</dt>
-            <dd id="settledCustomersCount" aria-live="polite">—</dd>
-          </dl>
-        </section>
-
-        <div
-          class="mt-6 rounded-2xl border border-french-gray/30 bg-white p-2 shadow-sm"
-        >
-          <!-- Search -->
-          <div class="relative min-w-0 flex-1">
-            <label for="customerSearchInput" class="sr-only">
-              جستجوی مشتری
-            </label>
-
-            <!-- Search Icon -->
-            <div
-              class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-persian-blue/60"
-            >
-              <svg
-                class="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="7" />
-
-                <path stroke-linecap="round" d="m20 20-4-4" />
-              </svg>
-            </div>
-
-            <input
-              id="customerSearchInput"
-              type="search"
-              inputmode="search"
-              autocomplete="off"
-              placeholder="جستجو با کد، نام، نام خانوادگی یا شماره تماس..."
-              class="h-12 w-full rounded-xl border border-transparent bg-alabaster pr-12 pl-12 text-sm text-mirage outline-none transition-all duration-200 placeholder:text-mirage/40 hover:border-french-gray/40 focus:border-persian-blue focus:bg-white focus:ring-4 focus:ring-persian-blue/10"
-            />
-
-            <!-- Clear Search -->
-            <button
-              id="clearCustomerSearchButton"
-              type="button"
-              class="absolute inset-y-0 left-0 hidden items-center pl-4 text-mirage/35 transition-colors hover:text-alizarin-crimson"
-              aria-label="پاک کردن جستجو"
-              title="پاک کردن جستجو"
-            >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M6 6l12 12M18 6 6 18"
-                />
-              </svg>
-            </button>
+        <section class="grid gap-6" aria-label="خلاصه و جستجوی مشتریان">
+          <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <dl class="card-tilt orders-stat">
+              <dt>کل مشتریان</dt>
+              <dd id="totalCustomersCount" aria-live="polite">—</dd>
+            </dl>
+            <dl class="card-tilt orders-stat">
+              <dt>مشتریان تسویه‌نشده</dt>
+              <dd id="unsettledCustomersCount" aria-live="polite">—</dd>
+            </dl>
+            <dl class="card-tilt orders-stat">
+              <dt>مشتریان تسویه‌شده</dt>
+              <dd id="settledCustomersCount" aria-live="polite">—</dd>
+            </dl>
           </div>
-        </div>
+
+          <div
+            class="rounded-2xl border border-french-gray/30 bg-white p-2 shadow-sm"
+          >
+            <!-- Search -->
+            <div class="relative min-w-0 flex-1">
+              <label for="customerSearchInput" class="sr-only">
+                جستجوی مشتری
+              </label>
+
+              <!-- Search Icon -->
+              <div
+                class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-persian-blue/60"
+              >
+                <svg
+                  class="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+
+                  <path stroke-linecap="round" d="m20 20-4-4" />
+                </svg>
+              </div>
+
+              <input
+                id="customerSearchInput"
+                type="search"
+                inputmode="search"
+                autocomplete="off"
+                placeholder="جستجو با کد، نام، نام خانوادگی یا شماره تماس..."
+                class="h-12 w-full rounded-xl border border-transparent bg-alabaster pr-12 pl-12 text-sm text-mirage outline-none transition-all duration-200 placeholder:text-mirage/40 hover:border-french-gray/40 focus:border-persian-blue focus:bg-white focus:ring-4 focus:ring-persian-blue/10"
+              />
+
+              <!-- Clear Search -->
+              <button
+                id="clearCustomerSearchButton"
+                type="button"
+                class="absolute inset-y-0 left-0 hidden items-center pl-4 text-mirage/35 transition-colors hover:text-alizarin-crimson"
+                aria-label="پاک کردن جستجو"
+                title="پاک کردن جستجو"
+              >
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M6 6l12 12M18 6 6 18"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </section>
 
         <!-- ==================== Customers Workspace ==================== -->
         <!-- ==================== Customers Workspace ==================== -->
@@ -824,14 +824,13 @@
     </dialog>
     <dialog
       id="customerDetailsModal"
-      class="bottom-curtain"
+      class="orders-modal hidden"
       aria-hidden="true"
+      aria-labelledby="customerDetailsTitle"
     >
-      <form
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="customerDetailsTitle"
-        class="navbar-panel-content flex w-full flex-col"
+      <section
+        data-dialog-panel
+        class="orders-glass scale-95 opacity-0"
       >
         <header
           class="flex items-center justify-between border-b border-french-gray/30 p-5"
@@ -842,11 +841,11 @@
           <button
             type="button"
             data-dialog-close
-            aria-label="بستن جزئیات"
-            class="rounded-xl px-3 py-2 text-xl hover:bg-alabaster"
-          >
-            ×
-          </button>
+            id="closeCustomerDetailsButton"
+            aria-label="بستن"
+            autofocus
+            class="dialog-close-button"
+          ></button>
         </header>
         <div id="customerDetailsBody" class="overflow-y-auto p-5 sm:p-6"></div>
         <footer
@@ -867,7 +866,7 @@
             حذف مشتری
           </button>
         </footer>
-      </form>
+      </section>
     </dialog>
     <dialog
       id="customerDuplicateModal"

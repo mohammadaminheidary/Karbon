@@ -46,24 +46,26 @@ const numberFormatter =
   new Intl.NumberFormat("fa-IR");
 
 
-const SETTINGS_SECTIONS =
-  new Set([
-    "general",
-    "members",
-    "expenses",
-    "document-accounts",
-    "banks",
-    "products",
-    "inventory",
-    "units",
-    "brands",
-    "invoices",
-    "appearance",
-    "security",
-    "backup",
-    "fiscal-year",
-    "data-import",
-  ]);
+/** @type {Map<string, ((panel: Element | null) => unknown) | null>} */
+const settingsSections = new Map([
+  ["general", null],
+  ["members", () => {
+    if (!membersLoading) return loadMembers();
+  }],
+  ["expenses", initializeExpenseSettings],
+  ["document-accounts", initializeDocumentAccounts],
+  ["banks", initializeBankAccounts],
+  ["products", initializeProductSettings],
+  ["inventory", initializeInventorySettings],
+  ["units", initializeInventorySettings],
+  ["brands", initializeBrandSettings],
+  ["invoices", initializeInvoiceSettings],
+  ["appearance", null],
+  ["security", initializeSecuritySettings],
+  ["backup", initializeBackupSettings],
+  ["fiscal-year", initializeFiscalYears],
+  ["data-import", initializeCustomerImport],
+]);
 
 
 const DELETE_GRACE_SECONDS = 7;
@@ -180,7 +182,7 @@ function getInitialSettingsSection() {
 
 
   if (
-    SETTINGS_SECTIONS.has(
+    settingsSections.has(
       section
     )
   ) {
@@ -214,7 +216,7 @@ async function showSettingsSection(
   } = {}
 ) {
   const section =
-    SETTINGS_SECTIONS.has(
+    settingsSections.has(
       requestedSection
     )
       ? requestedSection
@@ -286,45 +288,8 @@ async function showSettingsSection(
   sectionLoads.set(section, version);
   panel?.setAttribute("aria-busy", "true");
   try {
-  if (
-    section === "members" &&
-    !membersLoading
-  ) {
-    await loadMembers();
-  }
-  if (section === "document-accounts") {
-    await initializeDocumentAccounts();
-  }
-  if (section === "expenses") {
-    await initializeExpenseSettings();
-  }
-  if (section === "banks") {
-    await initializeBankAccounts();
-  }
-  if (section === "inventory" || section === "units") {
-    await initializeInventorySettings();
-  }
-  if (section === "brands") {
-    await initializeBrandSettings();
-  }
-  if (section === "products") {
-    await initializeProductSettings();
-  }
-  if (section === "invoices") {
-    await initializeInvoiceSettings();
-  }
-  if (section === "security") {
-    await initializeSecuritySettings();
-  }
-  if (section === "data-import") {
-    await initializeCustomerImport(panel);
-  }
-  if (section === "backup") {
-    await initializeBackupSettings(panel);
-  }
-  if (section === "fiscal-year") {
-    await initializeFiscalYears(panel);
-  }
+    const initialize = settingsSections.get(section);
+    if (initialize) await initialize(panel);
   } finally {
     if (sectionLoads.get(section) === version) panel?.setAttribute("aria-busy", "false");
   }

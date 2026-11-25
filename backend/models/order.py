@@ -1,6 +1,7 @@
 """Orders own invoice data; payments reference the existing financial ledger."""
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, String, Text, JSON
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, JSON, text
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 from database import Base
 from models.finance import utc_now
 
@@ -10,12 +11,13 @@ PRODUCT_BRAND_CHECK = "(requires_brand = 0 AND brand_id IS NULL) OR (requires_br
 
 class Product(Base):
     __tablename__ = "products"
-    __table_args__ = (CheckConstraint("price >= 0 AND price <= 999999999999"), CheckConstraint("stock IS NULL OR stock >= 0"),
-                      CheckConstraint(PRODUCT_BRAND_CHECK), {"sqlite_autoincrement": True})
+    __table_args__ = (CheckConstraint("price >= 0 AND price <= 999999999999"), CheckConstraint(PRODUCT_BRAND_CHECK),
+                      Index("ux_products_name_brand", "name", text("COALESCE(brand_id, 0)"), unique=True),
+                      {"sqlite_autoincrement": True})
     id = Column(Integer, primary_key=True)
     product_code = Column(String(32), nullable=True, unique=True)
     revision = Column(Integer, nullable=False, default=1)
-    name = Column(String(150), nullable=False, unique=True)
+    name = Column(String(150), nullable=False)
     unit = Column(String(80), nullable=False)
     category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=True)
     requires_brand = Column(Boolean, nullable=False, default=False, server_default="0")
@@ -42,10 +44,18 @@ class Order(Base):
     description = Column(Text, nullable=True)
     subtotal = Column(BigInteger, nullable=False)
     discount = Column(BigInteger, nullable=False)
+    tax = Column(BigInteger, nullable=False, default=0, server_default="0")
+    shipping = Column(BigInteger, nullable=False, default=0, server_default="0")
     status = Column(String(12), nullable=False, default="active")
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     invoice_snapshot = Column(JSON, nullable=True)
+    edit_snapshot = Column(JSON, nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+
+    @hybrid_property
+    def total(self):
+        return self.subtotal - self.discount + self.tax + self.shipping
 
 
 class OrderItem(Base):

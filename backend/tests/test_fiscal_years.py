@@ -190,6 +190,82 @@ class FiscalFixture(ExitStack):
 
 
 class FiscalYearTests(unittest.TestCase):
+    def test_general_receipts_reconcile_across_rollover_and_preserve_closed_archive(self):
+        with FiscalFixture() as f:
+            bank, product = f.references()
+            customer = f.customer("مشتری")
+            order = f.order(customer, product, number="RECEIPTS", total=1000, paid=500)
+            receipt = {"request_id": str(uuid4()), "kind": "income", "customer_id": customer["id"],
+                       "bank_id": bank["id"], "amount": 200, "transaction_date": f"{f.year}/08/01"}
+            first = f.post("/finance/transactions", receipt)
+            preview = f.preview(f.year)
+            self.assertEqual((preview["summary"]["receivables"], preview["summary"]["income"]), (300, 700))
+            self.assertEqual(f.confirm(f.year, preview)[0], 200)
+            archive_path = f"{API}/{f.year}/records/orders/{order['id']}?version=1"
+            status, archive = f.call("GET", archive_path)
+            self.assertEqual(status, 200, archive)
+            self.assertEqual((archive["paid"], archive["remaining"]), (700, 300))
+            self.assertEqual({p["transaction_id"]: p["amount"] for p in archive["payments"]}[first["id"]], 200)
+
+            next_year = f.year + 1
+            second = f.post("/finance/transactions", {**receipt, "request_id": str(uuid4()), "amount": 500,
+                                                       "transaction_date": f"{next_year}/01/01"})
+            self.assertEqual(second["invoice_allocations"][0]["amount"], 300)
+            carryovers = f.call("GET", f"{API}/customers/{customer['id']}/carryovers")[1]
+            self.assertEqual((carryovers["invoices"][0]["amount"], carryovers["invoices"][0]["outstanding"]), (300, 0))
+            settlement = {"request_id": str(uuid4()), "method": "cash", "amount": 1,
+                          "transaction_date": f"{next_year}/01/01"}
+            self.assertEqual(f.call("POST", f"/orders/{order['id']}/payments", settlement)[0], 409)
+
+            new_order = f.order(customer, product, number="USES-CREDIT", total=150, year=next_year)
+            self.assertEqual((new_order["paid"], new_order["remaining"]), (150, 0))
+            status, history = f.call("GET", f"/customers/{customer['id']}/payments")
+            self.assertEqual(status, 200, history)
+            self.assertEqual(history["fiscal_year"], next_year)
+            self.assertEqual(history["summary"], {"invoiced": 1150, "paid": 1200, "outstanding": 0, "credit": 50})
+            self.assertEqual([row["id"] for row in history["items"]],
+                             [second["id"], first["id"], order["payments"][0]["transaction_id"]])
+            following = f.preview(next_year)
+            summary = following["summary"]
+            self.assertEqual((summary["receivables"], summary["credits"], summary["income"]), (0, 50, 500))
+            self.assertEqual(f.confirm(next_year, following)[0], 200)
+            f.exports(next_year, "ready")
+            status, exported = f.call("GET", f"{API}/{next_year}/exports/data")
+            self.assertEqual(status, 200, exported)
+            with ZipFile(BytesIO(exported)) as archive_zip, closing(load_workbook(BytesIO(
+                archive_zip.read(f"karbon-{next_year}.xlsx"),
+            ))) as book:
+                def rows(sheet):
+                    headers, *values = list(book[sheet].values)
+                    return [dict(zip(headers, row)) for row in values]
+
+                payment = next(row for row in rows("payments") if row["transaction_id"] == second["id"])
+                self.assertEqual((payment["amount"], payment["unapplied"]), (500, 50))
+                self.assertEqual({row["order_id"]: row["amount"] for row in rows("allocations")
+                                  if row["transaction_id"] == second["id"]}, {order["id"]: 300, new_order["id"]: 150})
+            self.assertEqual(f.call("GET", archive_path), (200, archive))
+
+    def test_purchase_archive_keeps_original_issuance_after_reopen_and_edit(self):
+        with FiscalFixture() as f:
+            _, product = f.references()
+            supplier = f.customer("تأمین‌کننده")
+            rows = [{"product_id": product["id"], "category_id": product["category_id"],
+                     "quantity": 5, "purchase_price": 700}]
+            body = {"request_id": str(uuid4()), "purchase_date": f"{f.year}/06/12",
+                    "supplier_id": supplier["id"], "rows": rows}
+            receipt = f.post("/purchases", body)
+            path = f'/purchases/{receipt["id"]}'
+            archive = f'{API}/{f.year}/records{path}/issued?version=1'
+            self.assertEqual(f.confirm(f.year, f.preview(f.year))[0], 200)
+            status, original = f.call("GET", archive)
+            self.assertEqual(status, 200, original)
+            self.assertEqual(original["items"][0]["quantity"], 5)
+            self.assertEqual(f.reopen(f.year)[0], 200)
+            edit = {**body, "request_id": str(uuid4()), "revision": 1, "rows": [{**rows[0], "quantity": 7}]}
+            self.assertEqual(f.call("PUT", path, edit)[0], 200)
+            self.assertEqual(f.call("GET", f"{path}/invoice")[1]["items"][0]["quantity"], 7)
+            self.assertEqual(f.call("GET", archive), (200, original))
+
     def test_jalali_leap_cutoff_and_preflight(self):
         with FiscalFixture() as f:
             bank, product = f.references()
@@ -530,7 +606,8 @@ class FiscalYearTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 exports[kind] = body
             self.assert_exports(f, year, exports, preview)
-            final_receipt = f.post(payment_path, {**payment, "request_id": str(uuid4()), "amount": 2_000_000})
+            final_receipt = f.post(payment_path, {**payment, "request_id": str(uuid4()), "amount": 2_000_000,
+                                                 "tracking_number": "901110"})
             self.assertEqual(final_receipt["outstanding"], 0)
             self.assertEqual(f.call("POST", f"{API}/{year}/exports")[0], 202)
             for kind, body in exports.items():

@@ -10,6 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from schemas.customer_schema import DIGITS, normalize_text
 
 
+PaymentMethod = Literal["pos", "cash", "transfer"]
+
+
 def parse_jalali(value):
     if not isinstance(value, str):
         raise ValueError("تاریخ شمسی را به صورت ۱۴۰۵/۰۷/۱۴ وارد کنید.")
@@ -146,6 +149,8 @@ class TransactionLine(BaseModel):
 
 
 class TransactionFields(TransactionLine):
+    bank_id: int | None = Field(default=None, strict=True, gt=0)
+    payment_method: PaymentMethod | None = None
     transaction_date: date
     time_mode: Literal["auto", "manual"] = "auto"
     hour: int | None = Field(default=None, strict=True, ge=0, le=23)
@@ -158,6 +163,10 @@ class TransactionFields(TransactionLine):
 
     @model_validator(mode="after")
     def source_and_time(self):
+        if self.payment_method is not None and (self.kind != "income" or self.customer_id is None):
+            raise ValueError("روش پرداخت فقط برای دریافت از مشتری قابل ثبت است.")
+        if self.bank_id is None and self.payment_method != "cash":
+            raise ValueError("حساب مقصد را انتخاب کنید.")
         if self.time_mode == "manual" and (self.hour is None or self.minute is None):
             raise ValueError("ساعت و دقیقه را وارد کنید.")
         if self.time_mode == "auto" and (self.hour is not None or self.minute is not None):

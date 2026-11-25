@@ -1080,9 +1080,13 @@
 
             <section id="settings-panel-invoices" aria-labelledby="settings-tab-invoices" data-settings-panel="invoices" class="finance-surface hidden min-w-0 w-full max-w-full">
               <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
-                <h2 class="text-xl font-black">فاکتورهای مشتریان</h2>
+                <h2 class="text-xl font-black">فاکتورهای فروش و خرید</h2>
                 <button id="refreshInvoices" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button>
               </div>
+              <label for="settingsInvoicesKind" class="sr-only">نوع فاکتور</label>
+              <select id="settingsInvoicesKind" class="finance-field mb-3">
+                <option value="sale">فاکتورهای فروش</option><option value="purchase">فاکتورهای خرید</option>
+              </select>
               <label for="settingsInvoicesSearch" class="sr-only">جستجوی مشتری یا فاکتور</label>
               <input id="settingsInvoicesSearch" type="search" maxlength="200" autocomplete="off" class="finance-field" placeholder="نام یا کد مشتری، کد فاکتور یا شماره سفارش…" />
               <p id="settingsInvoicesStatus" class="mt-4 text-sm text-mirage/60" role="status"></p>
@@ -1705,7 +1709,7 @@
                   <form id="fiscalSearchForm" class="fiscal-actions fiscal-search">
                     <label for="fiscalRecordKind">نوع سابقه</label>
                     <select id="fiscalRecordKind">
-                      <option value="orders">سفارش‌ها</option><option value="invoices">فاکتورها</option>
+                      <option value="orders">سفارش‌ها</option><option value="invoices">فاکتورهای فروش</option><option value="purchases">فاکتورهای خرید</option>
                       <option value="customers">صورتحساب مشتریان</option><option value="transactions">تراکنش‌ها</option>
                     </select>
                     <label for="fiscalSearch">جست‌وجو</label>

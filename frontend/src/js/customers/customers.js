@@ -1,9 +1,10 @@
 import { onPageRefresh } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
-import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { notify } from "../components/notifications.js";
 import { createSpinner } from "../components/loader.js";
 import { getCustomers, getCustomer, deleteCustomer } from "./customer-api.js";
+import { mountCustomerPaymentHistory } from "./customer-payments.js";
+import { mountCustomerInvoices } from "./customer-invoices.js";
 import { disintegrateCustomerCard } from "./customer-card-animation.js";
 import {
   initializeCustomerModal,
@@ -15,6 +16,7 @@ import {
   fullName,
   genderLabel,
   formatDate,
+  formatJalaliInput,
   formatNumber,
   statusMeta,
   createSummary,
@@ -35,6 +37,9 @@ let search = "",
   searchTimer;
 let detailsDialog,
   deleteDialog,
+  paymentHistory,
+  invoiceHistory,
+  detailsCustomerId,
   selectedCustomer = null,
   detailsRequest = 0;
 let deleteTimer,
@@ -74,6 +79,9 @@ function createCustomerCard(customer) {
   );
   card.type = "button";
   card.dataset.customerId = customer.id;
+  card.setAttribute("aria-haspopup", "dialog");
+  card.setAttribute("aria-controls", "customerDetailsModal");
+  card.setAttribute("aria-expanded", String(detailsCustomerId === customer.id));
   card.setAttribute(
     "aria-label",
     `مشاهده جزئیات ${fullName(customer)}، کد ${customer.customer_code}`,
@@ -141,7 +149,10 @@ function createCustomerCard(customer) {
       "برای مشاهده جزئیات روی کارت کلیک کنید!",
     ),
   );
-  card.addEventListener("click", () => openDetails(customer.id));
+  card.addEventListener("click", () => {
+    card.focus({ preventScroll: true });
+    void openDetails(customer.id);
+  });
   wrapper.append(card);
   return wrapper;
 }
@@ -276,14 +287,26 @@ function detailField(label, value, ltr = false) {
 
 function renderDetails(customer) {
   const body = get("customerDetailsBody");
+  paymentHistory?.cancel();
+  invoiceHistory?.cancel();
   body.replaceChildren();
+  const profile = element("section", "customer-details-panel");
+  const financial = element("section", "customer-details-panel customer-financial-panel");
+  profile.setAttribute("aria-labelledby", "customerPersonalTitle");
+  financial.setAttribute("aria-labelledby", "customerFinancialTitle");
+  const personalTitle = element("h3", "customer-details-heading", "مشخصات فردی");
+  const financialTitle = element("h3", "customer-details-heading", "اطلاعات مالی");
+  personalTitle.id = "customerPersonalTitle";
+  financialTitle.id = "customerFinancialTitle";
   const info = element("dl", "grid gap-5 sm:grid-cols-2");
+  const timestampDate = (value) => value
+    ? formatJalaliInput(new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`))
+    : null;
   for (const [label, value, ltr] of [
+    ["نام و نام خانوادگی", fullName(customer)],
     ["کد مشتری", formatNumber(customer.customer_code)],
     ["شناسه یکتای دائمی مشتری", customer.permanent_id, true],
     ["جنسیت", genderLabel(customer.gender)],
-    ["نام", customer.first_name],
-    ["نام خانوادگی", customer.last_name],
     [
       "شماره‌های تماس (شماره اول، اصلی)",
       customer.phone_numbers.join("\n") || "بدون شماره تماس",
@@ -291,37 +314,41 @@ function renderDetails(customer) {
     ],
     ["آخرین تماس", formatDate(customer.last_contact_date)],
     ["آدرس", customer.address],
+    ["ایمیل", customer.email, true],
+    ["نوع مشتری", customer.customer_type],
+    ["تاریخ ثبت", timestampDate(customer.created_at)],
+    ["آخرین ویرایش", timestampDate(customer.updated_at)],
     ["توضیحات مشتری", customer.notes],
   ])
     info.append(detailField(label, value, ltr));
-  const status = statusMeta(customer.summary.status);
-  const summary = element("div");
-  summary.append(createSummary(customer.summary));
-  body.append(
-    info,
-    element(
-      "p",
-      `my-5 inline-block rounded-full px-3 py-1 text-xs font-bold ${status.classes}`,
-      status.label,
-    ),
-    summary,
-  );
-  if (!customer.summary.available)
-    body.append(
-      element(
-        "p",
-        "mt-4 text-xs leading-6 text-mirage/50",
-        "اطلاعات مالی پس از راه‌اندازی بخش سفارش‌ها و پرداخت‌ها در دسترس خواهد بود.",
-      ),
-    );
+  const badge = element("p");
+  function renderStatus(summary) {
+    const status = statusMeta(summary.status);
+    badge.className = `justify-self-start rounded-full px-3 py-1 text-xs font-bold ${status.classes}`;
+    badge.textContent = status.label;
+  }
+  renderStatus(customer.summary);
+  const summary = element("div", "customer-financial-summary grid gap-3");
+  const invoices = element("details", "customer-invoice-history");
+  const payments = element("section", "orders-detail-section grid gap-3");
+  payments.id = "customerPaymentHistory";
+  profile.append(personalTitle, info);
+  financial.append(financialTitle, badge, summary, invoices, payments);
+  body.append(profile, financial);
+  const history = paymentHistory = mountCustomerPaymentHistory(summary, payments, customer.id);
+  const invoiceList = invoiceHistory = mountCustomerInvoices(invoices, customer.id);
   const carryovers = element("section", "orders-detail-section mt-5 grid gap-3");
+  carryovers.id = "customerFiscalCarryovers";
   carryovers.hidden = true;
-  body.append(carryovers);
+  financial.append(carryovers);
   void import("../fiscal-years/customer-carryovers.js").then(({ loadCustomerCarryovers }) =>
     loadCustomerCarryovers(carryovers, customer.id, async () => {
+      if (!carryovers.isConnected || paymentHistory !== history) return;
+      void history.refresh();
+      invoiceList.refresh();
       try {
         const updated = await getCustomer(customer.id);
-        if (summary.isConnected) summary.replaceChildren(createSummary(updated.summary));
+        if (paymentHistory === history) renderStatus(updated.summary);
         await loadCustomers({ visibleCount: Math.max(PAGE_SIZE, loadedCustomers.length) });
       } catch { /* The next customer refresh can retrieve updated totals. */ }
     }),
@@ -332,8 +359,27 @@ function renderDetails(customer) {
   });
 }
 
+function customerCard(id) {
+  return get("customersList").querySelector(`[data-customer-id="${id}"]`);
+}
+
+function resetDetails() {
+  customerCard(detailsCustomerId)?.setAttribute("aria-expanded", "false");
+  detailsCustomerId = null;
+  selectedCustomer = null;
+  detailsRequest++;
+  paymentHistory?.cancel();
+  paymentHistory = null;
+  invoiceHistory?.cancel();
+  invoiceHistory = null;
+}
+
 async function openDetails(id) {
   const current = ++detailsRequest;
+  detailsCustomerId = id;
+  customerCard(id)?.setAttribute("aria-expanded", "true");
+  paymentHistory?.cancel();
+  paymentHistory = null;
   selectedCustomer = null;
   get("editCustomerButton").disabled = true;
   get("deleteCustomerButton").disabled = true;
@@ -344,7 +390,8 @@ async function openDetails(id) {
   );
   loading.prepend(createSpinner());
   get("customerDetailsBody").replaceChildren(loading);
-  detailsDialog.open();
+  if (!get("customerDetailsModal").open)
+    detailsDialog.open(get("closeCustomerDetailsButton"));
   try {
     const customer = await getCustomer(id);
     if (current !== detailsRequest) return;
@@ -408,10 +455,9 @@ async function finalDelete() {
     const deletedCustomer = deletingCustomer;
     await deleteCustomer(deletedCustomer.id);
     deletingCustomer = null;
-    selectedCustomer = null;
     deleteDialog.close();
+    resetDetails();
     detailsDialog.close();
-    detailsRequest++;
     notify("مشتری حذف شد", { type: "success" });
     await disintegrateCustomerCard(
       get("customersList").querySelector(`[data-customer-id="${deletedCustomer.id}"]`),
@@ -472,11 +518,10 @@ function startDelete() {
 }
 
 export async function initializeCustomers() {
-  detailsDialog = new NavbarPanelDialog("customerDetailsModal", {
-    onCancel: () => {
-      detailsRequest++;
-      selectedCustomer = null;
-    },
+  detailsDialog = new Dialog("customerDetailsModal", {
+    animateNativeClose: true,
+    onCancel: resetDetails,
+    restoreFocus: (opener) => customerCard(opener?.dataset.customerId) || get("customerSearchInput"),
   });
   deleteDialog = new Dialog("customerDeleteModal", {
     canClose: () => !deleteInFlight,
@@ -559,7 +604,7 @@ export async function initializeCustomers() {
     }
   });
   async function refreshCodes() {
-    await loadCustomers({ visibleCount: Math.max(PAGE_SIZE, loadedCustomers.length) });
+    const listing = loadCustomers({ visibleCount: Math.max(PAGE_SIZE, loadedCustomers.length) });
     if (selectedCustomer && !deleteInFlight && !deletingCustomer) {
       const id = selectedCustomer.id, current = detailsRequest;
       try {
@@ -570,6 +615,7 @@ export async function initializeCustomers() {
         }
       } catch { /* The details dialog retains its own retry flow. */ }
     }
+    await listing;
   }
   await loadCustomers();
   onPageRefresh(refreshCodes);

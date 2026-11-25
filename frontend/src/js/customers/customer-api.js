@@ -84,6 +84,12 @@ export const getCustomers = ({
 } = {}) =>
   request(`?${new URLSearchParams({ search, skip, limit })}`, { signal });
 export const getCustomer = (id) => request(`/${Number(id)}`);
+export const getCustomerInvoices = (id, skip, signal) =>
+  request(`/${Number(id)}/invoices?${new URLSearchParams({ skip })}`, { signal });
+export const getCustomerPayments = (id, { cursor, signal } = {}) => {
+  const query = cursor ? `?${new URLSearchParams({ cursor })}` : "";
+  return request(`/${Number(id)}/payments${query}`, { signal });
+};
 export const getNextCustomerCode = () => request("/next-code");
 export const createCustomer = (data) =>
   request("", { method: "POST", body: data });
@@ -107,5 +113,6 @@ export function processCustomerWorkbook(action, workbook, sheet, columns) {
 }
 
 // Selectors need identity/contact fields, not invoice aggregates.
-export const getCustomerOptions = ({ search = "", skip = 0, limit = 100, customer_id, signal } = {}) =>
-  request(`/options?${new URLSearchParams({ search, skip, limit, ...(customer_id ? { customer_id } : {}) })}`, { signal });
+export const getCustomerOptions = ({ search = "", skip = 0, limit = 100, customer_id, includeAddress, signal } = {}) =>
+  request(`/options?${new URLSearchParams({ search, skip, limit, ...(customer_id ? { customer_id } : {}),
+    ...(includeAddress ? { include_address: true } : {}) })}`, { signal });

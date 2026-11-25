@@ -1,14 +1,12 @@
-from datetime import date
-
 from sqlalchemy import String, case, cast, exists, func, insert, or_, select, text
 from sqlalchemy.orm import object_session
 
 from models.customer import Customer, utc_now
 from models.finance import FinancialTransaction
-from models.fiscal_year import FiscalYear
-from models.order import Order, OrderPayment
+from models.inventory import Purchase
+from models.order import Order
 from services.customer_ids import generate_customer_id, generate_customer_ids
-from services.fiscal_period import active_value, in_active_period
+from services.receivables import active_bounds, invoice_positions
 from services.reference_codes import compact_customer_codes
 from schemas.customer_schema import CustomerSummary, normalize_text
 
@@ -31,39 +29,23 @@ class CustomerHasOrders(Exception):
     pass
 
 
+class CustomerHasPurchases(Exception):
+    pass
+
+
 def invoice_balances(db, customer_id=None):
-    # Receipts on older invoices are active-year cash. Only active-year
-    # invoices contribute sales, and only payments through the period end
-    # contribute to outstanding balances.
-    end = func.coalesce(active_value(FiscalYear.end_date).scalar_subquery(), date.max)
-    tx = FinancialTransaction
-    payments = db.query(
-        OrderPayment.order_id.label("order_id"),
-        func.sum(tx.amount).label("paid_through_end"),
-        func.sum(case((in_active_period(tx.transaction_date), tx.amount), else_=0)).label("paid"),
-    ).join(tx, tx.id == OrderPayment.transaction_id).filter(
-        tx.deleted_at.is_(None), tx.transaction_date <= end,
-    )
-    if customer_id is not None:
-        payments = payments.filter(OrderPayment.order_id.in_(select(Order.id).where(Order.customer_id == customer_id)))
-    allocations = payments.group_by(OrderPayment.order_id).subquery()
-    invoice_total = Order.subtotal - Order.discount
-    in_period = in_active_period(Order.invoice_date)
-    through_end = Order.invoice_date <= end
-    unpaid = func.max(invoice_total - func.coalesce(allocations.c.paid_through_end, 0), 0)
-    query = db.query(
-        Order.customer_id.label("customer_id"),
+    start, end = active_bounds()
+    customers = None if customer_id is None else [customer_id]
+    balances = invoice_positions(end, customers, start=start).c
+    in_period = balances.invoice_date >= start
+    return db.query(
+        balances.customer_id,
         func.sum(case((in_period, 1), else_=0)).label("order_count"),
-        func.sum(case((in_period, invoice_total), else_=0)).label("sales"),
-        func.sum(allocations.c.paid).label("paid"),
-        func.sum(case((through_end, unpaid), else_=0)).label("debt"),
-        func.sum(case((through_end, 1), else_=0)).label("invoices"),
-    ).outerjoin(allocations, allocations.c.order_id == Order.id).filter(
-        Order.deleted_at.is_(None),
-    )
-    if customer_id is not None:
-        query = query.filter(Order.customer_id == customer_id)
-    return query.group_by(Order.customer_id)
+        func.sum(case((in_period, balances.total), else_=0)).label("sales"),
+        func.sum(balances.paid_in_period).label("paid"),
+        func.sum(balances.remaining).label("debt"),
+        func.count(balances.id).label("invoices"),
+    ).group_by(balances.customer_id)
 
 
 def customer_summary(count=0, sales=0, paid=0, debt=0, invoices=0):
@@ -91,11 +73,23 @@ def get_customer(db, customer_id):
     return customer
 
 
+def invoice_history(db, customer_id, skip, limit):
+    balances = invoice_positions(active_bounds()[1], [customer_id])
+    rows = db.execute(select(
+        balances.c.id, Order.invoice_code, balances.c.invoice_date, balances.c.total,
+        balances.c.paid, balances.c.remaining,
+    ).select_from(balances).join(Order, Order.id == balances.c.id).order_by(
+        balances.c.invoice_date.desc(), balances.c.id.desc(),
+    ).offset(skip).limit(limit + 1)).mappings().all()
+    return {"items": [dict(row) for row in rows[:limit]],
+            "next_skip": skip + limit if len(rows) > limit else None}
+
+
 def phone_values():
     return func.json_each(Customer.phone_numbers).table_valued("value")
 
 
-def list_customers(db, search="", skip=0, limit=50, *, options_only=False, customer_id=None):
+def list_customers(db, search="", skip=0, limit=50, *, options_only=False, customer_id=None, include_address=False):
     query = db.query(Customer).filter(Customer.deleted_at.is_(None))
     if customer_id is not None:
         query = query.filter(Customer.id == customer_id)
@@ -125,6 +119,8 @@ def list_customers(db, search="", skip=0, limit=50, *, options_only=False, custo
     total = query.count()
     if options_only:
         fields = (Customer.id, Customer.customer_code, Customer.first_name, Customer.last_name, Customer.phone_numbers)
+        if include_address:
+            fields += (Customer.address,)
         items = query.with_entities(*fields).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
         return {"items": [dict(row._mapping) for row in items], "total": total, "skip": skip, "limit": limit}
     items = query.outerjoin(balances, balances.c.customer_id == Customer.id).add_columns(
@@ -225,11 +221,14 @@ def delete_customer(db, customer_id):
         customer = get_customer(db, customer_id)
         if db.query(Order.id).filter(Order.customer_id == customer_id, Order.deleted_at.is_(None)).first():
             raise CustomerHasOrders()
+        purchases = db.query(Purchase.id).filter(Purchase.supplier_id == customer_id)
+        if purchases.filter(Purchase.deleted_at.is_(None)).first():
+            raise CustomerHasPurchases()
         linked = db.query(FinancialTransaction).filter(FinancialTransaction.customer_id == customer_id)
         remaining = linked.filter(FinancialTransaction.deleted_at.is_(None)).count()
         if remaining:
             raise CustomerHasTransactions(remaining)
-        if linked.first() or db.query(Order.id).filter(Order.customer_id == customer_id).first():
+        if linked.first() or db.query(Order.id).filter(Order.customer_id == customer_id).first() or purchases.first():
             # Retain foreign keys and retry IDs of deleted receipts/invoices.
             customer.deleted_at = utc_now()
             customer.updated_at = customer.deleted_at

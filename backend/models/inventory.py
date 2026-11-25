@@ -1,5 +1,5 @@
-"""Settings-owned reference lists and immutable purchase receipts."""
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
+"""Settings reference lists, purchase receipts and production records."""
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
 from database import Base
 from models.finance import utc_now
 
@@ -35,8 +35,17 @@ class Purchase(Base):
     id = Column(Integer, primary_key=True)
     request_id = Column(String(36), nullable=False, unique=True)
     request_fingerprint = Column(String(64), nullable=False)
+    revision = Column(Integer, nullable=False, default=1, server_default="1")
+    last_edit_id = Column(String(36), nullable=True)
+    last_edit_fingerprint = Column(String(64), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     invoice_number = Column(String(32), nullable=False, unique=True)
     purchase_date = Column(Date, nullable=False)
+    supplier_id = Column(Integer, ForeignKey("customers.id", ondelete="RESTRICT"), nullable=True, index=True)
+    discount = Column(BigInteger, nullable=False, default=0, server_default="0")
+    tax = Column(BigInteger, nullable=False, default=0, server_default="0")
+    shipping = Column(BigInteger, nullable=False, default=0, server_default="0")
+    invoice_snapshot = Column(JSON, nullable=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
     category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=False)
     category_name = Column(String(80), nullable=False)
@@ -70,3 +79,15 @@ class PurchaseItem(Base):
     unit = Column(String(80), nullable=False)
     quantity = Column(Integer, nullable=False)
     purchase_price = Column(BigInteger, nullable=False)
+
+
+class ProductionRun(Base):
+    __tablename__ = "production_runs"
+    __table_args__ = {"sqlite_autoincrement": True}
+    id = Column(Integer, primary_key=True)
+    request_id = Column(String(36), nullable=False, unique=True)
+    request_fingerprint = Column(String(64), nullable=False)
+    production_date = Column(Date, nullable=False, index=True)
+    description = Column(String(500), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)

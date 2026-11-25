@@ -10,7 +10,7 @@ from zlib import error as ZipDataError
 from pydantic import ValidationError
 from sqlalchemy import text
 
-from schemas.customer_schema import CustomerWrite, DIGITS, normalize_text
+from schemas.customer_schema import CustomerWrite, normalize_text
 from services import customer_service
 
 MAX_BYTES = 8 * 1024 * 1024

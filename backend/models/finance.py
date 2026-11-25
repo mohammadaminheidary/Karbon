@@ -72,6 +72,7 @@ class FinancialTransaction(Base):
     title = Column(String(201), nullable=False)
     account_code = Column(String(50), nullable=False)
     amount = Column(BigInteger, nullable=False)
+    payment_method = Column(String(12), nullable=True)
     tracking_number = Column(String(100), nullable=True)
     description = Column(Text, nullable=True)
     transaction_date = Column(Date, nullable=False)

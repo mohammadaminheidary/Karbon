@@ -1,4 +1,5 @@
 // Run beside serve_customers_fixture.py with an empty disposable database.
+import { readDate } from "./date-input-helpers.mjs";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -142,7 +143,7 @@ try {
     );
     return `${p.year}/${p.month}/${p.day}`;
   });
-  assert.equal(await page.locator("#purchaseDate").inputValue(), today);
+  assert.equal(await readDate(page, "purchaseDate"), today);
   await page
     .locator("#purchaseCategory")
     .selectOption({ label: "مواد اولیه آزمایش" });
@@ -175,7 +176,7 @@ try {
   await page.locator("#newPurchaseEntry").click();
   assert.equal(await page.locator("#purchaseItemName").inputValue(), "");
   // Unsaved previews may be reused; final numbers are allocated atomically.
-  assert.equal(await page.locator("#purchaseDate").inputValue(), today);
+  assert.equal(await readDate(page, "purchaseDate"), today);
   // Check the actual panel and navbar geometry at desktop, tablet and mobile.
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });

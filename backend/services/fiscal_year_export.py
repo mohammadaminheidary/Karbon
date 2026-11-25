@@ -231,8 +231,15 @@ def carryover_chapter(pdf, data):
     opening_invoices = {row["order_id"]: row["amount"] for row in data["opening_invoices"]}
     orders = group_rows(data["orders"], "customer_id")
     items = group_rows(data["order_items"], "order_id")
-    allocated = group_rows(data["payments"], "order_id")
-    unapplied = group_rows(allocated[None], "customer_id")
+    payments = {row["transaction_id"]: row for row in data["payments"]}
+    allocated = group_rows((
+        {**payments[row["transaction_id"]], "order_id": row["order_id"], "amount": row["amount"], "method": row["method"]}
+        for row in data["allocations"]
+    ), "order_id")
+    unapplied = group_rows((
+        {**row, "amount": amount} for row in data["payments"] if row["customer_id"] is not None
+        and (amount := row.get("unapplied", row["amount"] if row["order_id"] is None else 0)) > 0
+    ), "customer_id")
     for closing in data["closing_customer_accounts"]:
         cid = closing["customer_id"]
         c = customers[cid]
@@ -451,19 +458,22 @@ def datasets(data):
     from models.order import Order, OrderItem, OrderPayment, Product
 
     yield "summary", ["metric", "value"], [{"metric": k, "value": v} for k, v in data["summary"].items()]
+    payment_fields = "transaction_id customer_id order_id bank_id date jalali_date amount method tracking_number in_period".split()
+    if any("unapplied" in payment for payment in data["payments"]):
+        payment_fields.append("unapplied")
     columns = {
         "customers": dataset_fields(Customer, "created_date", "at_year_end", "new_in_period"),
         "orders": dataset_fields(Order, "source_year", "in_period", "total", "paid", "remaining", "jalali_date",
                                   "jalali_payment_date", omit={"request_id", "request_fingerprint", "invoice_snapshot", "deleted_at"}),
         "order_items": dataset_fields(OrderItem, "total", "category_path", "product_code"),
         "invoices": "order_id invoice_code order_number customer_id source_year in_period issue_date due_date subtotal discount total paid outstanding issued_customer".split(),
-        "payments": "transaction_id customer_id order_id bank_id date jalali_date amount method tracking_number in_period".split(),
+        "payments": payment_fields,
         "allocations": dataset_fields(OrderPayment, "amount", "in_period"),
         "transactions": dataset_fields(FinancialTransaction, "in_period", "method", "jalali_date", "bank_name",
                                        "expense_category", "order_id", omit={"request_id", "deleted_at"}),
         "documents": dataset_fields(Document, "in_period", omit={"request_id", "last_request_id", "request_fingerprint", "deleted_at"}),
         "accounts": dataset_fields(BankAccount, "bank_name", "is_cash", "income", "expense", "closing_balance"),
-        "purchases": dataset_fields(Purchase, "jalali_date", "total", omit={"request_id", "request_fingerprint"}),
+        "purchases": dataset_fields(Purchase, "jalali_date", "total", omit={"request_id", "request_fingerprint", "invoice_snapshot", "revision", "last_edit_id", "last_edit_fingerprint", "deleted_at"}),
         "purchase_items": dataset_fields(PurchaseItem, "total"),
         "products": dataset_fields(Product, omit={"stock", "revision"}),
         "product_categories": dataset_fields(InventoryOption),
@@ -489,9 +499,9 @@ FIELD_DEFINITIONS = {
     "remaining": "Invoice total less allocations through the fiscal cutoff.",
     "receipt_date": "Fiscal period follows the posted date of each financial transaction.",
     "receivable": "Sum of the customer's positive outstanding invoice balances.",
-    "credit": "Unallocated receipts, deposits for invoices not yet issued at the cutoff, and historical excess allocations.",
+    "credit": "Receipt amounts remaining after invoice allocations, including deposits for invoices not yet issued at the cutoff.",
     "overdue": "True when the original due date precedes the applicable cutoff.",
-    "method": "pos, cash, transfer, or unknown when no method is recorded.",
+    "method": "pos, cash, transfer, customer_receipt for general receipts applied to an invoice, or unknown when no method is recorded.",
     "settled_customers": "Distinct customers with a period invoice or opening receivable and no remaining invoice debt at cutoff.",
     "carryover_customers": "Distinct customers with a closing receivable or credit.",
     "opening_invoices.amount": "Amount brought forward from the preceding cutoff.",

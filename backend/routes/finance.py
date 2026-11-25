@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from database import get_database
+from database import get_database, read_snapshot
 from models.finance import BankAccount, ExpenseCategory, FinancialTransaction
 from schemas.finance_schema import BankWrite, CategoryWrite, TransactionWrite, TransactionEdit, FinanceDelete
 from security.auth import get_current_user
@@ -23,7 +23,8 @@ def finance_errors():
     try:
         yield
     except service.FinanceError as error:
-        raise HTTPException(error.status, error.message)
+        detail = {"code": error.code, "message": error.message} if getattr(error, "code", None) else error.message
+        raise HTTPException(error.status, detail)
     except FiscalPeriodError as error:
         raise HTTPException(409, str(error))
     except IntegrityError:
@@ -43,6 +44,7 @@ def bank_catalog(db: Session = Depends(get_database)):
 @router.get("/banks")
 def banks(db: Session = Depends(get_database)):
     with finance_errors():
+        read_snapshot(db)
         return service.bank_list(db)
 
 
@@ -62,6 +64,7 @@ def update_bank(bank_id: int, data: BankWrite, db: Session = Depends(get_databas
 def bank_activity(bank_id: int = Path(gt=0, le=9223372036854775807), period: Literal["day", "yesterday", "week", "month", "quarter", "year"] = "month",
                   anchor: str | None = None, db: Session = Depends(get_database)):
     with finance_errors():
+        read_snapshot(db)
         return service.bank_activity(db, bank_id, period, anchor)
 
 
@@ -73,6 +76,7 @@ def bank_transactions(bank_id: int = Path(gt=0, le=9223372036854775807), start_d
                       search: str | None = Query(default=None, max_length=200),
                       cursor: str | None = Query(default=None, max_length=512), db: Session = Depends(get_database)):
     with finance_errors():
+        read_snapshot(db)
         return service.bank_transactions(db, bank_id, start_date=start_date, end_date=end_date, day=day, month=month,
                                          year=year, min_amount=min_amount, max_amount=max_amount, search=search, cursor=cursor)
 
@@ -104,6 +108,7 @@ def calendar(start_date: date, end_date: date, db: Session = Depends(get_databas
 @router.get("/finance/day")
 def daily(date: date, db: Session = Depends(get_database)):
     with finance_errors():
+        read_snapshot(db)
         return service.daily(db, date)
 
 

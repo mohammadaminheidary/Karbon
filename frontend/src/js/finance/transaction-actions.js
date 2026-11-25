@@ -1,5 +1,7 @@
+import { mountDateInput } from "../components/date-input.js";
 import { CurtainDialog } from "../components/curtain-dialog.js";
 import { CustomerSelect } from "../customers/customer-select.js";
+import { paymentMethods } from "./payment-methods.js";
 import {
   financeRequest,
   getBanks,
@@ -16,6 +18,7 @@ import {
 import { confirmFinanceDelete } from "./delete-dialog.js";
 
 let root,
+  editDate,
   dialog,
   item,
   onChanged,
@@ -23,11 +26,12 @@ let root,
   version = 0,
   sources = [],
   customers = [],
-  categories = [];
+  categories = [],
+  banks = [];
 let customerPicker;
 const $ = (id) => root.querySelector(`#edit${id}`);
 
-export function transactionActions(record, changed) {
+export function transactionActions(record, changed, { iconOnly = false } = {}) {
   const cell = node("td", "p-4");
   if (record.document_id) {
     const link = node(
@@ -44,16 +48,29 @@ export function transactionActions(record, changed) {
     cell.title = `${record.invoice.invoice_code} · مانده: ${money(record.invoice.remaining)}`;
     return cell;
   }
+  for (const invoice of record.invoice_allocations || []) {
+    const allocation = node("p", "mb-1 text-xs text-mirage/60", `${invoice.invoice_code} · ${money(invoice.amount)}`);
+    allocation.title = `مانده فاکتور: ${money(invoice.remaining)}`;
+    cell.append(allocation);
+  }
   const menu = node("details", "transaction-menu");
   const summary = node(
     "summary",
     "finance-button border border-french-gray/40",
-    "تنظیمات",
   );
+  const label = iconOnly ? "عملیات" : "تنظیمات";
   summary.setAttribute(
     "aria-label",
-    `تنظیمات تراکنش ${record.transaction_number || record.id}`,
+    `${label} تراکنش ${record.transaction_number || record.id}`,
   );
+  if (iconOnly) {
+    summary.classList.add("transaction-menu-icon");
+    const icon = node("span", "", "⋮");
+    icon.setAttribute("aria-hidden", "true");
+    summary.append(icon);
+  } else {
+    summary.textContent = label;
+  }
   const buttons = node("div", "transaction-menu-options");
   for (const [label, callback] of [
     ["ویرایش", () => editTransaction(record, changed)],
@@ -90,18 +107,20 @@ function createEditor() {
         <label>نوع تراکنش<select id="editKind" class="finance-field"><option value="income">درآمد</option><option value="expense">هزینه</option></select></label>
         <label>مشتری / عنوان هزینه<select id="editSource" class="finance-field"></select></label>
         <label>کد حساب<input id="editCode" readonly class="finance-field" dir="ltr" /></label>
-        <label>حساب بانکی<select id="editBank" class="finance-field"></select></label>
+        <div><label id="editBankLabel">حساب بانکی<select id="editBank" class="finance-field"></select></label><p id="editCashAccount" class="text-xs text-mirage/60" hidden>حساب مقصد: صندوق نقدی</p></div>
         <label>مبلغ (تومان)<input id="editAmount" class="finance-field" dir="ltr" inputmode="numeric" maxlength="21" /></label>
         <label>تاریخ شمسی<input id="editDate" class="finance-field" dir="ltr" placeholder="۱۴۰۵/۰۷/۱۴" maxlength="10" /></label>
         <label>ساعت ثبت<select id="editTimeMode" class="finance-field"><option value="auto">حفظ ساعت ثبت قبلی</option><option value="manual">انتخاب ساعت</option></select></label>
         <div id="editManual" class="grid grid-cols-2 gap-3"><label>ساعت<input id="editHour" class="finance-field" inputmode="numeric" dir="ltr" maxlength="2" /></label><label>دقیقه<input id="editMinute" class="finance-field" inputmode="numeric" dir="ltr" maxlength="2" /></label></div>
         <label id="editTrackingLabel">شماره پیگیری<input id="editTracking" class="finance-field" maxlength="100" /></label>
+        <label id="editMethodLabel">روش پرداخت<select id="editMethod" class="finance-field"></select></label>
         <label class="sm:col-span-2">شرح<textarea id="editDescription" class="finance-field" maxlength="5000" rows="3"></textarea></label>
       </fieldset>
       <p id="editError" role="alert" class="mt-3 text-sm text-alizarin-crimson"></p>
       <div class="mt-5 flex gap-3"><button id="editSave" type="submit" class="finance-button bg-persian-blue text-white">ذخیره تغییرات</button><button data-dialog-close type="button" class="finance-button border border-french-gray/40">انصراف</button></div>
     </form></section>`;
   document.body.append(root);
+  editDate = mountDateInput($("Date"));
   dialog = new CurtainDialog(root.id, {
     canClose: () => !saving,
     onCancel: () => {
@@ -111,6 +130,9 @@ function createEditor() {
     },
   });
   bindAmount($("Amount"));
+  $("Method").replaceChildren(new Option("ثبت نشده", ""),
+    ...paymentMethods.map(([key, label]) => new Option(label, key)));
+  $("Method").addEventListener("change", () => renderPaymentFields());
   customerPicker = new CustomerSelect($("Source"), {
     rows: (rows, selected) => {
       customers = rows;
@@ -126,6 +148,7 @@ function createEditor() {
     customerPicker.setActive(income);
     if (income) void customerPicker.reset(item.kind === "income" ? item.customer_id : undefined).catch(error => { $("Error").textContent = error.message; });
     renderSources();
+    renderPaymentFields();
   });
   $("Source").addEventListener("change", renderCode);
   $("TimeMode").addEventListener("change", syncTime);
@@ -171,6 +194,20 @@ function renderCode() {
   const row = sources.find((row) => row.id === Number($("Source").value));
   $("Code").value = row?.customer_code || row?.account_code || "";
 }
+function renderPaymentFields(selectedId = Number($("Bank").value)) {
+  const income = $("Kind").value === "income";
+  const method = income ? $("Method").value : "";
+  const cash = method === "cash";
+  $("MethodLabel").hidden = $("Method").disabled = !income;
+  $("BankLabel").hidden = $("Bank").disabled = cash;
+  $("CashAccount").hidden = !cash;
+  const available = banks.filter((row) => (row.active || row.id === item.bank_id) &&
+    (!method || cash || !row.is_cash));
+  $("Bank").replaceChildren(new Option("انتخاب حساب", ""), ...available.map((row) =>
+    new Option(`${row.name} · ${[row.first_name, row.last_name].filter(Boolean).join(" ")} · ${row.card_number || row.account_number}`, row.id),
+  ));
+  if (available.some((row) => row.id === selectedId)) $("Bank").value = selectedId;
+}
 function syncTime() {
   $("Manual").classList.toggle("hidden", $("TimeMode").value !== "manual");
 }
@@ -182,8 +219,9 @@ async function editTransaction(record, changed) {
   const current = ++version;
   $("Form").reset();
   $("Kind").value = record.kind;
+  $("Method").value = record.payment_method || "";
   $("Amount").value = new Intl.NumberFormat("fa-IR").format(record.amount);
-  $("Date").value = record.jalali_date;
+  editDate.value = record.jalali_date;
   $("TimeMode").value = record.time_mode;
   $("Hour").value = record.transaction_time.slice(0, 2);
   $("Minute").value = record.transaction_time.slice(3, 5);
@@ -191,7 +229,8 @@ async function editTransaction(record, changed) {
   $("Description").value = record.description || "";
   $("Error").textContent = "در حال دریافت اطلاعات...";
   $("Source").replaceChildren();
-  $("Bank").replaceChildren();
+  banks = [];
+  renderPaymentFields(record.bank_id);
   $("Code").value = "";
   $("Fields").disabled = true;
   $("Save").disabled = true;
@@ -200,7 +239,7 @@ async function editTransaction(record, changed) {
   customerPicker.setActive(record.kind === "income");
   dialog.open();
   try {
-    const [banks, clients, titles] = await Promise.all([
+    const [accounts, clients, titles] = await Promise.all([
       getBanks(),
       record.kind === "income" ? customerPicker.reset(record.customer_id) : Promise.resolve([]),
       getExpenseCategories(),
@@ -208,13 +247,8 @@ async function editTransaction(record, changed) {
     if (current !== version) return;
     customers = clients;
     categories = titles;
-    options(
-      $("Bank"),
-      banks.filter((row) => row.active || row.id === record.bank_id),
-      (row) =>
-        `${row.name} · ${[row.first_name, row.last_name].filter(Boolean).join(" ")} · ${row.card_number || row.account_number}`,
-    );
-    $("Bank").value = record.bank_id;
+    banks = accounts;
+    renderPaymentFields(record.bank_id);
     renderSources();
     $("Fields").disabled = false;
     $("Save").disabled = false;
@@ -236,9 +270,13 @@ async function save(event) {
   try {
     const kind = $("Kind").value,
       manual = $("TimeMode").value === "manual";
+    const paymentMethod = kind === "income" ? $("Method").value || null : null;
+    const bankId = paymentMethod === "cash" ? null : Number($("Bank").value);
+    if (paymentMethod !== "cash" && !bankId) throw new Error("حساب مقصد را انتخاب کنید.");
     const body = {
       kind,
-      bank_id: Number($("Bank").value),
+      bank_id: bankId,
+      payment_method: paymentMethod,
       amount: amountValue($("Amount").value),
       customer_id: kind === "income" ? Number($("Source").value) : null,
       expense_category_id:
@@ -248,7 +286,7 @@ async function save(event) {
         kind === "income"
           ? normalizeDigits($("Tracking").value.trim()) || null
           : null,
-      transaction_date: normalizeJalaliDate($("Date").value),
+      transaction_date: normalizeJalaliDate(editDate.value),
       time_mode: manual ? "manual" : "auto",
     };
     if (manual) {

@@ -23,8 +23,12 @@ from sqlalchemy import create_engine, inspect
 import config
 from database import Base
 from models.fiscal_year import FISCAL_TABLES
+from models.inventory import ProductionRun
+from services.invoice_settings_service import INVOICE_COLUMNS, SETTINGS_TABLES, initialize_invoice_storage
 from security.face_templates import template_key
 from services.fiscal_period import initialize_fiscal_storage
+from services.inventory_service import PURCHASE_REVISION_COLUMNS, upgrade_purchase_revisions
+from services.order_service import upgrade_product_constraints
 
 
 BACKUP_DIRECTORY = Path(__file__).resolve().parents[2] / "backup"
@@ -186,6 +190,8 @@ def validate_database(path, recovery):
         table_names = {name for (name,) in db.execute("SELECT name FROM sqlite_schema WHERE type = 'table'")}
         fiscal_names = {table.name for table in FISCAL_TABLES}
         legacy = not (table_names & fiscal_names)
+        invoice_names = {table.name for table in SETTINGS_TABLES}
+        legacy_invoices = not (table_names & invoice_names)
         columns = {table.name: {row[1] for row in db.execute("SELECT * FROM pragma_table_info(?)", (table.name,))}
                    for table in Base.metadata.tables.values()}
         legacy_fiscal = ("export_status" in columns["fiscal_years"]
@@ -194,7 +200,17 @@ def validate_database(path, recovery):
         for table in Base.metadata.tables.values():
             if legacy and table.name in fiscal_names:
                 continue
+            if legacy_invoices and table.name in invoice_names:
+                continue
+            if table is ProductionRun.__table__ and table.name not in table_names:
+                continue
             required = set(table.columns.keys())
+            if table.name == "purchases":
+                required -= PURCHASE_REVISION_COLUMNS.keys()
+            if table.name == "fiscal_inventory_changes":
+                required -= {"reference", "posted_at"}
+            if legacy_invoices:
+                required -= INVOICE_COLUMNS.get(table.name, {}).keys()
             if legacy_fiscal:
                 required -= added.get(table.name, set())
             if table.name not in table_names or not required <= columns[table.name]:
@@ -340,6 +356,25 @@ def create_archive(passphrase):
 
 
 def restore_snapshot(snapshot, recovery):
+    staged = create_engine(f"sqlite:///{snapshot.as_posix()}")
+    try:
+        if not inspect(staged).has_table("fiscal_years"):
+            Base.metadata.create_all(staged, tables=FISCAL_TABLES)
+        Base.metadata.create_all(staged, tables=SETTINGS_TABLES)
+        Base.metadata.create_all(staged, tables=[ProductionRun.__table__])
+        with staged.begin() as connection:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            upgrade_purchase_revisions(connection)
+        initialize_invoice_storage(staged)
+        upgrade_product_constraints(staged)
+        initialize_fiscal_storage(staged, zone=ZoneInfo(recovery["timezone"]))
+    finally:
+        staged.dispose()
+    publish_snapshot(snapshot, recovery)
+
+
+def publish_snapshot(snapshot, recovery):
+    """Replace the active SQLite database and invalidate previous sessions."""
     directory = config.recovery_directory()
     directory.mkdir(mode=0o700, exist_ok=True)
     if directory.is_symlink():
@@ -347,13 +382,6 @@ def restore_snapshot(snapshot, recovery):
     sync_directory(directory.parent)
     generation = uuid4().hex
     settings = directory / f"{generation}.json"
-    staged = create_engine(f"sqlite:///{snapshot.as_posix()}")
-    try:
-        if not inspect(staged).has_table("fiscal_years"):
-            Base.metadata.create_all(staged, tables=FISCAL_TABLES)
-        initialize_fiscal_storage(staged, zone=ZoneInfo(recovery["timezone"]))
-    finally:
-        staged.dispose()
     prepare_snapshot_for_restore(snapshot, generation)
     try:
         with os.fdopen(os.open(settings, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as stream:

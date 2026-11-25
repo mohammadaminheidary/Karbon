@@ -2,7 +2,7 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from schemas.finance_schema import normalize_tracking_number, parse_jalali
+from schemas.finance_schema import PaymentMethod, normalize_tracking_number, parse_jalali
 from schemas.customer_schema import normalize_text
 
 LIMIT = 999999999999
@@ -20,7 +20,7 @@ class ProductWrite(StrictFields):
     requires_brand: bool = Field(default=False, strict=True)
     brand_id: int | None = Field(default=None, strict=True, gt=0, le=9223372036854775807)
     price: int = Field(default=0, strict=True, ge=0, le=LIMIT)
-    stock: int | None = Field(default=None, strict=True, ge=0, le=1000000000)
+    stock: int | None = Field(default=None, strict=True, ge=-1000000000, le=1000000000)
     active: bool = True
 
     @field_validator("name", "unit", mode="before")
@@ -40,7 +40,7 @@ class ProductEdit(ProductWrite):
 
 
 class PaymentWrite(StrictFields):
-    method: Literal["pos", "cash", "transfer"]
+    method: PaymentMethod
     amount: int = Field(strict=True, gt=0, le=LIMIT)
     bank_id: int | None = Field(default=None, strict=True, gt=0, le=9223372036854775807)
 
@@ -78,7 +78,10 @@ class OrderWrite(StrictFields):
     items: list[ItemWrite] = Field(min_length=1, max_length=100)
     payments: list[PaymentWrite] = Field(default_factory=list, max_length=3)
     description: str | None = Field(default=None, max_length=5000)
-    discount: int = Field(default=0, strict=True, ge=0, le=LIMIT)
+    discount: int | None = Field(default=None, strict=True, ge=0, le=LIMIT)
+    delivery_address: str | None = Field(default=None, max_length=700)
+    invoice_number: str | None = Field(default=None, min_length=1, max_length=32)
+    invoice_settings_revision: int | None = Field(default=None, strict=True, ge=1)
 
     @field_validator("invoice_date", "payment_date", mode="before")
     @classmethod
@@ -98,10 +101,12 @@ class OrderWrite(StrictFields):
     @model_validator(mode="after")
     def totals(self):
         subtotal = sum(item.quantity * item.unit_price for item in self.items)
-        if subtotal > LIMIT or self.discount > subtotal:
+        if subtotal > LIMIT or (self.discount is not None and self.discount > subtotal):
             raise ValueError("جمع اقلام یا تخفیف فاکتور معتبر نیست.")
-        if sum(payment.amount for payment in self.payments) > subtotal - self.discount:
-            raise ValueError("مجموع پرداخت‌ها نباید از مبلغ نهایی فاکتور بیشتر باشد.")
         if len({payment.method for payment in self.payments}) != len(self.payments):
             raise ValueError("هر روش پرداخت فقط یک بار قابل ثبت است.")
         return self
+
+
+class OrderEdit(OrderWrite):
+    revision: int = Field(strict=True, ge=0)

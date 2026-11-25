@@ -3,6 +3,7 @@ import { financeRequest } from "../finance/finance-api.js";
 import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { onExternalDataChange } from "../components/data-events.js";
+import { beginPrint, rasterizeInvoicePages, renderInvoicePages, renderScaledPages } from "../invoices/invoice-paper.js";
 import { fiscalRequest } from "../fiscal-years/fiscal-api.js";
 
 const WIDTH = 794,
@@ -99,7 +100,7 @@ export async function renderInvoice(invoice, scale = 3) {
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
     pages.push(canvas);
-    text(invoice.store?.name || "فاکتور فروش", WIDTH - MARGIN, 36, {
+    text(invoice.store?.name || (invoice.kind === "purchase" ? "فاکتور خرید" : "فاکتور فروش"), WIDTH - MARGIN, 36, {
       size: 24,
       weight: 700,
       color: "#1e40af",
@@ -157,8 +158,8 @@ export async function renderInvoice(invoice, scale = 3) {
       if (invoice.store[field]) paragraph(invoice.store[field]);
     y += 12;
   }
-  paragraph(invoice.customer.name, { label: "مشتری: ", weight: 700, size: 15 });
-  paragraph(formatNumber(invoice.customer.code), { label: "کد مشتری: " });
+  paragraph(invoice.customer?.name || invoice.supplier?.name, { label: "مشتری: ", weight: 700, size: 15 });
+  if (invoice.customer.code != null) paragraph(formatNumber(invoice.customer.code), { label: "کد مشتری: " });
   if (invoice.customer.phone_numbers?.length)
     paragraph(invoice.customer.phone_numbers.join("، "), { label: "تلفن: " });
   if (invoice.customer.address)
@@ -389,6 +390,8 @@ let currentArchive;
 let root,
   dialog,
   pages = [],
+  designedPapers = [],
+  disconnectPreview,
   invoice,
   urls = [],
   version = 0,
@@ -399,12 +402,13 @@ function setup() {
   root = node("div", "orders-modal hidden");
   root.id = "finalInvoiceModal";
   root.setAttribute("aria-hidden", "true");
-  root.innerHTML = `<button type="button" class="orders-backdrop" data-dialog-close aria-label="بستن فاکتور"></button><section role="dialog" aria-modal="true" aria-labelledby="finalInvoiceTitle" class="orders-glass scale-95 opacity-0"><header class="orders-dialog-header"><h2 id="finalInvoiceTitle">فاکتور نهایی</h2><button type="button" class="orders-icon-button" data-dialog-close aria-label="بستن">×</button></header><div class="orders-dialog-body"><p id="finalInvoiceStatus" role="status"></p><p id="finalInvoiceAccessible" class="sr-only"></p><div id="finalInvoicePages"></div></div><footer class="orders-dialog-footer"><button type="button" id="retryFinalInvoice" class="orders-secondary" hidden>تلاش مجدد</button><button type="button" id="printFinalInvoice" class="orders-secondary" disabled>چاپ فاکتور</button><button type="button" id="imageFinalInvoice" class="orders-secondary" disabled>خروجی تصویر PNG</button><button type="button" id="pdfFinalInvoice" class="orders-primary" disabled>خروجی PDF</button></footer></section>`;
+  root.innerHTML = `<button type="button" class="orders-backdrop" data-dialog-close aria-label="بستن فاکتور"></button><section role="dialog" aria-modal="true" aria-labelledby="finalInvoiceTitle" class="orders-glass scale-95 opacity-0"><header class="orders-dialog-header"><h2 id="finalInvoiceTitle">فاکتور نهایی</h2><button type="button" class="dialog-close-button" data-dialog-close aria-label="بستن"></button></header><div class="orders-dialog-body"><p id="finalInvoiceStatus" role="status"></p><p id="finalInvoiceAccessible" class="sr-only"></p><div id="finalInvoicePages"></div></div><footer class="orders-dialog-footer"><button type="button" id="retryFinalInvoice" class="orders-secondary" hidden>تلاش مجدد</button><button type="button" id="printFinalInvoice" class="orders-secondary" disabled>چاپ فاکتور</button><button type="button" id="imageFinalInvoice" class="orders-secondary" disabled>خروجی تصویر PNG</button><button type="button" id="pdfFinalInvoice" class="orders-primary" disabled>خروجی PDF</button></footer></section>`;
   document.body.append(root);
   dialog = new Dialog(root.id, {
     canClose: () => !exporting,
     onCancel: () => {
       version++;
+      disconnectPreview?.();
     },
   });
   const refresh = () => {
@@ -418,12 +422,17 @@ function setup() {
   print.id = "invoicePrintPages";
   document.body.append(print);
   root.querySelector("#printFinalInvoice").addEventListener("click", () => {
-    if (pages.length) window.print();
+    if (designedPapers.length) beginPrint(designedPapers, invoice.presentation.layout.page);
+    else if (pages.length) window.print();
   });
   for (const [id, callback] of [
     [
       "pdfFinalInvoice",
       async (current) => {
+        if (designedPapers.length) {
+          beginPrint(designedPapers, invoice.presentation.layout.page);
+          return;
+        }
         const name = `invoice-${invoice.invoice_code}.pdf`;
         const blob = await invoicePdf(pages);
         if (current === version) download(blob, name);
@@ -434,7 +443,7 @@ function setup() {
       async (current) => {
         const code = invoice.invoice_code;
         const image = await invoiceImages(
-          pages,
+          designedPapers.length ? await rasterizeInvoicePages(designedPapers) : pages,
           `invoice-${code}`,
         );
         if (current === version) download(
@@ -445,7 +454,7 @@ function setup() {
     ],
   ])
     root.querySelector(`#${id}`).addEventListener("click", async () => {
-      if (exporting || !pages.length) return;
+      if (exporting || !(pages.length || designedPapers.length)) return;
       const current = version;
       exporting = true;
       setButtons(true);
@@ -454,13 +463,14 @@ function setup() {
       try {
         await callback(current);
         if (current === version)
-          root.querySelector("#finalInvoiceStatus").textContent = "خروجی آماده شد.";
+          root.querySelector("#finalInvoiceStatus").textContent = id === "pdfFinalInvoice" && designedPapers.length
+            ? "برای ذخیره PDF، گزینه Save as PDF را در پنجره چاپ انتخاب کنید." : "خروجی آماده شد.";
       } catch (error) {
         if (current === version)
           root.querySelector("#finalInvoiceStatus").textContent = error.message;
       } finally {
         exporting = false;
-        setButtons(!pages.length);
+        setButtons(!(pages.length || designedPapers.length));
       }
     });
 }
@@ -481,6 +491,8 @@ export async function showFinalInvoice(orderId, archive = {}) {
   currentArchive = archive;
   const current = ++version;
   pages = [];
+  designedPapers = [];
+  disconnectPreview?.();
   setButtons(true);
   urls.forEach(URL.revokeObjectURL);
   urls = [];
@@ -495,10 +507,33 @@ export async function showFinalInvoice(orderId, archive = {}) {
   const newUrls = [];
   try {
     const query = archive.version ? `?version=${archive.version}` : "";
+    const kind = archive.kind === "purchase" ? "purchases" : "invoices";
     const saved = archive.year
-      ? await fiscalRequest(`/${archive.year}/records/invoices/${orderId}/issued${query}`)
-      : await financeRequest(`/orders/${orderId}/invoice`);
-    const rendered = await renderInvoice(saved);
+      ? await fiscalRequest(`/${archive.year}/records/${kind}/${orderId}/issued${query}`)
+      : await financeRequest(kind === "purchases"
+        ? `/purchases/${orderId}/invoice`
+        : `/orders/${orderId}/invoice?include_balance=true`);
+    const currentBalance = saved.current_balance
+      ? `پرداختی جاری ${money(saved.current_balance.paid)} · مانده جاری ${money(saved.current_balance.remaining)}`
+      : "";
+    if (saved.presentation?.layout) {
+      const papers = await renderInvoicePages(saved);
+      if (current !== version) return;
+      invoice = saved;
+      designedPapers = papers;
+      disconnectPreview = renderScaledPages(root.querySelector("#finalInvoicePages"), papers);
+      root.querySelector("#imageFinalInvoice").textContent = papers.length > 1 ? "تصاویر PNG (ZIP)" : "خروجی تصویر PNG";
+      root.querySelector("#pdfFinalInvoice").textContent = "ذخیره PDF";
+      root.querySelector("#finalInvoiceStatus").textContent = currentBalance || (papers.length > 1
+        ? `${papers.length} صفحه · فاکتور ذخیره‌شده` : "فاکتور ذخیره‌شده آماده است.");
+      setButtons(false);
+      return;
+    }
+    root.querySelector("#pdfFinalInvoice").textContent = "خروجی PDF";
+    const rendered = await renderInvoice(saved.kind === "purchase" ? {
+      ...saved, customer: saved.supplier || { name: "رسید خرید", phone_numbers: [] },
+      paid: 0, remaining: saved.total, order_number: "—", jalali_payment_date: "—",
+    } : saved);
     if (current !== version) return;
     const previews = [],
       printedPages = [];
@@ -533,12 +568,13 @@ export async function showFinalInvoice(orderId, archive = {}) {
       invoice.invoice_code,
       invoice.order_number,
       invoice.jalali_date,
-      invoice.customer.name,
+      invoice.customer?.name || invoice.supplier?.name,
       ...invoice.items.map(
         (item) =>
           [item.product_name, item.brand_name, `${item.quantity} ${item.unit} ${money(item.unit_price)}`].filter(Boolean).join(" · "),
       ),
-      `تخفیف ${money(invoice.discount)}، مبلغ نهایی ${money(invoice.total)}، پرداختی ${money(invoice.paid)}، مانده ${money(invoice.remaining)}`,
+      `تخفیف ${money(invoice.discount)}، مبلغ نهایی ${money(invoice.total)}`,
+      invoice.paid == null ? "" : `پرداختی ${money(invoice.paid)}، مانده ${money(invoice.remaining)}`,
       ...invoice.payments.map(
         (payment) => `${methodNames[payment.method]} ${money(payment.amount)}`,
       ),
@@ -546,9 +582,9 @@ export async function showFinalInvoice(orderId, archive = {}) {
     root.querySelector("#imageFinalInvoice").textContent =
       pages.length > 1 ? "تصاویر PNG (ZIP)" : "خروجی تصویر PNG";
     root.querySelector("#finalInvoiceStatus").textContent =
-      pages.length > 1
+      currentBalance || (pages.length > 1
         ? `${formatNumber(pages.length)} صفحه؛ خروجی تصویر شامل تمام صفحات در فایل ZIP است.`
-        : "فاکتور نهایی ذخیره‌شده آماده است.";
+        : "فاکتور نهایی ذخیره‌شده آماده است.");
     setButtons(false);
   } catch (error) {
     newUrls.forEach(URL.revokeObjectURL);

@@ -14,7 +14,7 @@ import {
 
 const modalTemplate = `
   <section role="dialog" aria-modal="true" aria-labelledby="bankModalTitle" class="curtain-content">
-    <div class="flex items-center justify-between gap-3"><div><p class="mb-1 text-xs text-mirage/45">مدیریت حساب‌های بانکی</p><h2 id="bankModalTitle" class="text-xl font-black">افزودن حساب</h2></div><button type="button" data-dialog-close class="finance-button" aria-label="بستن">×</button></div>
+    <div class="flex items-center justify-between gap-3"><div><p class="mb-1 text-xs text-mirage/45">مدیریت حساب‌های بانکی</p><h2 id="bankModalTitle" class="text-xl font-black">افزودن حساب</h2></div><button type="button" data-dialog-close class="dialog-close-button" aria-label="بستن"></button></div>
     <p id="bankCatalogStatus" class="mt-4 text-sm text-mirage/50" role="status"></p>
     <p id="bankFormError" class="mt-4 hidden rounded-xl bg-alizarin-crimson/10 p-3 text-sm text-alizarin-crimson" role="alert"></p>
     <button id="retryBankCatalog" type="button" class="finance-button mt-2 hidden border border-french-gray/40">دریافت مجدد بانک‌ها</button>
@@ -23,8 +23,8 @@ const modalTemplate = `
         <label for="bankFirstName">نام <input id="bankFirstName" class="finance-field" required maxlength="100" autocomplete="given-name" aria-describedby="bankFormError" /></label>
         <label for="bankLastName">نام خانوادگی <input id="bankLastName" class="finance-field" required maxlength="100" autocomplete="family-name" aria-describedby="bankFormError" /></label>
         <label for="bankSelect" class="sm:col-span-2">بانک <select id="bankSelect" class="finance-field" required aria-describedby="bankFormError"><option value="">انتخاب بانک</option></select></label>
-        <div id="bankLogoPreview" class="hidden items-center gap-3 rounded-xl bg-alabaster p-3 sm:col-span-2"></div>
         <label for="bankCardNumber" class="sm:col-span-2">شماره کارت <input id="bankCardNumber" class="finance-field bank-number" required inputmode="numeric" maxlength="19" dir="ltr" placeholder="0000 0000 0000 0000" autocomplete="off" aria-describedby="bankFormError" /></label>
+        <div id="bankCardPreview" class="bank-card-preview sm:col-span-2" hidden></div>
         <label for="bankShebaNumber" class="sm:col-span-2">شماره شبا (اختیاری) <input id="bankShebaNumber" class="finance-field bank-number" inputmode="text" maxlength="40" dir="ltr" placeholder="IR + 24 رقم" autocomplete="off" spellcheck="false" aria-describedby="bankFormError" /><span class="mt-2 block text-xs font-normal text-mirage/45">در صورت ورود: IR به همراه ۲۴ رقم؛ ارقام فارسی و انگلیسی پذیرفته می‌شوند.</span></label>
         <details class="rounded-xl border border-french-gray/30 p-3 sm:col-span-2"><summary class="cursor-pointer text-sm font-bold text-mirage/60">تنظیمات مالی حساب</summary><div class="mt-4 grid gap-4 sm:grid-cols-2">
           <label for="bankAccount">شماره حساب (اختیاری) <input id="bankAccount" class="finance-field" maxlength="50" dir="ltr" autocomplete="off" /></label>
@@ -102,6 +102,50 @@ function ownerName(raw, label) {
   return value;
 }
 
+function cardholder(bank) {
+  return [bank.first_name, bank.last_name].filter(Boolean).join(" ");
+}
+
+function renderCardFace(bank, { preview = false } = {}) {
+  const face = node("div", "bank-card-face");
+  face.dataset.bank = bank.is_cash ? "cash" : bank.bank || bank.code || "";
+
+  const header = node("div", "bank-card-brand");
+  const logo = bankLogo(bank, "bank-logo bank-card-logo");
+  logo.setAttribute("aria-hidden", "true");
+  header.append(logo, node(preview ? "p" : "h3", "bank-card-name", bank.name));
+  face.append(header);
+
+  if (!bank.is_cash) {
+    const chip = node("span", "bank-chip");
+    chip.setAttribute("aria-hidden", "true");
+    (preview ? face : header).append(chip);
+  }
+
+  const number = node(
+    "p",
+    "bank-card-number",
+    bank.card_number
+      ? formatCardNumber(bank.card_number)
+      : bank.is_cash
+        ? "صندوق نقدی"
+        : "شماره کارت ثبت نشده",
+  );
+  number.dir = bank.card_number ? "ltr" : "rtl";
+  if (bank.card_number)
+    number.setAttribute("aria-label", `شماره کارت ${number.textContent}`);
+
+  const owner = node(
+    "p",
+    "bank-card-owner",
+    cardholder(bank) ||
+      (bank.is_cash ? "دریافت و پرداخت نقدی" : "صاحب حساب ثبت نشده"),
+  );
+  owner.dir = "auto";
+  face.append(number, owner);
+  return face;
+}
+
 function renderAccount(bank, onEdit, mode, onDelete) {
   if (mode === "rows") {
     const row = node("div", "bank-settings-row");
@@ -113,7 +157,7 @@ function renderAccount(bank, onEdit, mode, onDelete) {
       node(
         "p",
         "font-bold",
-        [bank.first_name, bank.last_name].filter(Boolean).join(" ") ||
+        cardholder(bank) ||
           (bank.is_cash ? "دریافت و پرداخت نقدی" : "صاحب حساب ثبت نشده"),
       ),
       node(
@@ -170,78 +214,35 @@ function renderAccount(bank, onEdit, mode, onDelete) {
   article.href = `/page/bank-transactions-page.html?bank=${bank.id}`;
   article.setAttribute(
     "aria-label",
-    `تراکنش‌های ${bank.name}، ${[bank.first_name, bank.last_name].filter(Boolean).join(" ")}`,
+    `تراکنش‌های ${[bank.name, cardholder(bank)].filter(Boolean).join("، ")}`,
   );
-  const glass = node("span", "navbar-glass");
-  glass.setAttribute("aria-hidden", "true");
   const surface = node("div", "bank-account-surface card-tilt-surface");
-  const face = node("div", "bank-card-face");
-  const top = node("div", "relative flex items-center justify-between gap-3");
-  const identity = node("div", "min-w-0");
-  identity.append(
-    node("h3", "text-base font-black", bank.name),
-    node(
+  const face = renderCardFace(bank);
+  if (!bank.is_cash || bank.sheba_number) {
+    const sheba = node(
       "p",
-      "mt-1 text-xs text-mirage/50",
-      bank.active ? "حساب فعال" : "حساب غیرفعال",
-    ),
-  );
-  top.append(identity, bankLogo(bank));
-  const chip = node("span", "bank-chip");
-  chip.setAttribute("aria-hidden", "true");
-  face.append(top, chip);
-  const number = node(
-    "p",
-    "bank-card-number",
-    bank.card_number
-      ? formatCardNumber(bank.card_number)
-      : bank.is_cash
-        ? "صندوق نقدی"
-        : "شماره کارت ثبت نشده",
-  );
-  number.dir = bank.card_number ? "ltr" : "rtl";
-  number.setAttribute(
-    "aria-label",
-    bank.card_number
-      ? `شماره کارت ${formatCardNumber(bank.card_number)}`
-      : "شماره کارت ثبت نشده",
-  );
-  const sheba = node(
-    "p",
-    "bank-sheba",
-    bank.sheba_number || (bank.is_cash ? "" : "شماره شبا ثبت نشده"),
-  );
-  sheba.dir = bank.sheba_number ? "ltr" : "rtl";
-  sheba.setAttribute(
-    "aria-label",
-    bank.sheba_number ? `شماره شبا ${bank.sheba_number}` : "شماره شبا ثبت نشده",
-  );
-  const owner = [bank.first_name, bank.last_name].filter(Boolean).join(" ");
-  face.append(
-    number,
-    sheba,
-    node(
-      "p",
-      "relative mt-3 mb-3 text-sm font-bold",
-      owner || (bank.is_cash ? "دریافت و پرداخت نقدی" : "صاحب حساب ثبت نشده"),
-    ),
-  );
-  const balance = node(
-    "div",
-    "relative mt-auto border-t border-french-gray/25 pt-3",
+      "bank-card-sheba",
+      bank.sheba_number || "شماره شبا ثبت نشده",
+    );
+    sheba.dir = bank.sheba_number ? "ltr" : "rtl";
+    if (bank.sheba_number)
+      sheba.setAttribute("aria-label", `شماره شبا ${bank.sheba_number}`);
+    face.append(sheba);
+  }
+  const balance = node("div", "bank-card-balance");
+  const balanceHeader = node("div", "bank-card-balance-header");
+  balanceHeader.append(
+    node("p", "", "موجودی حساب"),
+    node("p", "", bank.active ? "حساب فعال" : "حساب غیرفعال"),
   );
   balance.append(
-    node("p", "text-xs text-mirage/50", "موجودی حساب"),
-    node(
-      "p",
-      "mt-1 break-words text-xl font-black text-persian-blue",
-      money(bank.balance),
-    ),
+    balanceHeader,
+    node("p", "bank-card-balance-amount", money(bank.balance)),
   );
   if (bank.opening_balance_locked)
-    balance.append(node("p", "mt-1 text-xs text-mirage/65", `افتتاحیه ${money(bank.opening_balance)}`));
+    balance.append(node("p", "bank-card-opening", `افتتاحیه ${money(bank.opening_balance)}`));
   face.append(balance);
-  surface.append(glass, face);
+  surface.append(face);
   article.append(surface);
   return article;
 }
@@ -342,16 +343,31 @@ export async function initializeBankAccounts() {
     }
   }
 
+  function updatePreviewFields() {
+    const preview = $("bankCardPreview");
+    if (preview.hidden) return;
+    const digits = normalizeDigits($("bankCardNumber").value).replace(/\D/g, "");
+    preview.querySelector(".bank-card-number").textContent = formatCardNumber(
+      digits.slice(0, 16).padEnd(16, "•"),
+    );
+    preview.querySelector(".bank-card-owner").textContent =
+      [$("bankFirstName").value.trim(), $("bankLastName").value.trim()]
+        .filter(Boolean)
+        .join(" ") || "نام دارنده کارت";
+  }
+
   function preview() {
     const bank = banks.find((item) => item.code === $("bankSelect").value);
-    $("bankLogoPreview").replaceChildren();
-    $("bankLogoPreview").classList.toggle("hidden", !bank);
-    $("bankLogoPreview").classList.toggle("flex", Boolean(bank));
-    if (bank)
-      $("bankLogoPreview").append(
-        bankLogo(bank),
-        node("span", "text-sm font-bold", bank.name),
-      );
+    const container = $("bankCardPreview");
+    container.replaceChildren();
+    container.hidden = !bank;
+    if (!bank) return;
+    const face = renderCardFace(bank, { preview: true });
+    // The same values are available to assistive technology in the form fields.
+    face.setAttribute("aria-hidden", "true");
+    face.querySelector(".bank-card-number").dir = "ltr";
+    container.append(node("p", "bank-card-preview-label", "پیش‌نمایش کارت"), face);
+    updatePreviewFields();
   }
 
   async function loadCatalog() {
@@ -416,8 +432,8 @@ export async function initializeBankAccounts() {
     );
     $("bankOpening").readOnly = Boolean(editing?.opening_balance_locked);
     $("bankActive").value = String(editing?.active ?? true);
-    $("bankLogoPreview").classList.add("hidden");
     $("bankSelect").replaceChildren(new Option("انتخاب بانک", ""));
+    preview();
     root.inert = false;
     dialog.open();
     await loadCatalog();
@@ -497,7 +513,10 @@ export async function initializeBankAccounts() {
       before + Math.floor(Math.max(0, before - 1) / 4),
     );
     input.setSelectionRange(caret, caret);
+    updatePreviewFields();
   });
+  $("bankFirstName").addEventListener("input", updatePreviewFields);
+  $("bankLastName").addEventListener("input", updatePreviewFields);
   $("bankShebaNumber").addEventListener("blur", () => {
     $("bankShebaNumber").value = normalizeDigits($("bankShebaNumber").value)
       .replace(/\s/g, "")

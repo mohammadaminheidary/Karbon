@@ -3,8 +3,9 @@ import { financeRequest } from "../finance/finance-api.js";
 import { node, money } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { showFinalInvoice } from "./invoice-export.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onExternalDataChange, publishLocalDataChange } from "../components/data-events.js";
 import { fiscalLabel, fiscalRequest } from "../fiscal-years/fiscal-api.js";
+import { confirmFinanceDelete } from "../finance/delete-dialog.js";
 
 let root,
   dialog,
@@ -15,6 +16,7 @@ const methodNames = {
   pos: "کارت‌خوان",
   cash: "نقدی",
   transfer: "کارت‌به‌کارت",
+  customer_receipt: "دریافت از مشتری",
 };
 const paymentNames = {
   settled: "تسویه‌شده",
@@ -29,7 +31,7 @@ function setup() {
   root = node("div", "orders-modal hidden");
   root.id = "orderDetailsModal";
   root.setAttribute("aria-hidden", "true");
-  root.innerHTML = `<button type="button" class="orders-backdrop" data-dialog-close aria-label="بستن جزئیات"></button><section role="dialog" aria-modal="true" aria-labelledby="orderDetailsTitle" class="orders-glass scale-95 opacity-0"><header class="orders-dialog-header"><h2 id="orderDetailsTitle">جزئیات سفارش</h2><button type="button" class="orders-icon-button" data-dialog-close aria-label="بستن">×</button></header><div class="orders-dialog-body"><p id="orderDetailsStatus" role="status"></p><div id="orderDetailsContent"></div><p id="orderDetailsError" class="orders-error" role="alert" hidden></p></div><footer class="orders-dialog-footer"><button type="button" class="orders-secondary" data-dialog-close>بستن</button><button type="button" id="retryOrderDetails" class="orders-secondary" hidden>تلاش مجدد</button><button type="button" id="exportOrderDetails" class="orders-primary" disabled>چاپ و خروجی فاکتور</button></footer></section>`;
+  root.innerHTML = `<button type="button" class="orders-backdrop" data-dialog-close aria-label="بستن جزئیات"></button><section role="dialog" aria-modal="true" aria-labelledby="orderDetailsTitle" class="orders-glass scale-95 opacity-0"><header class="orders-dialog-header"><h2 id="orderDetailsTitle">جزئیات سفارش</h2><button type="button" class="dialog-close-button" data-dialog-close aria-label="بستن"></button></header><div class="orders-dialog-body"><p id="orderDetailsStatus" role="status"></p><div id="orderDetailsContent"></div><p id="orderDetailsError" class="orders-error" role="alert" hidden></p></div><footer class="orders-dialog-footer"><button type="button" class="orders-secondary" data-dialog-close>بستن</button><button type="button" id="retryOrderDetails" class="orders-secondary" hidden>تلاش مجدد</button><button type="button" id="cancelOrderDetails" class="orders-secondary text-alizarin-crimson" hidden>لغو سفارش</button><button type="button" id="editOrderDetails" class="orders-secondary" hidden>ویرایش سفارش</button><button type="button" id="exportOrderDetails" class="orders-primary" disabled>چاپ و خروجی فاکتور</button></footer></section>`;
   document.body.append(root);
   dialog = new Dialog(root.id, {
     onCancel: () => {
@@ -82,6 +84,7 @@ function render(order, year) {
       ["کد مشتری", formatNumber(order.customer.code)],
       ["شماره‌های تماس", order.customer.phone_numbers.join("، ") || "ثبت نشده"],
       ["آدرس", order.customer.address || "ثبت نشده"],
+      ...(order.delivery_address ? [["نشانی تحویل", order.delivery_address]] : []),
     ]),
   );
   const items = section("اقلام فاکتور");
@@ -166,6 +169,8 @@ export async function showOrderDetails(orderId, options = {}) {
   $("orderDetailsError").hidden = true;
   $("retryOrderDetails").hidden = true;
   $("exportOrderDetails").disabled = true;
+  $("cancelOrderDetails").hidden = true;
+  $("editOrderDetails").hidden = true;
   root.inert = false;
   dialog.open();
   try {
@@ -182,6 +187,22 @@ export async function showOrderDetails(orderId, options = {}) {
     $("orderDetailsStatus").textContent = "";
     $("exportOrderDetails").disabled = false;
     $("exportOrderDetails").onclick = () => showFinalInvoice(order.id, options);
+    if (!year && kind === "orders") {
+      const edit = $("editOrderDetails");
+      edit.hidden = !options.onEdit;
+      edit.onclick = options.onEdit ? () => options.onEdit(order) : null;
+      const cancel = $("cancelOrderDetails");
+      cancel.hidden = false;
+      cancel.onclick = () => confirmFinanceDelete({
+        path: `/orders/${order.id}`,
+        orderCancellation: true,
+        description: `سفارش ${order.order_number} لغو شود؟ موجودی کالاها بازگردانده می‌شود و پرداخت‌های فاکتور از دفتر مالی حذف می‌شوند.`,
+        onDeleted: () => {
+          dialog.close();
+          publishLocalDataChange();
+        },
+      });
+    }
   } catch (error) {
     if (current !== version) return;
     $("orderDetailsStatus").textContent = "";

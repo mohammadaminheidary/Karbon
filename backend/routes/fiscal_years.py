@@ -12,11 +12,12 @@ from routes.finance import finance_errors
 from security.auth import get_current_user, require_admin
 from services import fiscal_year_service as service
 from services.order_service import invoice
+from services.inventory_service import archived_purchase_invoice
 
 router = APIRouter(prefix="/api/settings/fiscal-years", tags=["Fiscal years"], dependencies=[Depends(get_current_user)])
 
 Year = Annotated[int, Path(ge=1, le=9376)]
-RecordKind = Literal["orders", "invoices", "customers", "transactions"]
+RecordKind = Literal["orders", "invoices", "purchases", "customers", "transactions"]
 Output = Literal["summary", "carryover", "data"]
 Version = Annotated[int | None, Query(ge=1, le=2**63 - 1)]
 
@@ -132,6 +133,17 @@ def issued_invoice(year: Year, record_id: Annotated[int, Path(gt=0, le=2**63 - 1
         return invoice(db, record_id, include_deleted=True)
 
 
+@router.get("/{year}/records/purchases/{record_id}/issued")
+def issued_purchase(year: Year, record_id: Annotated[int, Path(gt=0, le=2**63 - 1)],
+                    version: Version = None, db: Session = Depends(get_database)):
+    with finance_errors():
+        data = service.find_snapshot(db, year, version).data
+        receipt = next((row for row in data["purchases"] if row["id"] == record_id), None)
+        if receipt is None:
+            raise HTTPException(404, "خرید در این بایگانی پیدا نشد.")
+        return archived_purchase_invoice(db, data, receipt)
+
+
 @router.get("/{year}/records/{kind}/{record_id}")
 def record(year: Year, kind: RecordKind, record_id: Annotated[int, Path(gt=0, le=2**63 - 1)],
            version: Version = None, db: Session = Depends(get_database)):
@@ -139,8 +151,8 @@ def record(year: Year, kind: RecordKind, record_id: Annotated[int, Path(gt=0, le
         data = service.find_snapshot(db, year, version).data
         if kind == "customers":
             return precise(service.statement(data, record_id))
-        if kind == "transactions":
-            item = next((tx for tx in data["transactions"] if tx["id"] == record_id), None)
+        if kind in {"transactions", "purchases"}:
+            item = next((row for row in data[kind] if row["id"] == record_id), None)
             if item is None:
                 raise HTTPException(404, "تراکنش در این بایگانی پیدا نشد.")
             return precise(item)

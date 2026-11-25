@@ -15,11 +15,14 @@ from models.fiscal_year import FiscalInventoryOpening, InventoryChange, Inventor
 from models.inventory import InventoryOption, Purchase, PurchaseItem
 from models.order import CASH_ACCOUNT_NUMBER, Order, OrderItem, OrderPayment, Product
 from services.fiscal_period import bank_openings, jalali, year_dates, year_of
+from services.inventory_service import PURCHASE_INTERNAL_FIELDS
+from services.receivables import CUSTOMER_RECEIPT_METHOD, general_allocations, invoice_positions
 
 
 MONTHS = ("فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
           "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند")
-METHODS = {"pos": "کارت‌خوان", "cash": "نقدی", "transfer": "کارت‌به‌کارت", "unknown": "ثبت نشده"}
+METHODS = {"pos": "کارت‌خوان", "cash": "نقدی", "transfer": "کارت‌به‌کارت", "unknown": "ثبت نشده",
+           CUSTOMER_RECEIPT_METHOD: "دریافت از مشتری"}
 
 
 def columns(row, omit=()):
@@ -41,16 +44,19 @@ def inventory_at(db, cutoff):
     states = {}
     for change in db.scalars(select(InventoryChange).order_by(InventoryChange.business_date, InventoryChange.id)):
         totals[change.product_id] += change.delta
-        if change.tracked is not None:
-            tracked[change.product_id] = change.tracked
+        if change.tracked is not None and (change.product_id not in tracked or tracked[change.product_id].id < change.id):
+            tracked[change.product_id] = change
         if change.business_date <= cutoff:
             quantities[change.product_id] += change.delta
-            if change.tracked is not None:
+            saved = states.get(change.product_id)
+            if change.tracked is not None and (saved is None or
+                    (max(change.business_date, history.available_from), change.id) >
+                    (max(saved.business_date, history.available_from), saved.id)):
                 states[change.product_id] = change
     live = {pid: qty for pid, qty in db.execute(select(Product.id, Product.stock).where(
         Product.deleted_at.is_(None), Product.stock.is_not(None)))}
-    expected = {pid: totals[pid] for pid, enabled in tracked.items() if enabled}
-    if expected != live or any(quantities[pid] < 0 for pid, state in states.items() if state.tracked):
+    expected = {pid: totals[pid] for pid, change in tracked.items() if change.tracked}
+    if expected != live:
         return {"available": False, "reason": "سوابق تغییر موجودی برای بازسازی مانده در تاریخ پایان سال کافی نیست.", "rows": []}
     return {"available": True, "reason": None, "rows": [
         {"product_id": pid, "product_code": state.product_code, "name": state.name,
@@ -59,29 +65,30 @@ def inventory_at(db, cutoff):
     ]}
 
 
-def customer_positions(orders, receipts, credits, cutoff):
+def customer_positions(orders, positions, receipts, credits, cutoff):
     invoices = {}
     accounts = defaultdict(lambda: {"receivable": 0, "credit": 0})
     for tx in credits:
         if tx.transaction_date <= cutoff:
             accounts[tx.customer_id]["credit"] += tx.amount
     for order in orders:
-        paid = sum(tx.amount for _, tx in receipts[order.id] if tx.transaction_date <= cutoff)
-        if order.invoice_date > cutoff:
+        position = positions.get(order.id)
+        if position is None:
+            paid = sum(tx.amount for _, tx in receipts[order.id] if tx.transaction_date <= cutoff)
             if paid:
                 accounts[order.customer_id]["credit"] += paid
             continue
-        total = order.subtotal - order.discount
-        amount = max(total - paid, 0)
-        if paid > total:
-            accounts[order.customer_id]["credit"] += paid - total
+        amount = position.remaining
+        if position.general_paid or position.direct_paid > position.total:
+            accounts[order.customer_id]["credit"] += max(position.direct_paid - position.total, 0) - position.general_paid
         if amount:
             accounts[order.customer_id]["receivable"] += amount
             invoices[order.id] = {
                 "order_id": order.id, "customer_id": order.customer_id, "source_year": year_of(order.invoice_date),
-                "paid": paid, "amount": amount, "overdue": order.payment_date < cutoff,
+                "paid": position.paid, "amount": amount, "overdue": order.payment_date < cutoff,
             }
-    return invoices, [{"customer_id": cid, **values} for cid, values in sorted(accounts.items())]
+    return invoices, [{"customer_id": cid, **values} for cid, values in sorted(accounts.items())
+                      if values["receivable"] or values["credit"]]
 
 
 def account_balances(db, year, start, cutoff, zone, transactions):
@@ -168,8 +175,18 @@ def capture(db, year):
     orders = db.scalars(select(Order).options(defer(Order.invoice_snapshot)).where(
         Order.deleted_at.is_(None), or_(Order.invoice_date <= cutoff, Order.id.in_(receipts)))
         .order_by(Order.invoice_date, Order.id)).all()
-    initial_invoices, initial_customers = customer_positions(orders, receipts, credits, start - timedelta(days=1))
-    open_invoices, closing_customers = customer_positions(orders, receipts, credits, cutoff)
+    opening_day = start - timedelta(days=1)
+    opening_positions = {row.id: row for row in db.execute(select(invoice_positions(opening_day)))}
+    closing_query = invoice_positions(cutoff)
+    closing_positions = {row.id: row for row in db.execute(select(closing_query))}
+    initial_invoices, initial_customers = customer_positions(orders, opening_positions, receipts, credits, opening_day)
+    open_invoices, closing_customers = customer_positions(orders, closing_positions, receipts, credits, cutoff)
+    by_transaction = {tx.id: tx for tx in transactions}
+    applications = db.execute(general_allocations(closing_query, cutoff)).all()
+    applied_amounts = Counter()
+    for application in applications:
+        applied_amounts[application.transaction_id] += application.amount
+    related.update(row.order_id for row in applications if by_transaction[row.transaction_id].transaction_date >= start)
     order_ids = related | initial_invoices.keys() | open_invoices.keys() | {o.id for o in orders if o.invoice_date >= start}
     orders = db.scalars(select(Order).options(undefer(Order.invoice_snapshot)).where(Order.id.in_(order_ids))
                         .order_by(Order.invoice_date, Order.id)).all()
@@ -178,16 +195,19 @@ def capture(db, year):
     order_data = []
     credit_customers = {row["customer_id"] for row in initial_customers + closing_customers if row["credit"]}
     linked_ids = {tx.id for tx in credits if tx.customer_id in credit_customers}
+    applications = [row for row in applications if row.order_id in order_ids]
+    linked_ids.update(row.transaction_id for row in applications)
     for order in orders:
-        issued = order.invoice_snapshot or {}
+        issued = order.edit_snapshot or order.invoice_snapshot or {}
         source_year = year_of(order.invoice_date)
         in_period = start <= order.invoice_date <= cutoff
-        total = order.subtotal - order.discount
-        paid = sum(tx.amount for _, tx in receipts[order.id])
-        outstanding = max(total - paid, 0) if order.invoice_date <= cutoff else 0
+        total = order.total
+        position = closing_positions.get(order.id)
+        paid = position.paid if position else sum(tx.amount for _, tx in receipts[order.id])
+        outstanding = position.remaining if position else 0
         linked_ids.update(tx.id for _, tx in receipts[order.id])
         order_data.append({
-            **columns(order, {"request_id", "request_fingerprint", "invoice_snapshot", "deleted_at"}),
+            **columns(order, {"request_id", "request_fingerprint", "invoice_snapshot", "edit_snapshot", "deleted_at"}),
             "source_year": source_year, "in_period": in_period, "total": total, "paid": paid,
             "remaining": outstanding, "jalali_date": jalali(order.invoice_date),
             "jalali_payment_date": jalali(order.payment_date),
@@ -218,9 +238,9 @@ def capture(db, year):
         if not in_period and tx.id not in linked_ids:
             continue
         allocation = allocations.get(tx.id)
-        method = allocation.method if allocation else "cash" if tx.bank_id in cash_ids else "unknown"
+        method = allocation.method if allocation else tx.payment_method or ("cash" if tx.bank_id in cash_ids else "unknown")
         transaction_data.append({
-            **columns(tx, {"request_id", "deleted_at"}), "in_period": in_period, "method": method,
+            **columns(tx, {"request_id", "deleted_at", "payment_method"}), "in_period": in_period, "method": method,
             "jalali_date": jalali(tx.transaction_date), "bank_name": bank_names.get(tx.bank_id),
             "expense_category": (expense_names.get(tx.expense_category_id) or document_names.get(tx.document_account_id)
                                  or tx.title) if tx.kind == "expense" else None,
@@ -231,10 +251,19 @@ def capture(db, year):
                 "transaction_id": tx.id, "customer_id": tx.customer_id, "order_id": allocation.order_id if allocation else None,
                 "bank_id": tx.bank_id, "date": tx.transaction_date, "jalali_date": jalali(tx.transaction_date),
                 "amount": tx.amount, "method": method, "tracking_number": tx.tracking_number, "in_period": in_period,
+                "unapplied": 0 if allocation or tx.customer_id is None else tx.amount - applied_amounts[tx.id],
             })
         if allocation:
             allocation_data.append({**columns(allocation), "amount": tx.amount, "in_period": in_period})
+    allocation_data.extend({"id": None, "order_id": row.order_id, "transaction_id": row.transaction_id,
+                            "method": CUSTOMER_RECEIPT_METHOD, "amount": row.amount,
+                            "in_period": by_transaction[row.transaction_id].transaction_date >= start}
+                           for row in sorted(applications, key=lambda row: (row.transaction_id, row.order_id)))
+    purchases = db.scalars(select(Purchase).where(
+        Purchase.deleted_at.is_(None), Purchase.purchase_date.between(start, cutoff))
+        .order_by(Purchase.purchase_date, Purchase.id)).all()
     used_customers = ({o.customer_id for o in orders}
+                      | {p.supplier_id for p in purchases if p.supplier_id}
                       | {a["customer_id"] for a in initial_customers + closing_customers}
                       | {tx["customer_id"] for tx in transaction_data if tx["customer_id"]})
     customers = []
@@ -248,8 +277,6 @@ def capture(db, year):
     documents = db.scalars(select(Document).where(Document.deleted_at.is_(None),
         or_(Document.date.between(start, cutoff), Document.id.in_(
             {tx["document_id"] for tx in transaction_data if tx["document_id"]}))).order_by(Document.date, Document.id))
-    purchases = db.scalars(select(Purchase).where(Purchase.purchase_date.between(start, cutoff))
-                           .order_by(Purchase.purchase_date, Purchase.id)).all()
     purchase_items = []
     purchase_totals = Counter()
     for item in db.scalars(select(PurchaseItem).where(PurchaseItem.purchase_id.in_([p.id for p in purchases]))
@@ -275,9 +302,12 @@ def capture(db, year):
         "documents": [{**columns(d, {"request_id", "last_request_id", "request_fingerprint", "deleted_at"}),
                        "in_period": start <= d.date <= cutoff} for d in documents],
         "accounts": bank_data,
-        "purchases": [{**columns(p, {"request_id", "request_fingerprint"}), "jalali_date": jalali(p.purchase_date),
-                       "total": purchase_totals[p.id]} for p in purchases],
+        "purchases": [{**columns(p, PURCHASE_INTERNAL_FIELDS | {"request_id", "revision", "deleted_at"}), "jalali_date": jalali(p.purchase_date),
+                       "total": purchase_totals[p.id] - p.discount + p.tax + p.shipping} for p in purchases],
         "purchase_items": purchase_items,
+        "purchase_issuance": {str(p.id): {key: p.invoice_snapshot[key] for key in ("presentation", "supplier")
+                                             if key in p.invoice_snapshot}
+                              for p in purchases if p.invoice_snapshot},
         "inventory": inventory, "opening_inventory": opening_inventory,
         "products": [products[pid] for pid in sorted(products)],
         "product_categories": [columns(c) for c in categories if c.id in category_ids],

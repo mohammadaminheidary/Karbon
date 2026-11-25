@@ -1,4 +1,5 @@
 // Run against serve_customers_fixture.py. All records belong to its temporary DB.
+import { fillDate, readDate, dateParts } from "./date-input-helpers.mjs";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -143,7 +144,9 @@ try {
     "SELECT",
   );
   assert.equal(
-    await page.locator("#purchaseDate").evaluate((el) => el.readOnly),
+    await dateParts(page, "purchaseDate").evaluateAll((fields) =>
+      fields.length === 3 && fields.every((field) => field.readOnly),
+    ),
     false,
   );
   assert.equal(
@@ -168,7 +171,7 @@ try {
     ["/page/settings-page.html#inventory", "/page/settings-page.html#products"],
   );
   await expectSummary(0, 1, 0);
-  await page.locator("#purchaseDate").fill("۱۴۰۵/۰۸/۰۹");
+  await fillDate(page, "purchaseDate", "۱۴۰۵/۰۸/۰۹");
   await fillRow(0, firstCategory.id, firstProduct.id, "۳", "700");
   assert.equal(await row(0).locator(".purchase-unit").inputValue(), "عدد");
   assert.equal(await row(0).locator(".purchase-total").inputValue(), nf(2100));
@@ -190,7 +193,7 @@ try {
   await fillRow(0, firstCategory.id, firstProduct.id, "۳", "700");
   await page.locator("#reloadPurchaseOptions").click();
   await optionsReady();
-  assert.equal(await page.locator("#purchaseDate").inputValue(), "۱۴۰۵/۰۸/۰۹");
+  assert.equal(await readDate(page, "purchaseDate"), "1405/08/09");
   assert.equal(
     await row(0).locator(".purchase-product").inputValue(),
     String(firstProduct.id),
@@ -310,7 +313,7 @@ try {
       });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.locator("#purchaseDate").fill("1405/12/30");
+  await fillDate(page, "purchaseDate", "1405/12/30");
   const invalid = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/purchases") && response.status() === 422,
@@ -329,7 +332,7 @@ try {
   );
 
   // Commit every row, then lose the response. Reload and retry the same invoice.
-  await page.locator("#purchaseDate").fill("۱۴۰۵/۰۸/۰۹");
+  await fillDate(page, "purchaseDate", "۱۴۰۵/۰۸/۰۹");
   let committed;
   await page.route("**/api/purchases", async (route) => {
     const response = await route.fetch();
@@ -363,7 +366,7 @@ try {
   await ready();
   await optionsReady();
   assert.equal(await page.locator("#purchaseRows tr").count(), 3);
-  assert.equal(await page.locator("#purchaseDate").inputValue(), "1405/08/09");
+  assert.equal(await readDate(page, "purchaseDate"), "1405/08/09");
   await expectSummary(9, 3, 5900);
   const retried = page.waitForResponse(
     (response) =>

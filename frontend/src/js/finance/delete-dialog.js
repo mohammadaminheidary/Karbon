@@ -6,7 +6,7 @@ let dialog,
   root,
   pending = false,
   action;
-export function confirmFinanceDelete({ path, description, onDeleted }) {
+export function confirmFinanceDelete({ path, description, onDeleted, orderCancellation = false }) {
   if (pending) return;
   if (!root) {
     root = node("dialog", "bottom-curtain finance-surface");
@@ -17,7 +17,7 @@ export function confirmFinanceDelete({ path, description, onDeleted }) {
       <form id="financeDeleteForm" class="mt-5">
         <label>رمز حساب کاربری<input id="financeDeletePassword" type="password" autocomplete="current-password" required maxlength="1024" class="finance-field" /></label>
         <p id="financeDeleteError" role="alert" class="mt-3 text-sm text-alizarin-crimson"></p>
-        <div class="mt-5 flex gap-3"><button id="financeDeleteSubmit" class="finance-button bg-alizarin-crimson text-white" type="submit">بله، حذف شود</button><button type="button" data-dialog-close class="finance-button border border-french-gray/40">انصراف</button></div>
+        <div class="mt-5 flex gap-3" data-confirm-actions><button id="financeDeleteSubmit" class="finance-button bg-alizarin-crimson text-white" type="submit">بله، حذف شود</button><button type="button" data-dialog-close class="finance-button border border-french-gray/40">انصراف</button></div>
       </form></section>`;
     document.body.append(root);
     dialog = new CurtainDialog(root.id, {
@@ -52,12 +52,20 @@ export function confirmFinanceDelete({ path, description, onDeleted }) {
       await current.onDeleted?.();
     });
   }
-  action = { path, onDeleted };
+  action = { path, onDeleted, orderCancellation };
+  root.toggleAttribute("data-order-cancellation", orderCancellation);
   root.querySelector("form").reset();
+  root.querySelector("#deleteTitle").textContent = orderCancellation ? "لغو سفارش" : "آیا مطمئن هستید؟";
   root.querySelector("#deleteDescription").textContent = description;
   root.querySelector("#financeDeleteError").textContent = "";
+  const keep = root.querySelector("[data-dialog-close]");
+  keep.textContent = orderCancellation ? "حفظ سفارش" : "انصراف";
+  const confirm = root.querySelector("#financeDeleteSubmit");
+  if (orderCancellation) confirm.before(keep);
+  else confirm.after(keep);
+  busy();
   root.inert = false;
-  dialog.open(root.querySelector("input"));
+  dialog.open(orderCancellation ? keep : root.querySelector("input"));
 }
 function clear() {
   root.querySelector("form").reset();
@@ -67,7 +75,7 @@ function busy() {
   root
     .querySelectorAll("button, input")
     .forEach((el) => (el.disabled = pending));
-  root.querySelector("#financeDeleteSubmit").textContent = pending
-    ? "در حال حذف..."
-    : "بله، حذف شود";
+  root.querySelector("#financeDeleteSubmit").textContent = action?.orderCancellation
+    ? (pending ? "در حال لغو سفارش…" : "تأیید لغو سفارش")
+    : (pending ? "در حال حذف..." : "بله، حذف شود");
 }

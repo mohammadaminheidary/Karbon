@@ -1,22 +1,30 @@
 import hashlib
 import json
-from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import uuid5
 import jdatetime
-from sqlalchemy import String, cast, func, or_, text
+from sqlalchemy import String, cast, func, literal, or_, select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.schema import CreateTable
 from config import app_timezone
 from models.customer import Customer
 from models.finance import BankAccount, FinancialTransaction
 from models.order import CASH_ACCOUNT_NUMBER, Product, Order, OrderItem, OrderPayment
-from services.finance_service import FinanceError, next_transaction_number, require
-from services.fiscal_period import active_period, effective_day, ensure_open, in_active_period, jalali, stock_change
+from models.fiscal_year import InventoryChange
+from services.finance_service import FinanceError, next_transaction_number, payment_bank, require, validate_receipt_reference
+from services.fiscal_period import active_period, effective_day, ensure_open, in_active_period, jalali
+from services.inventory_stock import StockPosting, line_quantities, opposite, post_stock, quantities_for
 from services.reference_codes import compact_transaction_numbers
+from services.receivables import CUSTOMER_RECEIPT_METHOD, active_bounds, direct_receipts, general_allocations, invoice_positions
 from schemas.customer_schema import normalize_text
 from security.password import verify_password
-from services.inventory_service import category_path, enabled_units, require_category, require_enabled_unit, with_category_names
+from services.inventory_service import (
+    category_path, enabled_unit_names, products_by_id, require_category,
+    require_enabled_unit, with_category_names,
+)
+from services.production_service import has_production_stock, production_stock_products
 from models.inventory import Brand, Purchase, PurchaseItem
+from services import invoice_settings_service as design
 
 
 def initialize_order_storage(engine):
@@ -25,7 +33,8 @@ def initialize_order_storage(engine):
         connection.exec_driver_sql("BEGIN IMMEDIATE")
         for table, additions in {
             "products": {"product_code": "VARCHAR(32)", "revision": "INTEGER NOT NULL DEFAULT 1", "deleted_at": "DATETIME"},
-            "orders": {"invoice_snapshot": "JSON", "deleted_at": "DATETIME"},
+            "orders": {"invoice_snapshot": "JSON", "edit_snapshot": "JSON", "deleted_at": "DATETIME",
+                       "tax": "BIGINT NOT NULL DEFAULT 0", "shipping": "BIGINT NOT NULL DEFAULT 0"},
         }.items():
             columns = {row[1] for row in connection.exec_driver_sql(f"PRAGMA table_info({table})")}
             for column, sql_type in additions.items():
@@ -45,20 +54,55 @@ def initialize_order_storage(engine):
             BEFORE UPDATE OF invoice_snapshot ON orders
             WHEN OLD.invoice_snapshot IS NOT NULL AND OLD.invoice_snapshot != 'null' AND NEW.invoice_snapshot IS NOT OLD.invoice_snapshot
             BEGIN SELECT RAISE(ABORT, 'final invoice is permanent'); END""")
+    upgrade_product_constraints(engine)
+
+
+def upgrade_product_constraints(engine):
+    """Replace SQLite's legacy name and nonnegative-stock constraints in place."""
+    with engine.connect() as connection:
+        foreign_keys = connection.exec_driver_sql("PRAGMA foreign_keys").scalar()
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        try:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            migrated = connection.exec_driver_sql(
+                "SELECT 1 FROM sqlite_master WHERE type='index' AND name='ux_products_name_brand'"
+            ).scalar()
+            if not migrated:
+                sequence = connection.exec_driver_sql("SELECT seq FROM sqlite_sequence WHERE name='products'").scalar()
+                definition = str(CreateTable(Product.__table__).compile(dialect=connection.dialect))
+                connection.exec_driver_sql(definition.replace("CREATE TABLE products (", "CREATE TABLE products_migration (", 1))
+                columns = ", ".join(Product.__table__.columns.keys())
+                connection.exec_driver_sql(f"INSERT INTO products_migration ({columns}) SELECT {columns} FROM products")
+                connection.exec_driver_sql("DROP TABLE products")
+                connection.exec_driver_sql("ALTER TABLE products_migration RENAME TO products")
+                if sequence is not None:
+                    connection.exec_driver_sql("UPDATE sqlite_sequence SET seq=MAX(seq, ?) WHERE name='products'", (sequence,))
+                    connection.exec_driver_sql("INSERT INTO sqlite_sequence (name, seq) SELECT 'products', ? "
+                                               "WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name='products')", (sequence,))
+                for index in Product.__table__.indexes:
+                    index.create(connection)
+                connection.exec_driver_sql("CREATE INDEX ix_products_category_id ON products(category_id)")
+                if connection.exec_driver_sql("PRAGMA foreign_key_check").first():
+                    raise RuntimeError("Product migration violated a foreign key")
+            connection.commit()
+        finally:
+            connection.rollback()
+            connection.exec_driver_sql(f"PRAGMA foreign_keys={foreign_keys}")
 
 
 def products(db, include_inactive=False, for_order=False):
     query = db.query(Product).filter(Product.deleted_at.is_(None))
     if not include_inactive:
         query = query.filter(Product.active.is_(True))
-    if for_order:
-        query = query.filter(Product.unit.in_(enabled_units(db)))
+    units = {normalize_text(name) for name in enabled_unit_names(db)} if for_order else None
     referenced = {product_id for (product_id,) in db.query(OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Order.deleted_at.is_(None)).distinct().all()}
     referenced.update(product_id for (product_id,) in db.query(Purchase.product_id).distinct().all())
     referenced.update(product_id for (product_id,) in db.query(PurchaseItem.product_id).distinct().all())
+    referenced.update(db.scalars(production_stock_products().distinct()))
     query = with_category_names(query, Product.category_id).outerjoin(Product.brand).add_columns(Brand.name)
     return [{**product_data(item, name, parent_name, brand_name), "can_delete": item.id not in referenced}
-            for item, name, parent_name, brand_name in query.order_by(Product.id)]
+            for item, name, parent_name, brand_name in query.order_by(Product.id)
+            if units is None or normalize_text(item.unit) in units]
 
 
 def product_data(item, name, parent_name, brand_name):
@@ -70,11 +114,6 @@ def save_product(db, data, product_id=None):
     db.rollback()
     try:
         db.execute(text("BEGIN IMMEDIATE"))
-        duplicate = db.query(Product.id).filter(Product.name == data.name)
-        if product_id is not None:
-            duplicate = duplicate.filter(Product.id != product_id)
-        if duplicate.first():
-            raise FinanceError("کالایی با این نام قبلاً ثبت شده است.", 409)
         item = require(db, Product, product_id, "کالا") if product_id is not None else Product()
         previous_stock = item.stock
         if product_id is not None and item.revision != data.revision:
@@ -90,7 +129,15 @@ def save_product(db, data, product_id=None):
                 raise FinanceError("برند کالا را از تنظیمات انتخاب کنید.", 422)
             item.requires_brand = data.requires_brand
             item.brand_id = brand.id if brand else None
-        for key, value in data.model_dump(exclude={"revision", "unit", "category_id", "requires_brand", "brand_id", "price"}).items():
+        duplicate = db.query(Product.id).filter_by(name=data.name, brand_id=brand.id if brand else None)
+        if product_id is not None:
+            duplicate = duplicate.filter(Product.id != product_id)
+        if duplicate.first():
+            raise FinanceError("کالایی با همین نام و برند قبلاً ثبت شده است.", 409)
+        target_stock = data.stock if product_id is None or "stock" in data.model_fields_set else previous_stock
+        if previous_stock is not None and target_stock is None and has_open_stock_operations(db, item.id):
+            raise FinanceError("تا زمانی که عملیات قابل برگشت برای کالا وجود دارد، کنترل موجودی را نمی‌توان غیرفعال کرد.", 409)
+        for key, value in data.model_dump(exclude={"revision", "unit", "category_id", "requires_brand", "brand_id", "price", "stock"}).items():
             setattr(item, key, value)
         if product_id is None or "price" in data.model_fields_set:
             item.price = data.price
@@ -103,15 +150,35 @@ def save_product(db, data, product_id=None):
         if product_id is None:
             item.product_code = f"P-{item.id:06d}"
             db.flush()
-        if item.stock is not None or previous_stock is not None:
-            stock_change(db, item, effective_day(active_period(db)), (item.stock or 0) - (previous_stock or 0),
-                         tracked=item.stock is not None)
+        if target_stock is not None or previous_stock is not None:
+            post_stock(db, {item.id: item}, StockPosting(
+                f"product:{item.id}:{item.revision}", effective_day(active_period(db)),
+                {item.id: (target_stock or 0) - (previous_stock or 0)}), tracked=target_stock is not None)
         result = product_data(item, category.name, parent.name if parent else None, brand.name if brand else None)
         db.commit()
         return result
     except Exception:
         db.rollback()
         raise
+
+
+def has_open_stock_operations(db, product_id):
+    period = active_period(db)
+    orders = db.query(Order.id).join(OrderItem).filter(
+        OrderItem.product_id == product_id, Order.deleted_at.is_(None),
+        ~db.query(InventoryChange.id).filter(
+            InventoryChange.reference == func.coalesce(
+                func.json_extract(Order.edit_snapshot, "$._edit.stock_reference"),
+                'sale:' + cast(Order.id, String) + ':issue'),
+            InventoryChange.product_id == product_id, InventoryChange.delta == 0,
+        ).exists(),
+    )
+    purchases = db.query(Purchase.id).join(PurchaseItem).filter(
+        PurchaseItem.product_id == product_id, Purchase.deleted_at.is_(None))
+    if period:
+        orders = orders.filter(Order.invoice_date >= period.start_date)
+        purchases = purchases.filter(Purchase.purchase_date >= period.start_date)
+    return orders.first() is not None or purchases.first() is not None or has_production_stock(db, product_id, period)
 
 
 def delete_product(db, product_id, data, user):
@@ -131,6 +198,12 @@ def delete_product(db, product_id, data, user):
         if db.query(OrderItem.id).join(Order, Order.id == OrderItem.order_id).filter(
                 OrderItem.product_id == product.id, Order.deleted_at.is_(None)).first():
             raise FinanceError("این کالا در سفارش ثبت‌شده استفاده شده و قابل حذف نیست. می‌توانید آن را غیرفعال کنید.", 409)
+        if has_production_stock(db, product.id):
+            raise FinanceError("این کالا در تولید ثبت‌شده استفاده شده و قابل حذف نیست.", 409)
+        if product.stock is not None:
+            post_stock(db, {product.id: product}, StockPosting(
+                f"product:{product.id}:delete", effective_day(active_period(db)), {product.id: -product.stock}),
+                tracked=False, retiring=True)
         if db.query(OrderItem.id).filter(OrderItem.product_id == product.id).first():
             # Deleted invoices retain immutable history and foreign keys.
             product.deleted_at = datetime.now(timezone.utc)
@@ -138,8 +211,6 @@ def delete_product(db, product_id, data, user):
             product.revision += 1
         else:
             db.delete(product)
-        if product.stock is not None:
-            stock_change(db, product, effective_day(active_period(db)), -product.stock, tracked=False)
         db.commit()
         return {"id": product_id, "deleted": True}
     except Exception:
@@ -154,69 +225,119 @@ def next_number(db):
     return str(number)
 
 
+def read_order_payments(db, orders, *, issued=False):
+    order_ids = [order.id for order in orders]
+    customers = {order.customer_id for order in orders}
+    cutoff = date.max if issued else active_bounds()[1]
+    payments = direct_receipts(cutoff).where(OrderPayment.order_id.in_(order_ids))
+    if not issued:
+        positions = invoice_positions(cutoff, customers)
+        general = general_allocations(positions, cutoff, customers).where(positions.c.id.in_(order_ids))
+        payments = payments.union_all(general.add_columns(literal(CUSTOMER_RECEIPT_METHOD).label("method")))
+    rows = payments.subquery()
+    grouped = {}
+    for order_id, method, transaction, amount in db.execute(
+        select(rows.c.order_id, rows.c.method, FinancialTransaction, rows.c.amount)
+        .join(FinancialTransaction, FinancialTransaction.id == rows.c.transaction_id)
+        .order_by(FinancialTransaction.id)
+    ):
+        grouped.setdefault(order_id, []).append((method, transaction, amount))
+    return grouped
+
+
+def read_order_relations(db, order, *, issued=False):
+    customer = db.get(Customer, order.customer_id)
+    items = db.query(OrderItem).filter(OrderItem.order_id == order.id).order_by(OrderItem.position).all()
+    return customer, items, read_order_payments(db, [order], issued=issued).get(order.id, [])
+
+
+def current_invoice_snapshot(order):
+    return order.edit_snapshot or order.invoice_snapshot or {}
+
+
 def serialize(db, order, *, loaded=None):
-    if loaded is None:
-        customer = db.get(Customer, order.customer_id)
-        items = db.query(OrderItem).filter(OrderItem.order_id == order.id).order_by(OrderItem.position).all()
-        payments = db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(
-            OrderPayment.order_id == order.id, FinancialTransaction.deleted_at.is_(None)).order_by(OrderPayment.id).all()
-    else:
-        customer, items, payments = loaded
-    paid = sum(transaction.amount for _, transaction in payments)
-    total = order.subtotal - order.discount
-    category_paths = {item["id"]: item["category_path"] for item in (order.invoice_snapshot or {}).get("items", [])
+    customer, items, payments = read_order_relations(db, order) if loaded is None else loaded
+    paid = sum(amount for _, _, amount in payments)
+    total = order.total
+    snapshot = current_invoice_snapshot(order)
+    category_paths = {item["id"]: item["category_path"] for item in snapshot.get("items", [])
                       if "category_path" in item}
     return {
-        **{column.name: getattr(order, column.name) for column in Order.__table__.columns if column.name not in {"request_fingerprint", "invoice_snapshot", "deleted_at"}},
+        **{column.name: getattr(order, column.name) for column in Order.__table__.columns if column.name not in {"request_fingerprint", "invoice_snapshot", "edit_snapshot", "deleted_at"}},
+        "created_at": order.created_at.replace(tzinfo=timezone.utc),
         "jalali_date": jdatetime.date.fromgregorian(date=order.invoice_date).strftime("%Y/%m/%d"),
         "jalali_payment_date": jdatetime.date.fromgregorian(date=order.payment_date).strftime("%Y/%m/%d"),
-        "customer_name": order.invoice_snapshot["customer"]["name"] if order.invoice_snapshot else f"{customer.first_name} {customer.last_name}",
-        "total": total, "paid": paid, "remaining": total - paid,
-        "payment_status": "settled" if paid == total else "partial" if paid else "unpaid",
+        "customer_name": snapshot["customer"]["name"] if snapshot else f"{customer.first_name} {customer.last_name}",
+        "total": total, "paid": paid, "remaining": max(total - paid, 0),
+        "payment_status": "settled" if paid >= total else "partial" if paid else "unpaid",
         "items": [{**{column.name: getattr(item, column.name) for column in OrderItem.__table__.columns},
                    "category_path": category_paths.get(item.id), "total": item.quantity * item.unit_price} for item in items],
-        "payments": [{"method": payment.method, "transaction_id": transaction.id, "bank_id": transaction.bank_id,
-                      "amount": transaction.amount, "jalali_date": jalali(transaction.transaction_date),
-                      "tracking_number": transaction.tracking_number} for payment, transaction in payments],
+        "payments": [{"method": method, "transaction_id": transaction.id, "bank_id": transaction.bank_id,
+                      "amount": amount, "jalali_date": jalali(transaction.transaction_date),
+                      "tracking_number": transaction.tracking_number} for method, transaction, amount in payments],
     }
 
 
-def build_invoice(db, order):
-    data = serialize(db, order)
-    customer = db.get(Customer, order.customer_id)
-    data["customer"] = {"code": customer.customer_code, "name": f"{customer.first_name} {customer.last_name}",
-                        "phone_numbers": list(customer.phone_numbers), "address": customer.address}
-    paths = {item_id: category_path(name, parent_name)
-             for item_id, name, parent_name in with_category_names(
-                 db.query(OrderItem.id).filter(OrderItem.order_id == order.id), OrderItem.category_id,
-             )}
+def build_invoice(db, order, presentation=None, delivery_address=None, *, loaded=None):
+    if loaded is None:
+        loaded = read_order_relations(db, order, issued=True)
+    data = serialize(db, order, loaded=loaded)
+    data["customer"] = design.party_data(loaded[0])
+    catalog = db.query(OrderItem.id, Product.product_code).join(
+        Product, Product.id == OrderItem.product_id,
+    ).filter(OrderItem.order_id == order.id)
+    products = {item_id: (code, category_path(name, parent_name))
+                for item_id, code, name, parent_name in with_category_names(catalog, OrderItem.category_id)}
     for item in data["items"]:
-        item["product_code"] = db.get(Product, item["product_id"]).product_code
-        item["category_path"] = paths[item["id"]]
-    for payment in data["payments"]:
-        bank = db.get(BankAccount, payment["bank_id"])
-        payment["account_name"] = bank.name
-    data["store"] = None  # General settings currently contain no saved store profile.
+        item["product_code"], item["category_path"] = products[item["id"]]
+    if data["payments"]:
+        bank_ids = {payment["bank_id"] for payment in data["payments"]}
+        bank_names = dict(db.query(BankAccount.id, BankAccount.name).filter(BankAccount.id.in_(bank_ids)).all())
+        for payment in data["payments"]:
+            payment["account_name"] = bank_names[payment["bank_id"]]
+    if delivery_address:
+        data["delivery_address"] = delivery_address
+    if presentation:
+        data["presentation"] = presentation
+    else:
+        data["store"] = None
     data["version"] = 1
     return json.loads(json.dumps(data, default=str, ensure_ascii=False))
 
 
-def invoice(db, order_id, *, include_deleted=False):
+def invoice(db, order_id, *, include_deleted=False, include_balance=False):
     order = require(db, Order, order_id, "سفارش", include_deleted=include_deleted)
     if not order.invoice_snapshot:
         raise FinanceError("فاکتور نهایی آماده نیست.", 409)
-    return order.invoice_snapshot
+    saved = design.with_presentation(db, {key: value for key, value in current_invoice_snapshot(order).items()
+                                         if key not in {"_edit", "finance_rules"}})
+    if include_balance:
+        balances = invoice_positions(active_bounds()[1], [order.customer_id]).c
+        balance = db.execute(select(balances.paid, balances.remaining).where(balances.id == order.id)).mappings().one_or_none()
+        if balance is not None:
+            return {**saved, "current_balance": dict(balance)}
+    return saved
 
 
-def order_details(db, order_id):
+def order_details(db, order_id, *, editing=False):
     order = require(db, Order, order_id, "سفارش")
     saved = invoice(db, order_id)
-    # Execution status is live; invoice/customer/item history stays permanent.
+    # Execution status and receipt allocations are always read live.
     details = serialize(db, order)
     issued_payments = {p["transaction_id"]: p.get("account_name") for p in saved["payments"]}
+    bank_ids = {p["bank_id"] for p in details["payments"] if not issued_payments.get(p["transaction_id"])}
+    bank_names = dict(db.query(BankAccount.id, BankAccount.name).filter(BankAccount.id.in_(bank_ids)).all()) if bank_ids else {}
     for payment in details["payments"]:
-        payment["account_name"] = issued_payments.get(payment["transaction_id"]) or db.get(BankAccount, payment["bank_id"]).name
-    return {**saved, **details, "customer": saved["customer"], "items": saved["items"]}
+        payment["account_name"] = issued_payments.get(payment["transaction_id"]) or bank_names[payment["bank_id"]]
+    result = {**saved, **details, "customer": saved["customer"], "items": saved["items"]}
+    if editing:
+        snapshot = current_invoice_snapshot(order)
+        result.update(revision=snapshot.get("_edit", {}).get("revision", 0),
+                      edit_finance=order_finance_rules(db, order, snapshot),
+                      edit_payments=[p for p in saved["payments"] if p["transaction_id"] in {
+                          tx.id for _, tx, _ in read_order_payments(db, [order], issued=True).get(order.id, [])
+                      }])
+    return result
 
 
 def complete_order(db, order_id):
@@ -275,13 +396,11 @@ def load_order_relations(db, orders):
     """Load the relationships for this page, including the legacy full response."""
     ids = [order.id for order in orders]
     customers = {item.id: item for item in db.query(Customer).filter(Customer.id.in_({order.customer_id for order in orders})).all()} if ids else {}
-    items, payments = {}, {}
+    items = {}
     if ids:
         for item in db.query(OrderItem).filter(OrderItem.order_id.in_(ids)).order_by(OrderItem.position).all():
             items.setdefault(item.order_id, []).append(item)
-        for payment, transaction in db.query(OrderPayment, FinancialTransaction).join(FinancialTransaction, OrderPayment.transaction_id == FinancialTransaction.id).filter(
-                OrderPayment.order_id.in_(ids), FinancialTransaction.deleted_at.is_(None)).order_by(OrderPayment.id).all():
-            payments.setdefault(payment.order_id, []).append((payment, transaction))
+    payments = read_order_payments(db, orders) if ids else {}
     return {order.id: (customers[order.customer_id], items.get(order.id, []), payments.get(order.id, [])) for order in orders}
 
 
@@ -339,15 +458,14 @@ def delete_invoice(db, order_id, data, user):
             for receipt in receipts:
                 receipt.deleted_at = deleted_at
                 receipt.updated_at = deleted_at
-            quantities = Counter()
-            for item in db.query(OrderItem).filter(OrderItem.order_id == order.id).all():
-                quantities[item.product_id] += item.quantity
-            for product_id, quantity in quantities.items():
-                product = require(db, Product, product_id, "کالا")
-                if product.stock is not None:
-                    product.stock += quantity
-                    product.revision += 1
-                    stock_change(db, product, order.invoice_date, quantity)
+            issued = quantities_for(db, stock_reference(order))
+            products = {}
+            for product_id in line_quantities(db.query(OrderItem).filter_by(order_id=order.id)):
+                product = products[product_id] = require(db, Product, product_id, "کالا")
+                if product_id not in issued and product.stock is not None:
+                    raise FinanceError(f"برداشت اولیه «{product.name}» در سوابق قدیمی قابل تأیید نیست.", 409,
+                                       code="UNATTRIBUTED_STOCK")
+            post_stock(db, products, StockPosting(f"sale:{order.id}:cancel", order.invoice_date, opposite(issued)))
             order.deleted_at = deleted_at
             db.flush()
             compact_transaction_numbers(db)
@@ -359,28 +477,21 @@ def delete_invoice(db, order_id, data, user):
         raise
 
 
-def cash_account(db):
-    account = db.query(BankAccount).filter(BankAccount.account_number == CASH_ACCOUNT_NUMBER).first()
-    if not account:
-        account = BankAccount(name="صندوق نقدی", account_number=CASH_ACCOUNT_NUMBER, opening_balance=0, active=True)
-        db.add(account)
-        db.flush()
-    if not account.active or account.deleted_at is not None:
-        raise FinanceError("صندوق نقدی غیرفعال است.", 409)
-    return account
+def stock_reference(order):
+    return current_invoice_snapshot(order).get("_edit", {}).get("stock_reference", f"sale:{order.id}:issue")
 
 
-def payment_bank(db, data):
-    if data.method == "cash":
-        return cash_account(db)
-    bank = require(db, BankAccount, data.bank_id, "حساب بانکی", active=True)
-    if bank.account_number == CASH_ACCOUNT_NUMBER:
-        raise FinanceError("برای پرداخت غیرنقدی، حساب بانکی انتخاب کنید.", 422)
-    return bank
+def order_finance_rules(db, order, snapshot):
+    if "finance_rules" in snapshot:
+        return snapshot["finance_rules"]
+    defaults = design.preferences(db).data["sale_finance"]
+    return {**defaults, "shipping": order.shipping,
+            "tax_enabled": bool(order.tax) and defaults["tax_enabled"]}
 
 
 def add_receipt(db, order, customer, data, day, request_id, number, *, tracking_number=None):
-    bank = payment_bank(db, data)
+    bank = payment_bank(db, data.method, data.bank_id)
+    validate_receipt_reference(db, bank.id, day, tracking_number)
     label = {"pos": "کارت‌خوان", "cash": "نقدی", "transfer": "کارت‌به‌کارت"}[data.method]
     now = datetime.now(app_timezone())
     transaction = FinancialTransaction(
@@ -419,10 +530,9 @@ def settle_invoice(db, order_id, data):
                 raise FinanceError("این مسیر برای پرداخت فاکتور سال‌های بسته‌شده است.", 409)
             if not period.start_date <= data.transaction_date <= period.end_date:
                 raise FinanceError("تاریخ دریافت باید در سال مالی فعال باشد.", 422)
-            paid = db.query(func.coalesce(func.sum(FinancialTransaction.amount), 0)).join(OrderPayment).filter(
-                OrderPayment.order_id == order.id, FinancialTransaction.deleted_at.is_(None),
-            ).scalar()
-            if data.amount > order.subtotal - order.discount - paid:
+            positions = invoice_positions(period.end_date, [order.customer_id]).c
+            outstanding = db.scalar(select(positions.remaining).where(positions.id == order.id))
+            if data.amount > outstanding:
                 raise FinanceError("مبلغ دریافتی از مانده فاکتور بیشتر است.", 409)
             customer = require(db, Customer, order.customer_id, "مشتری")
             transaction_id = add_receipt(db, order, customer, data, data.transaction_date,
@@ -436,8 +546,163 @@ def settle_invoice(db, order_id, data):
         raise
 
 
+def order_item(order_id, position, item, product, previous=None):
+    return OrderItem(order_id=order_id, product_id=product.id, position=position,
+                     product_name=previous.product_name if previous else product.name,
+                     brand_name=previous.brand_name if previous else product.brand.name if product.brand else None,
+                     category_id=previous.category_id if previous else product.category_id,
+                     unit=previous.unit if previous else product.unit,
+                     quantity=item.quantity, unit_price=item.unit_price)
+
+
+def edit_stock(db, order, old_quantities, quantities, catalog, day, revision):
+    reference = stock_reference(order)
+    if old_quantities == quantities and order.invoice_date == day:
+        return reference
+    previous = quantities_for(db, reference)
+    for product_id in old_quantities:
+        product = catalog[product_id]
+        if product_id not in previous and product.stock is not None:
+            raise FinanceError(f"برداشت اولیه «{product.name}» در سوابق قدیمی قابل تأیید نیست.", 409,
+                               code="UNATTRIBUTED_STOCK")
+    issued = {}
+    for product_id, quantity in quantities.items():
+        # Units sold before tracking was enabled must never be restored as stock.
+        untracked = old_quantities[product_id] + previous.get(product_id, 0)
+        issued[product_id] = -max(0, quantity - untracked) if catalog[product_id].stock is not None else 0
+    prefix = f"sale:{order.id}:edit:{revision}"
+    reference = f"{prefix}:issue"
+    post_stock(db, catalog, StockPosting(f"{prefix}:reverse", order.invoice_date, opposite(previous)),
+               StockPosting(reference, day, issued))
+    return reference
+
+
+def edit_order_payments(db, order, snapshot, customer, data, total):
+    original_ids = {payment["transaction_id"] for payment in snapshot["payments"]}
+    direct = read_order_payments(db, [order], issued=True).get(order.id, [])
+    original = {method: tx for method, tx, _ in direct if tx.id in original_ids}
+    additional = [tx for _, tx, _ in direct if tx.id not in original_ids]
+    if additional and customer.id != order.customer_id:
+        raise FinanceError("برای سفارش دارای دریافت‌های بعدی، تغییر مشتری مجاز نیست.", 409)
+    if sum(p.amount for p in data.payments) + sum(tx.amount for tx in additional) > total:
+        raise FinanceError("مجموع پرداخت‌ها نباید از مبلغ نهایی فاکتور بیشتر باشد.", 422)
+    ensure_open(db, *(tx.transaction_date for tx in original.values()))
+    now = datetime.now(timezone.utc)
+    number = next_transaction_number(db) if any(p.method not in original for p in data.payments) else None
+    payment_ids = set()
+    for payment in data.payments:
+        tx = original.pop(payment.method, None)
+        if tx is None:
+            payment_ids.add(add_receipt(
+                db, order, customer, payment, data.payment_date,
+                str(uuid5(data.request_id, f"{order.id}:{data.revision}:{payment.method}")), number))
+            number += 1
+            continue
+        payment_ids.add(tx.id)
+        bank_id = tx.bank_id if payment.method == "cash" or tx.bank_id == payment.bank_id else payment_bank(db, payment.method, payment.bank_id).id
+        day = tx.transaction_date if data.payment_date == order.payment_date else data.payment_date
+        if (tx.customer_id, tx.bank_id, tx.amount, tx.transaction_date) != (customer.id, bank_id, payment.amount, day):
+            validate_receipt_reference(db, bank_id, day, tx.tracking_number, exclude_id=tx.id)
+            if tx.customer_id != customer.id:
+                tx.title = f"{customer.first_name} {customer.last_name}"
+                tx.account_code = str(customer.customer_code)
+            tx.customer_id, tx.bank_id, tx.amount, tx.transaction_date = customer.id, bank_id, payment.amount, day
+            tx.updated_at = now
+    for tx in original.values():
+        tx.deleted_at = tx.updated_at = now
+    db.flush()
+    if original:
+        compact_transaction_numbers(db)
+    return [row for row in read_order_payments(db, [order], issued=True).get(order.id, []) if row[1].id in payment_ids]
+
+
+def edit_order(db, order_id, data):
+    values = data.model_dump(mode="json", exclude={"request_id", "invoice_settings_revision"})
+    fingerprint = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+    request_id = str(data.request_id)
+    db.rollback()
+    try:
+        db.execute(text("BEGIN IMMEDIATE"))
+        order = require(db, Order, order_id, "سفارش")
+        snapshot = current_invoice_snapshot(order)
+        if not snapshot:
+            raise FinanceError("فاکتور نهایی آماده نیست.", 409)
+        edit = snapshot.get("_edit", {})
+        if edit.get("request_id") == request_id:
+            if edit["fingerprint"] != fingerprint:
+                raise FinanceError("شناسه درخواست قبلاً برای ویرایش دیگری استفاده شده است.", 409)
+            result = order_details(db, order_id, editing=True)
+            db.commit()
+            return result
+        if data.revision != edit.get("revision", 0) or data.invoice_number not in (None, order.invoice_code):
+            raise FinanceError("سفارش تغییر کرده است. جزئیات سفارش را دوباره برای ویرایش باز کنید.", 409,
+                               code="ORDER_CHANGED")
+        ensure_open(db, order.invoice_date, data.invoice_date, data.payment_date if data.payments else data.invoice_date)
+        number = data.order_number or order.order_number
+        if number != order.order_number and db.query(Order.id).filter(Order.order_number == number).first():
+            raise FinanceError("شماره سفارش تکراری است؛ شماره دیگری وارد کنید.", 409)
+        customer = require(db, Customer, data.customer_id, "مشتری")
+        old_customer_id = order.customer_id
+        rules = order_finance_rules(db, order, snapshot)
+        subtotal = sum(item.quantity * item.unit_price for item in data.items)
+        discount = order.discount if data.discount is None else data.discount
+        totals = design.calculate_totals(subtotal, rules, discount)
+        if (subtotal, discount) == (order.subtotal, order.discount):
+            totals.update(tax=order.tax, total=order.total)
+        items = db.query(OrderItem).filter_by(order_id=order.id).order_by(OrderItem.position).all()
+        old_quantities, quantities = line_quantities(items), line_quantities(data.items)
+        catalog = products_by_id(db, old_quantities.keys() | quantities.keys())
+        units = enabled_unit_names(db)
+        for product_id, quantity in quantities.items():
+            if quantity > old_quantities[product_id]:
+                product = require(db, Product, product_id, "کالا", active=True)
+                require_enabled_unit(db, product.unit, enabled=units)
+        revision = data.revision + 1
+        reference = edit_stock(db, order, old_quantities, quantities, catalog, data.invoice_date, revision)
+        payments = edit_order_payments(db, order, snapshot, customer, data, totals["total"])
+        previous_items = {item.product_id: item for item in items}
+        saved_items = {item["product_id"]: item for item in snapshot["items"]}
+        def line_values(rows):
+            return [(row.product_id, row.quantity, row.unit_price) for row in rows]
+        if line_values(items) != line_values(data.items):
+            for item in items:
+                db.delete(item)
+            items = [order_item(order_id, position, item, catalog[item.product_id], previous_items.get(item.product_id))
+                     for position, item in enumerate(data.items, 1)]
+            db.add_all(items)
+        order.order_number, order.customer_id = number, customer.id
+        order.invoice_date, order.payment_date, order.description = data.invoice_date, data.payment_date, data.description
+        for key in ("subtotal", "discount", "tax", "shipping"):
+            setattr(order, key, totals[key])
+        db.flush()
+        amended = build_invoice(db, order, snapshot.get("presentation"), data.delivery_address,
+                                loaded=(customer, items, payments))
+        if customer.id == old_customer_id:
+            amended["customer"] = snapshot["customer"]
+        amended["customer_name"] = amended["customer"]["name"]
+        for item in amended["items"]:
+            previous = saved_items.get(item["product_id"])
+            if previous:
+                item.update(category_path=previous.get("category_path"), product_code=previous.get("product_code"))
+        order.edit_snapshot = {**amended, "finance_rules": rules, "_edit": {
+            "revision": revision, "request_id": request_id, "fingerprint": fingerprint, "stock_reference": reference}}
+        db.flush()
+        result = order_details(db, order_id, editing=True)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+
+
 def save_order(db, data):
-    fingerprint = hashlib.sha256(data.model_dump_json(exclude={"request_id"}).encode()).hexdigest()
+    excluded = {"request_id", "invoice_settings_revision"}
+    values = data.model_dump(exclude=excluded, mode="json")
+    fingerprint = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+    fingerprints = {fingerprint}
+    if data.invoice_number is None and data.delivery_address is None:
+        legacy = data.model_copy(update={"discount": data.discount or 0})
+        fingerprints.add(hashlib.sha256(legacy.model_dump_json(exclude=excluded | {"invoice_number", "delivery_address"}).encode()).hexdigest())
     db.rollback()
     try:
         # All validation, stock changes and ledger entries share the write lock.
@@ -446,54 +711,60 @@ def save_order(db, data):
         if prior:
             if prior.deleted_at is not None:
                 raise FinanceError("این فاکتور حذف شده است؛ برای سفارش جدید شناسه درخواست تازه ایجاد کنید.", 409)
-            if prior.request_fingerprint != fingerprint:
+            if prior.request_fingerprint not in fingerprints:
                 raise FinanceError("شناسه درخواست قبلاً برای فاکتور دیگری استفاده شده است.", 409)
             result = serialize(db, prior)
             db.commit()
             return result
         ensure_open(db, data.invoice_date, data.payment_date if data.payments else data.invoice_date)
         customer = require(db, Customer, data.customer_id, "مشتری")
-        catalog = {}
-        quantities = Counter()
-        for item in data.items:
-            product = require(db, Product, item.product_id, "کالا", active=True)
-            require_enabled_unit(db, product.unit)
-            catalog[product.id] = product
-            quantities[product.id] += item.quantity
-        for product_id, quantity in quantities.items():
-            product = catalog[product_id]
-            if product.stock is not None:
-                if product.stock < quantity:
-                    raise FinanceError(f"موجودی «{product.name}» کافی نیست.", 409)
-                product.stock -= quantity
-                product.revision += 1
-                stock_change(db, product, data.invoice_date, -quantity)
+        settings = design.preferences(db)
+        design.check_workflow_revision(settings, data.invoice_settings_revision)
+        totals = design.calculate_totals(sum(item.quantity * item.unit_price for item in data.items),
+                                         settings.data["sale_finance"], data.discount)
+        if sum(payment.amount for payment in data.payments) > totals["total"]:
+            raise FinanceError("مجموع پرداخت‌ها نباید از مبلغ نهایی فاکتور بیشتر باشد.", 422)
+        quantities = line_quantities(data.items)
+        catalog = products_by_id(db, quantities)
+        units = enabled_unit_names(db)
+        for product_id in quantities:
+            # The batch holds these records in the session identity map.
+            product = require(db, Product, product_id, "کالا", active=True)
+            require_enabled_unit(db, product.unit, enabled=units)
         number = data.order_number or next_number(db)
-        if db.query(Order.id).filter(Order.order_number == number).first():
+        if data.order_number and db.query(Order.id).filter(Order.order_number == number).first():
             raise FinanceError("شماره سفارش تکراری است؛ شماره دیگری وارد کنید.", 409)
         order = Order(request_id=str(data.request_id), request_fingerprint=fingerprint,
                       invoice_code=f"pending-{data.request_id.hex[:24]}", order_number=number,
                       customer_id=customer.id, invoice_date=data.invoice_date, payment_date=data.payment_date,
-                      description=data.description, subtotal=sum(item.quantity * item.unit_price for item in data.items), discount=data.discount)
+                      description=data.description, **{key: value for key, value in totals.items() if key != "total"})
         db.add(order)
         db.flush()
+        issued = {product_id: -quantity if catalog[product_id].stock is not None else 0
+                  for product_id, quantity in quantities.items()}
+        post_stock(db, catalog, StockPosting(f"sale:{order.id}:issue", data.invoice_date, issued))
         now = datetime.now(app_timezone())
         code_date = jdatetime.date.fromgregorian(date=now.date()).strftime("%Y%m%d")
-        order.invoice_code = f"{code_date}-{now:%H%M%S}-{base36(order.id)}"
+        def legacy_number():
+            return f"{code_date}-{now:%H%M%S}-{base36(order.id)}"
+        order.invoice_code = design.allocate_number(db, "sale", settings.data["sale_numbering"], data.invoice_date,
+                                                    data.invoice_number, Order.invoice_code, legacy_number)
         for position, item in enumerate(data.items, 1):
             product = catalog[item.product_id]
-            db.add(OrderItem(order_id=order.id, product_id=product.id, position=position, product_name=product.name,
-                             brand_name=product.brand.name if product.brand else None,
-                             category_id=product.category_id, unit=product.unit, quantity=item.quantity, unit_price=item.unit_price))
+            db.add(order_item(order.id, position, item, product))
         if data.payments:
             number = next_transaction_number(db)
             for index, payment in enumerate(data.payments):
                 add_receipt(db, order, customer, payment, data.payment_date,
                             str(uuid5(data.request_id, payment.method)), number + index)
         db.flush()
-        order.invoice_snapshot = build_invoice(db, order)
+        loaded = read_order_relations(db, order, issued=True)
+        order.invoice_snapshot = {**build_invoice(db, order, design.freeze_presentation(db, "sale", settings.data),
+                                                  delivery_address=data.delivery_address, loaded=loaded),
+                                  "finance_rules": settings.data["sale_finance"]}
         db.flush()
-        result = serialize(db, order)
+        customer, items, _ = loaded
+        result = serialize(db, order, loaded=(customer, items, read_order_payments(db, [order]).get(order.id, [])))
         db.commit()
         return result
     except Exception:

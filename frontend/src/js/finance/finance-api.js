@@ -53,9 +53,10 @@ export async function financeRequest(
             ? detail
                 .map((item) => item.msg.replace(/^Value error, /, ""))
                 .join(" — ")
-            : "خطایی در دریافت یا ذخیره اطلاعات رخ داد.",
+            : detail?.message || "خطایی در دریافت یا ذخیره اطلاعات رخ داد.",
       );
       error.status = response.status;
+      if (detail?.code) error.code = detail.code;
       throw error;
     }
     if (method !== "GET") publishDataChange();

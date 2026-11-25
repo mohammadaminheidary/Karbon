@@ -15,6 +15,9 @@
   border-radius: 20px;
   background: white;
 }
+.orders-summary > .orders-stat {
+  padding-block: 14px;
+}
 
 .orders-stat dt {
   color: rgb(15 23 42 / 60%);
@@ -165,6 +168,9 @@
   .orders-stat {
     padding: 18px 16px;
   }
+  .orders-summary > .orders-stat {
+    padding-block: 10px;
+  }
 
   .orders-tab {
     flex: 1;
@@ -272,7 +278,7 @@
   font-size: 0.75rem;
   font-weight: 600;
 }
-.orders-dialog-body input:not([type="checkbox"]),
+.orders-dialog-body input:not([type="checkbox"], [data-date-part]),
 .orders-dialog-body select,
 .orders-dialog-body textarea {
   display: block;
@@ -291,11 +297,11 @@
     box-shadow 160ms,
     background 160ms;
 }
-.orders-dialog-body input[readonly] {
+.orders-dialog-body input[readonly]:not([data-date-part]) {
   color: rgb(15 23 42 / 55%);
   background: rgb(248 250 252 / 75%);
 }
-.orders-dialog-body input:focus,
+.orders-dialog-body input:not([data-date-part]):focus,
 .orders-dialog-body select:focus,
 .orders-dialog-body textarea:focus {
   outline: none;
@@ -599,7 +605,7 @@
     border-color 160ms,
     box-shadow 160ms;
 }
-.orders-method:has(input[type="checkbox"]:checked) {
+.orders-method:has(.orders-method-choice input:checked) {
   border-color: color-mix(in srgb, var(--color-persian-blue) 45%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-persian-blue) 5%, transparent);
 }
@@ -649,20 +655,71 @@
   color: rgb(15 23 42 / 50%);
 }
 .orders-record {
-  padding: 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-areas: "heading heading" "meta meta" "totals action";
+  align-content: center;
+  align-items: center;
+  gap: 6px 20px;
+  min-block-size: 10.125rem;
+  padding: 12px 16px;
   border: 1px solid rgb(182 192 198 / 30%);
-  border-radius: 16px;
-  margin-bottom: 16px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  background: white;
+}
+@media (min-width: 1280px) {
+  .orders-record {
+    min-block-size: 8.75rem;
+  }
 }
 .orders-record h3 {
+  grid-area: heading;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 0.875rem;
   font-weight: 800;
+}
+.orders-record-meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.orders-record-meta .orders-hint {
+  margin: 0;
+}
+.orders-record-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--theme-tint);
+  color: var(--theme-strong);
+  font-size: 0.625rem;
+  font-weight: 700;
 }
 .orders-record-totals {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin-top: 16px;
+}
+.orders-record > .orders-record-totals {
+  grid-area: totals;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-french-gray) 25%, transparent);
+}
+.orders-record > .orders-record-totals > div {
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--color-alabaster) 86%, transparent);
+}
+.orders-record > .orders-record-totals dd {
+  margin-top: 2px;
 }
 .orders-record-totals dd {
   margin-top: 6px;
@@ -718,9 +775,37 @@
   .orders-record-totals {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .orders-panel,
-  .orders-record {
+  .orders-panel {
     padding: 14px;
+  }
+}
+@media (width < 640px) {
+  .orders-record {
+    column-gap: 12px;
+    min-block-size: 16.8125rem;
+  }
+  .orders-record > .orders-record-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .orders-record > .orders-record-totals > div {
+    padding-inline: 8px;
+  }
+  .orders-record .orders-card-actions button {
+    max-inline-size: 7rem;
+    padding-inline: 10px;
+    font-size: 0.75rem;
+  }
+}
+@media (width <= 360px) {
+  .orders-record {
+    column-gap: 8px;
+  }
+  .orders-record > .orders-record-totals > div {
+    padding-inline: 4px;
+  }
+  .orders-record .orders-card-actions button {
+    max-inline-size: 5rem;
+    padding-inline: 6px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -817,6 +902,16 @@
   border-color: color-mix(in srgb, var(--color-french-gray) 70%, transparent);
   box-shadow: 0 4px 16px rgb(15 23 42 / 5%);
 }
+@media screen and (any-hover: hover) and (any-pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .orders-record.card-tilt::after {
+    background-image: radial-gradient(
+      circle 7rem at var(--card-light-x, 50%) var(--card-light-y, 50%),
+      rgb(255 255 255 / 18%),
+      rgb(255 255 255 / 5%) 56%,
+      transparent
+    );
+  }
+}
 .orders-card-open {
   position: absolute;
   inset: 0;
@@ -831,26 +926,23 @@
   outline-offset: 3px;
 }
 .orders-card-actions {
+  grid-area: action;
+  justify-self: end;
   position: relative;
   z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 16px;
   pointer-events: none;
 }
 .orders-card-actions button {
+  min-block-size: 44px;
   pointer-events: auto;
+}
+.orders-card-actions button:focus-visible {
+  outline: 2px solid var(--color-persian-blue);
+  outline-offset: 3px;
 }
 .orders-card-actions button:disabled {
   opacity: 0.6;
   cursor: wait;
-}
-.orders-card-actions .orders-error {
-  flex: 1;
-  margin: 0;
 }
 .orders-detail-section + .orders-detail-section {
   margin-top: 24px;
@@ -873,6 +965,43 @@
 #orderDetailsStatus {
   color: rgb(15 23 42 / 60%);
   font-size: 0.8125rem;
+}
+[data-order-cancellation] [data-confirm-actions] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--color-french-gray) 40%, transparent);
+}
+[data-order-cancellation] #financeDeletePassword {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-french-gray) 60%, transparent);
+  border-radius: 12px;
+}
+[data-order-cancellation] [data-confirm-actions] button {
+  min-height: 44px;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+[data-order-cancellation] [data-dialog-close] {
+  grid-column: 1;
+  grid-row: 1;
+}
+[data-order-cancellation] #financeDeleteSubmit {
+  grid-column: 2;
+  grid-row: 1;
+  background: var(--color-alizarin-crimson);
+  color: white;
+}
+[data-order-cancellation] :is(#financeDeleteSubmit, [data-dialog-close]):disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 @media (prefers-reduced-motion: reduce) {
   .orders-record {

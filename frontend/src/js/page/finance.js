@@ -1,3 +1,4 @@
+import { mountDateInput } from "../components/date-input.js";
 import { startPage } from "../components/page-ready.js";
 import { transactionActions } from "../finance/transaction-actions.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -6,6 +7,9 @@ import { bankLogo } from "../finance/bank-accounts.js";
 import { CurtainDialog } from "../components/curtain-dialog.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { CustomerSelect } from "../customers/customer-select.js";
+import { getCustomerPayments } from "../customers/customer-api.js";
+import { fullName } from "../customers/customer-utils.js";
+import { paymentMethodCard, paymentMethodLabels, paymentMethods } from "../finance/payment-methods.js";
 import {
   getBanks,
   getExpenseCategories,
@@ -28,6 +32,7 @@ import {
 import { fiscalLabel, getFiscalDate } from "../fiscal-years/fiscal-api.js";
 
 const $ = (id) => document.getElementById(id);
+const transactionDate = mountDateInput($("transactionDate"));
 let fiscalPeriod;
 const periodDay = (day) => !fiscalPeriod?.managed ? day
   : day < fiscalPeriod.start_date ? fiscalPeriod.start_date
@@ -45,12 +50,14 @@ let kind = "income",
   saving = false,
   optionsReady = false;
 let customerPicker;
+let customerSummaryController, displayedCustomerId;
 let requestId, requestFingerprint;
 const dialog = new CurtainDialog("transactionModal", {
   canClose: () => !saving,
   onCancel: () => {
     optionsVersion++;
     customerPicker?.cancel();
+    showCustomerDetails();
   },
 });
 
@@ -258,6 +265,8 @@ function renderTransactions(items) {
           item.bank.is_cash ? "دریافت نقدی" : item.bank.account_number,
         ),
       );
+      const paymentMethod = paymentMethodLabels[item.payment_method];
+      if (paymentMethod) bank.append(node("p", "mt-1 text-xs text-mirage/65", paymentMethod));
       const date = node(
         "td",
         "whitespace-nowrap p-4",
@@ -282,9 +291,13 @@ function renderTransactions(items) {
         ),
       );
       row.append(
-        transactionActions(item, async () => {
-          await Promise.all([selectDay(selectedDay), loadCalendar()]);
-        }),
+        transactionActions(
+          item,
+          async () => {
+            await Promise.all([selectDay(selectedDay), loadCalendar()]);
+          },
+          { iconOnly: true },
+        ),
       );
       return row;
     }),
@@ -426,8 +439,50 @@ function setOptions(select, items, placeholder, label) {
   );
 }
 
+async function showCustomerDetails(customer) {
+  if (customer?.id === displayedCustomerId) return;
+  displayedCustomerId = customer?.id;
+  customerSummaryController?.abort();
+  $("transactionCustomer").hidden = !customer;
+  if (!customer) return;
+
+  $("transactionCustomerName").textContent = fullName(customer);
+  $("transactionCustomerPhone").textContent = customer.phone_numbers?.join("، ") || "ثبت نشده";
+  $("transactionCustomerAddress").textContent = customer.address || "ثبت نشده";
+  const invoiced = $("transactionCustomerInvoiced");
+  const debt = $("transactionCustomerDebt");
+  const status = $("transactionCustomerStatus");
+  invoiced.textContent = debt.textContent = "—";
+  status.hidden = false;
+  status.textContent = "در حال دریافت خلاصه مالی…";
+  const controller = new AbortController();
+  customerSummaryController = controller;
+  try {
+    const { summary } = await getCustomerPayments(customer.id, { signal: controller.signal });
+    if (controller.signal.aborted) return;
+    invoiced.textContent = money(BigInt(summary.invoiced));
+    debt.textContent = money(BigInt(summary.outstanding));
+    status.hidden = true;
+  } catch (error) {
+    if (!controller.signal.aborted) status.textContent = error.message;
+  }
+}
+
+function selectedPaymentMethod() {
+  return $("transactionPaymentMethods").querySelector("input:checked")?.value;
+}
+
+function syncPaymentMethod() {
+  const income = kind === "income";
+  const cash = income && selectedPaymentMethod() === "cash";
+  $("transactionPayment").hidden = $("transactionPayment").disabled = !income;
+  $("transactionCashAccount").hidden = !cash;
+  $("transactionBankField").hidden = $("transactionBank").disabled = cash;
+}
+
 async function loadOptions() {
   customerPicker ||= new CustomerSelect($("transactionSource"), {
+    includeAddress: true,
     rows: (rows, selected) => {
       sources = rows;
       setOptions($("transactionSource"), rows, "انتخاب مشتری", row => `${row.first_name} ${row.last_name} · ${row.customer_code}`);
@@ -440,6 +495,7 @@ async function loadOptions() {
   const version = ++optionsVersion;
   optionsReady = false;
   setFormBusy();
+  showCustomerDetails();
   $("transactionFormError").classList.add("hidden");
   $("retryTransactionOptions").classList.add("hidden");
   $("transactionOptionsStatus").textContent =
@@ -451,8 +507,8 @@ async function loadOptions() {
     ]);
     if (version !== optionsVersion) return;
     sources = records.filter((item) => item.active !== false);
-    const activeBanks = banks.filter((item) => item.active);
-    setOptions($("transactionBank"), activeBanks, "انتخاب بانک", (item) => {
+    const activeBanks = banks.filter((item) => item.active && (kind === "expense" || !item.is_cash));
+    setOptions($("transactionBank"), activeBanks, activeBanks.length ? "انتخاب بانک" : "حساب بانکی فعال وجود ندارد", (item) => {
       const owner = [item.first_name, item.last_name].filter(Boolean).join(" ");
       const identifier = item.is_cash
         ? "نقدی"
@@ -470,8 +526,11 @@ async function loadOptions() {
           ? `${item.first_name} ${item.last_name} · ${item.customer_code}`
           : item.title,
     );
-    if (!activeBanks.length || !sources.length) {
-      $("transactionOptionsStatus").textContent = !activeBanks.length
+    if (kind === "income" && !activeBanks.length) $("income-pay-cash").checked = true;
+    syncPaymentMethod();
+    const missingExpenseBank = kind === "expense" && !activeBanks.length;
+    if (missingExpenseBank || !sources.length) {
+      $("transactionOptionsStatus").textContent = missingExpenseBank
         ? "ابتدا یک حساب فعال در بخش بانک ثبت کنید."
         : kind === "income"
           ? "ابتدا مشتری را در بخش مشتریان ثبت کنید."
@@ -507,8 +566,10 @@ function syncTimeMode() {
 async function openTransaction(nextKind) {
   kind = nextKind;
   $("transactionForm").reset();
-  $("transactionDate").value = formatJalaliInput(selectedDay);
+  syncPaymentMethod();
+  transactionDate.value = formatJalaliInput(selectedDay);
   $("transactionAccountCode").value = "";
+  $("transactionSourceLabel").textContent = kind === "income" ? "مشتری" : "عنوان هزینه";
   $("transactionModalTitle").textContent =
     kind === "income" ? "ثبت درآمد" : "ثبت هزینه";
   $("submitTransaction").classList.toggle("bg-eucalyptus", kind === "income");
@@ -536,15 +597,16 @@ async function submitTransaction(event) {
   let result;
   try {
     const manual = $("transactionTimeMode").value === "manual";
+    const paymentMethod = kind === "income" ? selectedPaymentMethod() : null;
     const payload = {
       kind,
-      bank_id: Number($("transactionBank").value),
+      bank_id: paymentMethod === "cash" ? null : Number($("transactionBank").value),
       amount: amountValue($("transactionAmount").value),
       [kind === "income" ? "customer_id" : "expense_category_id"]: Number(
         $("transactionSource").value,
       ),
       description: $("transactionDescription").value.trim() || null,
-      transaction_date: normalizeJalaliDate($("transactionDate").value),
+      transaction_date: normalizeJalaliDate(transactionDate.value),
       time_mode: manual ? "manual" : "auto",
     };
     if (kind === "income") {
@@ -552,6 +614,7 @@ async function submitTransaction(event) {
       if (tracking && !/^\d+$/.test(tracking))
         throw new Error("شماره پیگیری باید فقط شامل رقم باشد.");
       payload.tracking_number = tracking || null;
+      payload.payment_method = paymentMethod;
     }
     if (manual) {
       const hour = normalizeDigits($("transactionHour").value.trim()),
@@ -582,6 +645,7 @@ async function submitTransaction(event) {
     setFormBusy();
   }
   if (!result) return;
+  showCustomerDetails();
   dialog.close();
   notify(`${kind === "income" ? "درآمد" : "هزینه"} با موفقیت ثبت شد.`, {
     type: "success",
@@ -621,6 +685,12 @@ async function initialize() {
   );
   $("recordIncome").disabled = false;
   $("recordExpense").disabled = false;
+  $("transactionPaymentMethods").replaceChildren(...paymentMethods.map(([key, label, icon]) =>
+    paymentMethodCard(`income-pay-${key}`, label, icon, {
+      group: "income-payment-method", value: key, checked: key === "pos",
+    }),
+  ));
+  $("transactionPaymentMethods").addEventListener("change", syncPaymentMethod);
   $("transactionSource").addEventListener("change", () => {
     const source = sources.find(
       (item) => item.id === Number($("transactionSource").value),
@@ -628,6 +698,7 @@ async function initialize() {
     $("transactionAccountCode").value = source
       ? String(kind === "income" ? source.customer_code : source.account_code)
       : "";
+    showCustomerDetails(kind === "income" ? source : undefined);
   });
   $("transactionTimeMode").addEventListener("change", syncTimeMode);
   $("transactionForm").addEventListener("submit", submitTransaction);
@@ -668,6 +739,7 @@ async function initialize() {
     dayController?.abort();
     optionsVersion++;
     customerPicker?.cancel();
+    showCustomerDetails();
     calendarVersion++;
   });
   window.addEventListener("pageshow", (event) => {

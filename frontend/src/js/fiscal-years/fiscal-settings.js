@@ -265,9 +265,9 @@ function setup(panel) {
     );
     host.querySelectorAll("details").forEach((details) => { details.open = true; });
     const next = data.next_activity;
-    if (next.orders || next.transactions || next.purchases) {
+    if (next.orders || next.transactions || next.purchases || next.production) {
       host.prepend(node("p", "settings-field-hint",
-        `در سال بعد ${formatNumber(next.orders)} سفارش، ${formatNumber(next.transactions)} تراکنش و ${formatNumber(next.purchases)} خرید قبلاً ثبت شده است و در همان سال نمایش داده می‌شود.`));
+        `در سال بعد ${formatNumber(next.orders)} سفارش، ${formatNumber(next.transactions)} تراکنش، ${formatNumber(next.purchases)} خرید و ${formatNumber(next.production ?? 0)} تولید قبلاً ثبت شده است.`));
     }
     $("fiscalPreview").hidden = false;
     $("fiscalConfirmForm").reset();
@@ -338,6 +338,11 @@ function setup(panel) {
       await archivedOrder(id, type);
       return;
     }
+    if (type === "purchases") {
+      const { showFinalInvoice } = await import("../orders/invoice-export.js");
+      if (version === detailVersion) await showFinalInvoice(id, { year: archiveYear, version: archiveVersion, kind: "purchase" });
+      return;
+    }
     try {
       const record = await fiscalRequest(archivePath(`/records/${type}/${id}`));
       if (version !== detailVersion) return;
@@ -384,6 +389,9 @@ function setup(panel) {
     ]));
     if (type === "transactions") return table(["شماره", "تاریخ", "عنوان", "شماره پیگیری", "مبلغ", "جزئیات"], rows.map((tx) => [
       formatNumber(tx.transaction_number || tx.id), yearLabel(tx.jalali_date), tx.title, tx.tracking_number, money(tx.amount), open(tx.id),
+    ]));
+    if (type === "purchases") return table(["شماره فاکتور", "تأمین‌کننده", "تاریخ خرید", "مبلغ فاکتور", "جزئیات"], rows.map((row) => [
+      row.invoice_number, row.customer_name, yearLabel(row.jalali_date), money(row.total), open(row.id),
     ]));
     return table(["شماره سفارش", "شماره فاکتور", "مشتری", "تاریخ صدور", "مبلغ فاکتور", "جزئیات"], rows.map((row) => [
       row.order_number, row.invoice_code, row.customer_name, yearLabel(row.jalali_date || fullDate(row.issue_date)), money(row.total),

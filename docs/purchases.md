@@ -14,17 +14,23 @@ row, or the previous row when removing the last. At least one row remains and
 invoices support at most 100 rows. Row totals, total quantity, row count and invoice
 amount update immediately. Incomplete or invalid rows block saving.
 
-Categories come
-from **تنظیمات → انبار**; each product's category and unit are selected in
+Categories come from **تنظیمات → انبار**. Each product's category and unit are selected in
 **تنظیمات → کالاها**. Product choices are restricted to the selected active
-category and active, stock-tracked products with enabled units. The unit is read-only.
+category and active, stock-tracked products with enabled units. Changing a
+category clears the product and unit. Selecting a product fills its read-only unit.
 Services with untracked (`NULL`) stock retain their existing sales behavior.
 
-Saving an invoice adds all row quantities to `products.stock` and increments each
+Saving an invoice posts all row quantities to the shared inventory journal and increments each
 affected product revision in the same SQLite transaction that creates its receipt
 and line items. Repeated products are aggregated before checking stock limits.
 Purchase price is recorded on the receipt; the product's sales price is preserved.
 This form has no payment fields and does not post a financial payment.
+
+Open **تنظیمات → فاکتورها → فاکتورهای خرید** to edit or cancel a purchase in the
+open fiscal period. An edit keeps the receipt number and posts the reversal and
+replacement together. Cancellation removes the purchased quantity and keeps
+the original receipt for history. Stock balances can be negative.
+Open **گردش موجودی** beside a warehouse product to see posted entries.
 
 ## Persistence and compatibility
 
@@ -32,6 +38,9 @@ This form has no payment fields and does not post a financial payment.
   and a `rows` array (1–100 items). Each row has `category_id`, `product_id`,
   integer `quantity` and integer `purchase_price`. Older single-row payloads remain
   accepted, including retries of receipts created before the line-item upgrade.
+  The optional `unit` must match the product's configured unit.
+- `PUT /api/purchases/{id}` accepts the same rows with the current receipt `revision`.
+  `DELETE /api/purchases/{id}` uses the existing password confirmation contract.
 - `GET /api/purchases/next-number` previews a number; `GET /api/purchases/{id}`
   retrieves the saved receipt, ordered `rows` with individual `total` amounts,
   `row_count`, `total_quantity`, invoice `total` and historical product/category/unit names.

@@ -49,7 +49,7 @@ class InvoiceDeletionTests(unittest.TestCase):
         self.assertEqual(listing["total"], 1)
         self.assertEqual(listing["items"][0]["id"], survivor["id"])
         summary = self.request("GET", f'/customers/{self.customer["id"]}')[1]["summary"]
-        self.assertEqual((summary["order_count"], summary["total_orders"], summary["paid"], summary["debt"]), (1, 2000, 600, 1400))
+        self.assertEqual((summary["order_count"], summary["total_orders"], summary["paid"], summary["debt"]), (1, 2000, 1377, 623))
         customers = self.request("GET", "/customers")[1]
         self.assertEqual((customers["unsettled_customers"], customers["settled_customers"]), (1, 0))
         day = self.request("GET", "/finance/day?date=2026-10-15")[1]

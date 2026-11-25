@@ -1,6 +1,7 @@
 from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, LargeBinary, String
 
 from database import Base
+from models.finance import utc_now
 
 
 class FiscalYear(Base):
@@ -71,7 +72,11 @@ class InventoryHistory(Base):
 
 class InventoryChange(Base):
     __tablename__ = "fiscal_inventory_changes"
+    __table_args__ = (Index("ux_inventory_change_reference_product", "reference", "product_id", unique=True),
+                      Index("ix_inventory_change_product_id", "product_id", "id"))
     id = Column(Integer, primary_key=True)
+    reference = Column(String(100), nullable=False)
+    posted_at = Column(DateTime(timezone=True), nullable=True, default=utc_now)
     # Catalog records can be removed. The journal retains their identity.
     product_id = Column(Integer, nullable=False)
     business_date = Column(Date, nullable=False, index=True)

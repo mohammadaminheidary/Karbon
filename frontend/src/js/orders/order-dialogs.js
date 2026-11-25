@@ -1,9 +1,12 @@
+import { estimateInvoice } from "../invoices/issuance-preview.js";
+import { mountDateInput } from "../components/date-input.js";
 import { Dialog } from "../components/dialog.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
-import { onExternalDataChange } from "../components/data-events.js";
+import { onExternalDataChange, publishLocalDataChange } from "../components/data-events.js";
 import { notify } from "../components/notifications.js";
 import { showFinalInvoice } from "./invoice-export.js";
 import { financeRequest, getBanks } from "../finance/finance-api.js";
+import { paymentMethodCard, paymentMethods } from "../finance/payment-methods.js";
 import { getCustomerOptions as getCustomers, getCustomer } from "../customers/customer-api.js";
 import {
   fullName,
@@ -22,12 +25,7 @@ import {
   todayKey,
 } from "../finance/finance-utils.js";
 
-const methods = [
-  ["pos", "کارت‌خوان", "▣"],
-  ["cash", "نقدی", "◈"],
-  ["transfer", "کارت‌به‌کارت", "⇄"],
-];
-const today = () => formatJalaliInput(todayKey());
+const today = () => normalizeDigits(formatJalaliInput(todayKey()));
 const formatted = (value) => new Intl.NumberFormat("en-US").format(value);
 
 function modal(id, title, content, footer) {
@@ -42,7 +40,7 @@ function modal(id, title, content, footer) {
   root.setAttribute("aria-hidden", "true");
   root.innerHTML = `${registration ? "" : '<button type="button" class="orders-backdrop" data-dialog-close aria-label="انصراف"></button>'}
     <section role="dialog" aria-modal="true" aria-labelledby="${id}Title" class="orders-glass scale-95 opacity-0">
-      <header class="orders-dialog-header"><h2 id="${id}Title">${title}</h2><button type="button" class="orders-icon-button" data-dialog-close aria-label="بستن">×</button></header>
+      <header class="orders-dialog-header"><h2 id="${id}Title">${title}</h2><button type="button" class="dialog-close-button" data-dialog-close aria-label="بستن"></button></header>
       <form novalidate><div class="orders-dialog-body">${content}<p class="orders-error" role="alert" hidden></p></div><footer class="orders-dialog-footer">${footer}</footer></form>
     </section>`;
   document.body.append(root);
@@ -53,11 +51,13 @@ export function initializeOrderDialogs(onSaved) {
   let products = [],
     banks = [],
     customer = null,
+    editing = null,
     draftId,
     defaultBusinessDate,
     saving = false,
     loading = false,
     referencesReady = false;
+  let invoiceWorkflow, discountEdited = false;
   let manualNumber = false,
     paymentStarted = false,
     submitted = null,
@@ -86,8 +86,9 @@ export function initializeOrderDialogs(onSaved) {
       </div>
       <div class="orders-items-heading"><h3>اقلام فاکتور</h3></div>
       <div class="orders-table-scroll"><table class="orders-items-table"><thead><tr><th>ردیف</th><th>کالا</th><th>تعداد</th><th>واحد</th><th>مبلغ واحد (تومان)</th><th>مبلغ کل (تومان)</th><th><span class="sr-only">حذف ردیف</span></th></tr></thead><tbody id="orderItems"></tbody></table></div>
+      <details><summary>نشانی تحویل (اختیاری)</summary><label>نشانی تحویل<textarea id="orderDeliveryAddress" rows="2" maxlength="700"></textarea></label></details>
       <label>توضیحات فاکتور<textarea id="orderDescription" rows="3" maxlength="5000"></textarea></label>
-      <div class="orders-totals"><label>تخفیف (تومان)<input id="orderDiscount" inputmode="numeric" dir="ltr" maxlength="21" value="0" /></label><div><span>جمع اقلام</span><output id="orderSubtotal"></output></div><div><span>جمع کل نهایی</span><output id="orderTotal"></output></div></div>
+      <div class="orders-totals"><label>تخفیف (تومان)<input id="orderDiscount" inputmode="numeric" dir="ltr" maxlength="21" value="0" /></label><div><span>جمع اقلام</span><output id="orderSubtotal"></output></div><div id="orderTaxes" hidden><span>مالیات</span><output id="orderTax"></output></div><div id="orderShippingRow" hidden><span>ارسال</span><output id="orderShipping"></output></div><div><span>جمع کل نهایی</span><output id="orderTotal"></output></div></div>
     </fieldset>
     <p id="orderLoadStatus" role="status"></p><button id="orderRetryLoad" class="orders-secondary" type="button" hidden>تلاش مجدد</button>`,
     `
@@ -107,6 +108,8 @@ export function initializeOrderDialogs(onSaved) {
     <button type="button" class="orders-secondary" data-dialog-close>انصراف</button><button id="editOrderInvoice" type="button" class="orders-secondary">ویرایش فاکتور</button><button id="finalizeOrder" type="submit" class="orders-primary">پرداخت نهایی</button>`,
   );
   const $ = (id) => document.getElementById(id);
+  const orderDate = mountDateInput($("orderDate"));
+  const paymentDate = mountDateInput($("paymentDate"));
   const error = (root, message = "") => {
     const p = root.querySelector(".orders-error");
     p.textContent = message;
@@ -125,9 +128,9 @@ export function initializeOrderDialogs(onSaved) {
       throw err;
     }
   };
-  const date = (input) =>
-    field(input, (value) => {
-      const date = normalizeJalaliDate(value);
+  const date = (control) =>
+    field(control.first, () => {
+      const date = normalizeJalaliDate(control.value);
       if (!date) throw new Error("تاریخ شمسی الزامی است.");
       return date;
     });
@@ -154,6 +157,7 @@ export function initializeOrderDialogs(onSaved) {
     searchController?.abort();
     clearTimeout(searchTimer);
     customer = null;
+    editing = null;
     submitted = null;
     paymentStarted = false;
   }
@@ -162,12 +166,12 @@ export function initializeOrderDialogs(onSaved) {
     $("orderPay").disabled = loading || saving || !referencesReady;
     $("paymentFields").disabled = saving || Boolean(submitted);
     $("editOrderInvoice").disabled = saving || Boolean(submitted);
-    $("finalizeOrder").disabled = saving;
+    $("finalizeOrder").disabled = loading || saving || (!submitted && !referencesReady);
     $("finalizeOrder").textContent = saving
-      ? "در حال ثبت…"
+      ? editing ? "در حال ذخیره…" : "در حال ثبت…"
       : submitted
-        ? "تلاش مجدد ثبت"
-        : "پرداخت نهایی";
+        ? "تلاش مجدد"
+        : editing ? "ذخیره تغییرات" : "پرداخت نهایی";
     for (const root of [create, payment]) {
       root
         .querySelector("form")
@@ -345,7 +349,7 @@ export function initializeOrderDialogs(onSaved) {
       },
     );
   }
-  function addRow(after = null) {
+  function addRow(after = null, item = null) {
     if ($("orderItems").querySelectorAll(".orders-item-row").length >= 100) {
       error(create, "حداکثر ۱۰۰ ردیف قابل ثبت است.");
       return null;
@@ -365,6 +369,12 @@ export function initializeOrderDialogs(onSaved) {
       price = row.querySelector(".item-price"),
       quantity = row.querySelector(".item-quantity");
     productOptions(select);
+    if (item) {
+      select.value = String(item.product_id);
+      quantity.value = String(item.quantity);
+      price.value = formatted(item.unit_price);
+      row.querySelector(".item-unit").textContent = item.unit;
+    }
     select.addEventListener("change", () => {
       const product = products.find((p) => p.id === Number(select.value));
       row.querySelector(".item-unit").textContent = product?.unit || "—";
@@ -400,7 +410,7 @@ export function initializeOrderDialogs(onSaved) {
     const decrease = row.querySelector(".item-quantity-decrease");
     const increase = row.querySelector(".item-quantity-increase");
     const maximum = 1000000;
-    let lastValid = 1;
+    let lastValid = Number(input.value);
     function sync() {
       const value = input.value.trim() ? lastValid : null;
       if (value === null) input.removeAttribute("aria-valuenow");
@@ -490,12 +500,19 @@ export function initializeOrderDialogs(onSaved) {
       (total, item) => total + item.quantity * item.unit_price,
       0,
     );
-    const discount = validate
+    if (!Number.isSafeInteger(subtotal) || subtotal > 999999999999)
+      throw new Error("جمع اقلام فاکتور معتبر نیست.");
+    const override = discountEdited ? validate
       ? amount($("orderDiscount"), true)
-      : amountValue($("orderDiscount").value, { allowZero: true });
-    if (subtotal > 999999999999 || discount > subtotal)
+      : amountValue($("orderDiscount").value, { allowZero: true }) : undefined;
+    const totals = estimateInvoice(subtotal, editing?.edit_finance ?? invoiceWorkflow?.finance, override);
+    if (editing && subtotal === editing.subtotal && totals.discount === editing.discount) {
+      totals.tax = editing.tax;
+      totals.total = editing.total;
+    }
+    if (totals.discount > subtotal || totals.total > 999999999999)
       throw new Error("جمع اقلام یا تخفیف فاکتور معتبر نیست.");
-    return { items, subtotal, discount, total: subtotal - discount };
+    return { items, subtotal, ...totals };
   }
   function calculate() {
     create.querySelectorAll(".orders-item-row").forEach((row) => {
@@ -512,6 +529,11 @@ export function initializeOrderDialogs(onSaved) {
     });
     try {
       const values = invoiceValues();
+      if (!discountEdited) $("orderDiscount").value = formatted(values.discount);
+      $("orderTaxes").hidden = !values.tax;
+      $("orderTax").textContent = money(values.tax);
+      $("orderShippingRow").hidden = !values.shipping;
+      $("orderShipping").textContent = money(values.shipping);
       $("orderSubtotal").textContent = money(values.subtotal);
       $("orderTotal").textContent = money(values.total);
     } catch {
@@ -519,6 +541,7 @@ export function initializeOrderDialogs(onSaved) {
       $("orderTotal").textContent = "—";
     }
   }
+  $("orderDiscount").addEventListener("input", () => { discountEdited = true; });
   amountInput($("orderDiscount"), calculate);
   $("orderNumber").addEventListener("input", () => {
     manualNumber = true;
@@ -526,11 +549,17 @@ export function initializeOrderDialogs(onSaved) {
 
   function renderPaymentMethods() {
     $("paymentMethods").replaceChildren(
-      ...methods.map(([key, label, icon]) => {
-        const card = node("div", "orders-method card-tilt");
-        card.innerHTML = `<label class="orders-method-choice"><input type="checkbox" id="pay-${key}" ${key === "pos" ? "checked" : ""} /><span class="orders-method-icon" aria-hidden="true">${icon}</span><span>${label}</span></label><div id="pay-${key}-fields" class="orders-method-fields" ${key === "pos" ? "" : "hidden"}><label>مبلغ (تومان)<input id="pay-${key}-amount" inputmode="numeric" dir="ltr" maxlength="21" value="0" /></label>${key === "cash" ? `<p class="orders-hint">حساب مقصد: صندوق نقدی</p>` : `<label>حساب مقصد<select id="pay-${key}-bank"></select></label>`}</div>`;
+      ...paymentMethods.map(([key, label, icon]) => {
+        const card = paymentMethodCard(`pay-${key}`, label, icon, { checked: key === "pos" });
+        card.insertAdjacentHTML("beforeend", `<div id="pay-${key}-fields" class="orders-method-fields" ${key === "pos" ? "" : "hidden"}><label>مبلغ (تومان)<input id="pay-${key}-amount" inputmode="numeric" dir="ltr" maxlength="21" value="0" /></label>${key === "cash" ? `<p class="orders-hint">حساب مقصد: صندوق نقدی</p>` : `<label>حساب مقصد<select id="pay-${key}-bank"></select></label>`}</div>`);
+        const prior = editing?.edit_payments.find((payment) => payment.method === key);
+        if (editing) {
+          card.querySelector("input[type=checkbox]").checked = Boolean(prior);
+          card.querySelector(".orders-method-fields").hidden = !prior;
+          card.querySelector("input[inputmode]").value = formatted(prior?.amount ?? 0);
+        }
         if (key !== "cash") {
-          const available = banks.filter((b) => b.active && !b.is_cash);
+          const available = banks.filter((b) => !b.is_cash && (b.active || b.id === prior?.bank_id));
           card
             .querySelector("select")
             .replaceChildren(
@@ -543,6 +572,7 @@ export function initializeOrderDialogs(onSaved) {
                   ),
               ),
             );
+          if (prior) card.querySelector("select").value = String(prior.bank_id);
           if (!available.length)
             card
               .querySelector("select")
@@ -567,7 +597,7 @@ export function initializeOrderDialogs(onSaved) {
   }
   function paymentValues(validate = false) {
     const payments = [];
-    for (const [key] of methods) {
+    for (const [key] of paymentMethods) {
       if (!$(`pay-${key}`).checked) continue;
       const value = validate
         ? amount($(`pay-${key}-amount`), true)
@@ -578,7 +608,8 @@ export function initializeOrderDialogs(onSaved) {
         bank_id = Number($(`pay-${key}-bank`).value);
         if (
           validate &&
-          !banks.some((b) => b.id === bank_id && b.active && !b.is_cash)
+          !banks.some((b) => b.id === bank_id && !b.is_cash &&
+            (b.active || editing?.edit_payments.some((p) => p.method === key && p.bank_id === bank_id)))
         ) {
           $(`pay-${key}-bank`).focus();
           throw new Error("حساب مقصد پرداخت را انتخاب کنید.");
@@ -607,18 +638,26 @@ export function initializeOrderDialogs(onSaved) {
       throw new Error("مشتری را انتخاب کنید.");
     }
     const values = invoiceValues(true);
+    const invoiceNumber = !editing && invoiceWorkflow?.numbering?.manual ? $("orderInvoiceCode").value.trim() : "";
+    if (!editing && invoiceWorkflow?.numbering?.required && !invoiceNumber) {
+      $("orderInvoiceCode").focus();
+      throw new Error("شماره فاکتور را وارد کنید.");
+    }
     return {
       customer_id: customer.id,
       items: values.items,
-      discount: values.discount,
-      invoice_date: date($("orderDate")),
+      ...(discountEdited ? { discount: values.discount } : {}),
+      ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
+      ...(!editing && invoiceWorkflow?.revision ? { invoice_settings_revision: invoiceWorkflow.revision } : {}),
+      invoice_date: date(orderDate),
       order_number: manualNumber ? $("orderNumber").value.trim() || null : null,
+      ...($("orderDeliveryAddress").value.trim() ? { delivery_address: $("orderDeliveryAddress").value.trim() } : {}),
       description: $("orderDescription").value.trim() || null,
     };
   }
   create.querySelector("form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (loading || saving || createDialog.closing) return;
+    if (loading || saving || !referencesReady || createDialog.closing) return;
     error(create);
     try {
       validateInvoice();
@@ -626,8 +665,8 @@ export function initializeOrderDialogs(onSaved) {
       $("paymentInvoiceTotal").textContent = money(invoiceValues().total);
       if (!paymentStarted) {
         renderPaymentMethods();
-        $("paymentDate").value = defaultBusinessDate;
-        $("pay-pos-amount").value = formatted(invoiceValues().total);
+        paymentDate.value = editing?.jalali_payment_date ?? defaultBusinessDate;
+        if (!editing) $("pay-pos-amount").value = formatted(invoiceValues().total);
         paymentStarted = true;
       }
       calculatePayments();
@@ -645,7 +684,7 @@ export function initializeOrderDialogs(onSaved) {
   });
   payment.querySelector("form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (loading || saving || (!submitted && !referencesReady)) return;
     error(payment);
     clearInvalid(payment);
     try {
@@ -653,8 +692,9 @@ export function initializeOrderDialogs(onSaved) {
         const payload = {
           ...validateInvoice(),
           request_id: draftId,
-          payment_date: date($("paymentDate")),
+          payment_date: date(paymentDate),
           payments: paymentValues(true),
+          ...(editing ? { revision: editing.revision } : {}),
         };
         const paid = payload.payments.reduce((sum, p) => sum + p.amount, 0);
         if (paid > invoiceValues().total)
@@ -663,14 +703,20 @@ export function initializeOrderDialogs(onSaved) {
       }
       saving = true;
       busy();
-      $("paymentStatus").textContent = "در حال ثبت سفارش و پرداخت‌ها…";
-      const saved = await financeRequest("/orders", {
-        method: "POST",
+      const order = editing;
+      $("paymentStatus").textContent = order ? "در حال ذخیره تغییرات سفارش…" : "در حال ثبت سفارش و پرداخت‌ها…";
+      const saved = await financeRequest(order ? `/orders/${order.id}` : "/orders", {
+        method: order ? "PUT" : "POST",
         body: submitted,
       });
       paymentDialog.close();
       createDialog.close();
       discard();
+      if (order) {
+        notify(`تغییرات سفارش ${saved.order_number} ذخیره شد.`, { type: "success" });
+        publishLocalDataChange();
+        return;
+      }
       notify(
         `سفارش ${saved.order_number} ثبت شد؛ پرداختی ${money(saved.paid)} و مانده ${money(saved.remaining)}.`,
         { type: "success" },
@@ -679,9 +725,14 @@ export function initializeOrderDialogs(onSaved) {
       showFinalInvoice(saved.id);
     } catch (err) {
       if (err.status && err.status < 500) submitted = null;
+      if (err.code === "INVOICE_SETTINGS_CHANGED") {
+        await loadReferences();
+        $("paymentInvoiceTotal").textContent = $("orderTotal").textContent;
+        calculatePayments();
+      }
       error(payment, err.message);
       $("paymentStatus").textContent = submitted
-        ? "نتیجه ثبت مشخص نیست. برای جلوگیری از ثبت تکراری، تلاش مجدد همان فاکتور و همان پرداخت‌ها را ارسال می‌کند."
+        ? "نتیجه درخواست مشخص نیست. تلاش مجدد همان اطلاعات را ارسال می‌کند."
         : "اطلاعات را اصلاح کنید و دوباره تلاش کنید.";
     } finally {
       saving = false;
@@ -697,25 +748,53 @@ export function initializeOrderDialogs(onSaved) {
     $("orderLoadStatus").textContent = "در حال دریافت کالاها و حساب‌ها…";
     $("orderRetryLoad").hidden = true;
     try {
-      const [catalog, accounts, next] = await Promise.all([
+      const [catalog, accounts, next, selectedCustomer] = await Promise.all([
         financeRequest("/products?for_order=true"),
         getBanks(),
-        financeRequest("/orders/next-number"),
+        editing ? null : financeRequest("/orders/next-number"),
+        editing && !customer && !$("orderCustomerSearch").value ? getCustomer(editing.customer_id) : null,
       ]);
       if (version !== loadVersion) return;
       products = catalog;
+      if (editing) {
+        const available = new Set(catalog.map((item) => item.id));
+        products = [...catalog];
+        for (const item of editing.items) {
+          if (available.has(item.product_id)) continue;
+          available.add(item.product_id);
+          products.push({ ...item, id: item.product_id, name: item.product_name, price: item.unit_price });
+        }
+        if (selectedCustomer) {
+          customer = selectedCustomer;
+          $("orderCustomerSearch").value = `${customer.customer_code} · ${fullName(customer)}`;
+          renderCustomer();
+        }
+        if (!$("orderItems").children.length) {
+          editing.items.forEach((item) => addRow(null, item));
+        }
+      }
       banks = accounts;
       referencesReady = true;
-      if (!manualNumber) $("orderNumber").value = next.order_number;
-      if (next.business_jalali) {
-        if ($("orderDate").value === defaultBusinessDate) $("orderDate").value = next.business_jalali;
-        defaultBusinessDate = next.business_jalali;
+      invoiceWorkflow = next;
+      const invoiceNumber = $("orderInvoiceCode");
+      if (next) {
+        const readOnly = !next.numbering?.manual;
+        if (readOnly || invoiceNumber.readOnly) invoiceNumber.value = readOnly ? "هنگام ثبت نهایی تولید می‌شود" : "";
+        invoiceNumber.readOnly = readOnly;
+        invoiceNumber.maxLength = 32;
+        invoiceNumber.placeholder = next.numbering?.required ? "شماره فاکتور" : "اختیاری؛ شماره خودکار در صورت خالی بودن";
+        if (!manualNumber) $("orderNumber").value = next.order_number;
+      }
+      if (next?.business_jalali) {
+        if (orderDate.value === defaultBusinessDate) orderDate.value = next.business_jalali;
+        defaultBusinessDate = normalizeDigits(next.business_jalali);
       }
       create.querySelectorAll(".item-product").forEach((select) => {
         productOptions(select);
         const row = select.closest(".orders-item-row");
         const product = products.find((p) => p.id === Number(select.value));
-        row.querySelector(".item-unit").textContent = product?.unit || "—";
+        const savedItem = editing?.items.find((item) => item.product_id === product?.id);
+        row.querySelector(".item-unit").textContent = savedItem?.unit || product?.unit || "—";
         if (!product) row.querySelector(".item-price").value = "";
       });
       calculate();
@@ -749,8 +828,8 @@ export function initializeOrderDialogs(onSaved) {
   };
   onExternalDataChange(refreshReferences);
   document.addEventListener("visibilitychange", refreshReferences);
-  return async function openCreateOrder({ customer: initialCustomer = null } = {}) {
-    if (saving || createDialog.active) return;
+  return async function openCreateOrder({ customer: initialCustomer = null, order = null } = {}) {
+    if (saving || createDialog.active || payment.getAttribute("aria-hidden") === "false") return;
     if (submitted) {
       openDialog(paymentDialog);
       if (initialCustomer && submitted.customer_id !== initialCustomer.id) {
@@ -760,9 +839,13 @@ export function initializeOrderDialogs(onSaved) {
     }
     draftId = crypto.randomUUID();
     submitted = null;
+    editing = order;
     customer = initialCustomer;
     paymentStarted = false;
-    manualNumber = false;
+    manualNumber = Boolean(order);
+    invoiceWorkflow = undefined;
+    discountEdited = Boolean(order);
+    $("orderInvoiceCode").readOnly = true;
     create.querySelector("form").reset();
     payment.querySelector("form").reset();
     error(create);
@@ -773,12 +856,19 @@ export function initializeOrderDialogs(onSaved) {
     if (customer) $("orderCustomerSearch").value = `${customer.customer_code} · ${fullName(customer)}`;
     renderCustomer();
     customerDropdown(false);
-    $("orderInvoiceCode").value = "هنگام ثبت نهایی تولید می‌شود";
+    $("createOrderModalTitle").textContent = order ? `ویرایش سفارش ${order.order_number}` : "ثبت سفارش";
+    $("orderPaymentModalTitle").textContent = order ? "بررسی پرداخت‌ها و ذخیره تغییرات" : "پرداخت فاکتور";
+    $("orderPay").textContent = order ? "ادامه و بررسی پرداخت‌ها" : "پرداخت ←";
+    $("orderInvoiceCode").value = order?.invoice_code ?? "هنگام ثبت نهایی تولید می‌شود";
+    $("orderNumber").value = order?.order_number ?? "";
+    $("orderDeliveryAddress").value = order?.delivery_address ?? "";
+    $("orderDeliveryAddress").closest("details").open = Boolean(order?.delivery_address);
+    $("orderDescription").value = order?.description ?? "";
     defaultBusinessDate = today();
-    $("orderDate").value = defaultBusinessDate;
-    $("orderDiscount").value = "0";
+    orderDate.value = order?.jalali_date ?? defaultBusinessDate;
+    $("orderDiscount").value = formatted(order?.discount ?? 0);
     $("orderItems").replaceChildren();
-    addRow();
+    if (!order) addRow();
     openDialog(createDialog);
     await loadReferences();
   };

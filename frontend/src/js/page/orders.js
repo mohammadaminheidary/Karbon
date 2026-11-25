@@ -9,6 +9,7 @@ import { onPageRefresh } from "../components/data-events.js";
 import { showOrderDetails } from "../orders/order-details.js";
 
 const createOrderButton = document.querySelector(".orders-create");
+let openOrderForm;
 
 function initializeTabs() {
   const tablist = document.querySelector('[role="tablist"]');
@@ -123,6 +124,9 @@ async function loadOrders(more = false) {
             "",
             `سفارش ${order.order_number} · ${order.customer_name}`,
           ),
+        );
+        const meta = node("div", "orders-record-meta");
+        meta.append(
           node(
             "p",
             "orders-hint",
@@ -141,11 +145,10 @@ async function loadOrders(more = false) {
           cell.append(node("dt", "", label), node("dd", "", money(value)));
           totals.append(cell);
         }
-        card.append(
-          totals,
+        meta.append(
           node(
             "p",
-            "orders-hint",
+            "orders-record-status",
             order.payment_status === "settled"
               ? "تسویه‌شده"
               : order.payment_status === "partial"
@@ -153,11 +156,14 @@ async function loadOrders(more = false) {
                 : "بدون پرداخت",
           ),
         );
+        card.append(meta, totals);
         const open = node("button", "orders-card-open");
         open.type = "button";
         open.setAttribute("aria-label", `جزئیات سفارش ${order.order_number}`);
         open.setAttribute("aria-haspopup", "dialog");
-        open.addEventListener("click", () => showOrderDetails(order.id));
+        open.addEventListener("click", () =>
+          showOrderDetails(order.id, { onEdit: (details) => openOrderForm({ order: details }) }),
+        );
         card.append(open);
         if (order.status === "active") {
           const actions = node("div", "orders-card-actions");
@@ -266,9 +272,9 @@ async function loadOrders(more = false) {
 async function initializeOrdersPage() {
   if (!(await protectPage())) return;
   initializeTabs();
-  const openCreateOrder = initializeOrderDialogs(() => loadOrders());
+  openOrderForm = initializeOrderDialogs(() => loadOrders());
   createOrderButton.disabled = false;
-  createOrderButton.addEventListener("click", () => openCreateOrder());
+  createOrderButton.addEventListener("click", () => openOrderForm());
   await loadOrders();
   onPageRefresh(() => loadOrders());
 }

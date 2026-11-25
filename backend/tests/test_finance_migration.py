@@ -35,7 +35,7 @@ with engine.begin() as connection:
     # This fixture deliberately recreates a schema predating deleted_at.
     connection.exec_driver_sql("DROP INDEX IF EXISTS ix_finance_bank_live_date")
     connection.exec_driver_sql("DROP INDEX IF EXISTS ux_customers_permanent_id")
-    for table, fields in {"customers":["deleted_at"], "bank_accounts":["deleted_at"], "expense_categories":["display_code","deleted_at"], "financial_transactions":["transaction_number","updated_at","deleted_at"]}.items():
+    for table, fields in {"customers":["deleted_at"], "bank_accounts":["deleted_at"], "expense_categories":["display_code","deleted_at"], "financial_transactions":["transaction_number","updated_at","deleted_at","payment_method"]}.items():
         for field in fields:
             connection.exec_driver_sql(f"ALTER TABLE {table} DROP COLUMN {field}")
 import app
@@ -50,6 +50,7 @@ initialize_bank_storage(engine)
                 self.assertEqual(db.execute("SELECT id, customer_code FROM customers ORDER BY id").fetchall(),[(3,1001),(9,1002)])
                 self.assertEqual(db.execute("SELECT id, display_code FROM expense_categories ORDER BY id").fetchall(),[(2,1),(8,2)])
                 self.assertEqual(db.execute("SELECT id, transaction_number, bank_id, customer_id, expense_category_id, account_code, amount FROM financial_transactions ORDER BY id").fetchall(),[(5,1,7,9,None,"1002",500),(11,2,7,None,8,"E-000002",100)])
+                self.assertEqual(db.execute("SELECT payment_method FROM financial_transactions ORDER BY id").fetchall(), [(None,), (None,)])
                 self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(),[])
 
 

@@ -21,12 +21,19 @@ from models.customer import Customer
 from models.order import Product, Order, OrderItem, OrderPayment
 from models.finance import BankAccount, FinancialTransaction
 from services import customer_service as customers, order_service as orders, finance_service as finance
+from services.inventory_service import save_purchase
+from services.inventory_stock import movement_summary
 from services.reference_codes import compact_customer_codes, compact_transaction_numbers
+from schemas.inventory_schema import PurchaseWrite
 from schemas.order_schema import OrderWrite
 from uuid import uuid4
 count = [0]
+reads = [0]
 @event.listens_for(engine, "before_cursor_execute")
-def counter(*args): count[0] += 1
+def counter(connection, cursor, statement, parameters, context, executemany):
+    count[0] += 1
+    if statement.lstrip().upper().startswith("SELECT"):
+        reads[0] += 1
 with SessionLocal() as db:
     db.add_all([Customer(id=i, customer_code=1000+i, first_name=f"مشتری {i}", last_name="آزمایش") for i in range(1, 26)])
     db.add(Product(id=1, product_code="P-000001", name="کالا", unit="عدد", price=100, stock=100))
@@ -76,5 +83,35 @@ with SessionLocal() as db:
     compact_customer_codes(db)
     assert db.query(Customer.customer_code).order_by(Customer.id).all() == [(1001+i,) for i in range(24)]
     db.rollback()
+
+    category_id = db.scalar(text("SELECT id FROM inventory_options WHERE kind='categories' LIMIT 1"))
+    stock_products = [Product(id=i, product_code=f"P-{i:06d}", name=f"کالا {i}",
+                              unit="عدد", category_id=category_id, price=100, stock=100)
+                      for i in range(2, 42)]
+    db.add_all(stock_products)
+    db.commit()
+    day = "1405/07/02"
+    for size in (1, 40):
+        rows = [dict(product_id=i, quantity=1, category_id=category_id, purchase_price=100)
+                for i in range(2, 2 + size)]
+        reads[0] = 0
+        receipt = save_purchase(db, PurchaseWrite(request_id=uuid4(), purchase_date=day, rows=rows))
+        assert receipt["row_count"] == size and receipt["total"] == size * 100
+        if size == 1:
+            purchase_reads = reads[0]
+        else:
+            assert reads[0] == purchase_reads, (purchase_reads, reads[0])
+        rows = [dict(product_id=i, quantity=1, unit_price=100) for i in range(2, 2 + size)]
+        reads[0] = 0
+        order = orders.save_order(db, OrderWrite(request_id=uuid4(), customer_id=1,
+            invoice_date=day, payment_date=day, items=rows))
+        assert len(order["items"]) == size and order["total"] == size * 100
+        if size == 1:
+            sale_reads = reads[0]
+        else:
+            assert reads[0] == sale_reads, (sale_reads, reads[0])
+    reads[0] = 0
+    assert movement_summary(db, date(2026, 9, 24)) == {"incoming": 40, "outgoing": 40}
+    assert reads[0] == 1, reads
 '''], cwd=ROOT / "backend", env=dict(os.environ, KARBON_DATABASE_PATH=str(Path(directory)/"test.db"), KARBON_JWT_SECRET="query-budget-test-only", PYTHONDONTWRITEBYTECODE="1"), capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)

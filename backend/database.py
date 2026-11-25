@@ -39,6 +39,13 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
+def read_snapshot(db):
+    # sqlite3's legacy transaction mode does not begin a transaction on SELECT.
+    connection = db.connection()
+    if not connection.connection.driver_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN")
+
+
 def get_database():
     db = SessionLocal()
 

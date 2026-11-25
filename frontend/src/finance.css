@@ -32,6 +32,42 @@
   font-size: 0.8125rem;
   font-weight: 600;
 }
+#transactionCustomer .orders-customer-details {
+  gap: 8px 12px;
+  margin-top: 0;
+  padding: 12px;
+}
+#transactionPaymentMethods {
+  gap: 8px;
+  margin-top: 8px;
+}
+#transactionPaymentMethods .orders-method {
+  padding: 4px 10px;
+}
+@media (max-width: 640px) {
+  #transactionPaymentMethods {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+  #transactionPaymentMethods .orders-method {
+    padding: 4px 2px;
+  }
+  #transactionPaymentMethods .orders-method-choice {
+    display: grid !important;
+    grid-template-columns: repeat(2, auto);
+    justify-content: center;
+    gap: 0 4px;
+    min-height: 40px;
+    font-size: 0.6875rem;
+    text-align: center;
+  }
+  #transactionPaymentMethods .orders-method-icon {
+    line-height: 1;
+  }
+  #transactionPaymentMethods .orders-method-choice span:last-child {
+    grid-column: 1 / -1;
+  }
+}
 .bank-account {
   /* Keep the current card width and content scale at every breakpoint. */
   --bank-card-scale: 0.9;
@@ -45,6 +81,8 @@
 .bank-account-surface {
   position: relative;
   isolation: isolate;
+  display: flex;
+  flex-direction: column;
   height: 100%;
   border-radius: inherit;
 }
@@ -86,33 +124,93 @@
     grid-column: 1;
   }
 }
+.bank-card-preview {
+  width: min(100%, 320px);
+  min-width: 0;
+  justify-self: center;
+}
+.bank-card-preview-label {
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+}
 .bank-card-face {
-  position: relative;
-  overflow: hidden;
-  border-radius: inherit;
+  --bank-color: #42526c;
+  --bank-shade: #172234;
+  --bank-pattern: radial-gradient(ellipse at 0 0, #fff3, transparent 60%);
+  container-type: inline-size;
+  box-sizing: border-box;
+  flex: none;
   display: flex;
   flex-direction: column;
-  padding: 16px 24px;
-  height: 100%;
-  color: var(--color-mirage);
+  justify-content: space-between;
+  gap: 5px;
+  aspect-ratio: 85.6 / 53.98;
+  padding: clamp(10px, 5%, 20px);
+  border: 1px solid #ffffff38;
+  border-radius: 16px;
+  background: var(--bank-pattern), linear-gradient(135deg, var(--bank-color), var(--bank-shade));
+  box-shadow: inset 0 1px 0 #ffffff38, 0 4px 12px #0f172a24;
+  color: #fff;
 }
-.bank-card-face::before,
-.bank-card-face::after {
-  content: "";
-  position: absolute;
-  width: 240px;
-  height: 240px;
-  border: 1px solid color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
-  border-radius: 50%;
-  left: -110px;
-  top: 40px;
-  pointer-events: none;
+.bank-account .bank-card-face {
+  flex: 1 0 auto;
 }
-.bank-card-face::after {
-  width: 320px;
-  height: 320px;
-  left: -150px;
-  top: 0;
+.bank-card-face:is([data-bank="mellat"], [data-bank="shahr"], [data-bank="parsian"],
+  [data-bank="gardeshgari"], [data-bank="karafarin"], [data-bank="khavar-mianeh"]) {
+  --bank-pattern: repeating-radial-gradient(ellipse at 5% 115%, transparent 0 15px, #ffffff24 16px, transparent 18px 23px);
+}
+.bank-card-face:is([data-bank="melli"], [data-bank="sepah"], [data-bank="pasargad"],
+  [data-bank="maskan"], [data-bank="sanat-madan"], [data-bank="sarmayeh"]) {
+  --bank-pattern: linear-gradient(145deg, transparent 43%, #ffffff24 43% 59%, transparent 59%),
+    linear-gradient(155deg, transparent 57%, #ffffff17 57% 74%, transparent 74%);
+}
+.bank-card-face:is([data-bank="tejarat"], [data-bank="saman"], [data-bank="dey"],
+  [data-bank="sina"], [data-bank="tosee-taavon"], [data-bank="iran-zamin"]) {
+  --bank-pattern: repeating-linear-gradient(135deg, transparent 0 25px, #ffffff21 26px 27px, transparent 28px 38px),
+    linear-gradient(120deg, transparent 38%, #ffffff28 38% 64%, transparent 64%);
+}
+.bank-card-face:is([data-bank="saderat"], [data-bank="refah"], [data-bank="keshavarzi"],
+  [data-bank="resalat"], [data-bank="mehr-iran"], [data-bank="post"],
+  [data-bank="tosee-saderat"], [data-bank="eghtesad-novin"]) {
+  --bank-pattern: radial-gradient(circle at -5% 100%, #ffffff30 0 35%, transparent 35%),
+    radial-gradient(ellipse at 108% 0, #ffffff25 0 42%, transparent 42%);
+}
+.bank-card-face[data-bank="mellat"] { --bank-color: #af2537; --bank-shade: #4f1124; }
+.bank-card-face[data-bank="melli"] { --bank-color: #22649b; --bank-shade: #122d59; }
+.bank-card-face[data-bank="tejarat"] { --bank-color: #007983; --bank-shade: #0b3b50; }
+.bank-card-face[data-bank="saderat"] { --bank-color: #473c8e; --bank-shade: #1c1e4f; }
+.bank-card-face[data-bank="sepah"] { --bank-color: #976628; --bank-shade: #4a321b; }
+.bank-card-face[data-bank="saman"] { --bank-color: #007290; --bank-shade: #102a5b; }
+.bank-card-face[data-bank="pasargad"] { --bank-color: #866526; --bank-shade: #25251c; }
+.bank-card-face[data-bank="parsian"] { --bank-color: #8a462a; --bank-shade: #4e231b; }
+.bank-card-face[data-bank="refah"] { --bank-color: #225e92; --bank-shade: #112a51; }
+.bank-card-face[data-bank="keshavarzi"] { --bank-color: #387335; --bank-shade: #193e2b; }
+.bank-card-face[data-bank="maskan"] { --bank-color: #a3532c; --bank-shade: #542b27; }
+.bank-card-face[data-bank="shahr"] { --bank-color: #b52e3f; --bank-shade: #691a30; }
+.bank-card-face[data-bank="eghtesad-novin"] { --bank-color: #75458c; --bank-shade: #35224e; }
+.bank-card-face[data-bank="karafarin"] { --bank-color: #286755; --bank-shade: #173a37; }
+.bank-card-face[data-bank="resalat"] { --bank-color: #1d6585; --bank-shade: #172c4b; }
+.bank-card-face[data-bank="mehr-iran"] { --bank-color: #2f744c; --bank-shade: #123b3b; }
+.bank-card-face[data-bank="dey"] { --bank-color: #08718c; --bank-shade: #184056; }
+.bank-card-face[data-bank="sina"] { --bank-color: #296c9b; --bank-shade: #2d345e; }
+.bank-card-face[data-bank="sanat-madan"] { --bank-color: #8b5d31; --bank-shade: #3e3224; }
+.bank-card-face[data-bank="post"] { --bank-color: #277650; --bank-shade: #1c4143; }
+.bank-card-face[data-bank="tosee-saderat"] { --bank-color: #42638f; --bank-shade: #2b2a4d; }
+.bank-card-face[data-bank="tosee-taavon"] { --bank-color: #137780; --bank-shade: #173f56; }
+.bank-card-face[data-bank="khavar-mianeh"] { --bank-color: #91562c; --bank-shade: #422d29; }
+.bank-card-face[data-bank="gardeshgari"] { --bank-color: #9d354b; --bank-shade: #572142; }
+.bank-card-face[data-bank="iran-zamin"] { --bank-color: #385791; --bank-shade: #302451; }
+.bank-card-face[data-bank="sarmayeh"] { --bank-color: #536a42; --bank-shade: #25342e; }
+.bank-card-face[data-bank="cash"] { --bank-color: #43574a; --bank-shade: #25372e; }
+.bank-card-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bank-card-name {
+  font-size: clamp(0.875rem, 4.6cqi, 1.125rem);
+  font-weight: 800;
+  overflow-wrap: anywhere;
 }
 .bank-logo {
   display: inline-flex;
@@ -132,54 +230,82 @@
   max-height: 100%;
   object-fit: contain;
 }
+.bank-card-brand .bank-card-logo {
+  width: clamp(28px, 13cqi, 48px);
+  height: auto;
+  aspect-ratio: 1;
+  padding: 5px;
+  border-radius: 8px;
+  font-size: 1rem;
+}
 .bank-chip {
-  position: relative;
   display: block;
-  width: 38px;
-  height: 29px;
-  margin: 8px 0 8px auto;
-  border-radius: 7px;
-  border: 1px solid #f59e0b66;
+  flex: none;
+  align-self: flex-end;
+  width: clamp(26px, 12cqi, 42px);
+  aspect-ratio: 1.35;
+  border-radius: 6px;
+  border: 1px solid #bfa05d;
   background:
     linear-gradient(
       90deg,
-      transparent 31%,
-      #0f172a44 32%,
-      #0f172a44 34%,
-      transparent 35%,
-      transparent 65%,
-      #0f172a44 66%,
-      #0f172a44 68%,
-      transparent 69%
+      transparent 30%, #725f3e99 30% 34%,
+      transparent 34% 66%, #725f3e99 66% 70%, transparent 70%
     ),
     linear-gradient(
       0deg,
-      #f59e0b88 32%,
-      #0f172a44 33%,
-      #0f172a44 36%,
-      #f59e0b88 37%,
-      #f59e0b88 64%,
-      #0f172a44 65%,
-      #0f172a44 68%,
-      #f59e0b88 69%
-    );
+      transparent 30%, #725f3e99 30% 35%,
+      transparent 35% 65%, #725f3e99 65% 70%, transparent 70%
+    ),
+    linear-gradient(135deg, #f5e4a9, #c7a56b 55%, #f4e6b8);
+}
+.bank-card-brand .bank-chip {
+  align-self: center;
+  margin-inline-start: auto;
 }
 .bank-card-number {
-  position: relative;
-  font-size: clamp(1.125rem, calc(2vw * var(--app-font-scale, 1)), 1.4375rem);
+  font-size: clamp(0.875rem, 6.1cqi, 1.5rem);
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-align: left;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  line-height: 1.2;
+  text-align: start;
 }
-.bank-sheba {
-  position: relative;
-  margin-top: 8px;
+.bank-card-number[dir="ltr"] {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.025em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px #0008;
+}
+.bank-card-owner {
+  font-size: clamp(0.75rem, 4.2cqi, 1rem);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.bank-card-sheba,
+.bank-card-balance-header,
+.bank-card-opening {
   font-size: 0.75rem;
+  color: #ffffffe6;
+  overflow-wrap: anywhere;
+}
+.bank-card-sheba[dir="ltr"] {
+  font-family: ui-monospace, monospace;
+  font-size: clamp(0.6875rem, 4cqi, 0.875rem);
   letter-spacing: 0.01em;
-  color: rgb(15 23 42 / 55%);
-  text-align: left;
+}
+.bank-card-balance {
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid #ffffff40;
+}
+.bank-card-balance-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  column-gap: 8px;
+}
+.bank-card-balance-amount {
+  font-size: clamp(0.9375rem, 5.5cqi, 1.375rem);
+  font-weight: 800;
   overflow-wrap: anywhere;
 }
 .bank-number {
@@ -290,10 +416,40 @@
 .transaction-menu summary::-webkit-details-marker {
   display: none;
 }
+#transactionRows > tr > td {
+  padding-block: 10px;
+}
+.transaction-menu:has(> .transaction-menu-icon)::before {
+  /* Keep the auto-sized action column as wide as the original control. */
+  content: "تنظیمات";
+  display: block;
+  block-size: 0;
+  padding-inline: 19px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  white-space: nowrap;
+  visibility: hidden;
+}
+.finance-surface .transaction-menu-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  margin-inline-start: auto;
+  border-radius: 50%;
+  padding: 0;
+}
+.transaction-menu-icon > span {
+  font-size: 1.5em;
+  line-height: 1;
+}
 .transaction-menu-options {
   display: flex;
   gap: 3px;
   margin-top: 6px;
+}
+.transaction-menu-icon + .transaction-menu-options {
+  justify-content: flex-end;
 }
 .transaction-menu-options button:last-child {
   color: #dc2626;

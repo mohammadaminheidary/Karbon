@@ -3,11 +3,12 @@ import { getCustomerOptions } from "./customer-api.js";
 // Keep the native select, its validation and keyboard interaction. Search and
 // explicit pagination avoid downloading every customer's options on form open.
 export class CustomerSelect {
-  constructor(select, { rows, busy = () => {} }) {
+  constructor(select, { rows, busy = () => {}, includeAddress = false }) {
     Object.assign(this, {
       select,
       onRows: rows,
       onBusy: busy,
+      includeAddress,
       items: [],
       offset: 0,
       total: 0,
@@ -100,6 +101,7 @@ export class CustomerSelect {
         search: this.search.value.trim(),
         skip: more ? this.offset : 0,
         limit: 100,
+        includeAddress: this.includeAddress,
         signal: controller.signal,
       });
       let selectedRow =
@@ -108,6 +110,7 @@ export class CustomerSelect {
         const selected = await getCustomerOptions({
           customer_id: selectedId,
           limit: 1,
+          includeAddress: this.includeAddress,
           signal: controller.signal,
         });
         selectedRow = selected.items.find((row) => row.id === selectedId);

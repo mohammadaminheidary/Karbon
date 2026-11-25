@@ -15,11 +15,46 @@ let initialized = false,
   version = 0,
   records = [],
   loadedSearch = null,
+  loadedKind = "sale",
   total = 0,
   loading = false,
   searchTimer;
 
+function renderPurchases() {
+  $("settingsInvoicesList").replaceChildren(...records.map((invoice) => {
+    const row = node("article", "flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-french-gray/30 bg-white p-5");
+    const summary = node("div");
+    const heading = node("h3", "font-bold");
+    heading.append(document.createTextNode("فاکتور خرید "), node("bdi", "", invoice.invoice_number));
+    summary.append(heading, node("p", "mt-2 text-xs text-mirage/60",
+      [invoice.supplier_name, invoice.jalali_date, money(invoice.total)].filter(Boolean).join(" · ")));
+    const details = node("button", "finance-button border border-french-gray/40", "نمایش فاکتور خرید");
+    details.type = "button";
+    details.addEventListener("click", async () => {
+      const { showFinalInvoice } = await import("./invoice-export.js");
+      await showFinalInvoice(invoice.id, { kind: "purchase" });
+    });
+    const actions = node("div", "flex flex-wrap gap-2");
+    const edit = node("a", "finance-button border border-french-gray/40", "ویرایش خرید");
+    edit.href = `/page/warehouse-page.html#purchase-edit-${invoice.id}`;
+    const cancel = node("button", "finance-button bg-alizarin-crimson/10 text-alizarin-crimson", "لغو خرید");
+    cancel.type = "button";
+    cancel.addEventListener("click", () => confirmFinanceDelete({
+      path: `/purchases/${invoice.id}`,
+      description: `خرید ${invoice.invoice_number} لغو شود؟ مقدار ثبت‌شده از موجودی کالاها کسر می‌شود.`,
+      onDeleted: () => {
+        notify("خرید لغو و موجودی بروزرسانی شد.", { type: "success" });
+        publishLocalDataChange();
+      },
+    }));
+    actions.append(details, edit, cancel);
+    row.append(summary, actions);
+    return row;
+  }));
+}
+
 function render() {
+  if (loadedKind === "purchase") { renderPurchases(); return; }
   const groups = new Map();
   for (const invoice of records) {
     const id = invoice.customer.id;
@@ -115,13 +150,15 @@ async function load(more = false) {
   if (loadedSearch === null) $("settingsInvoicesStatus").textContent = "در حال دریافت فاکتورها…";
   try {
     const search = $("settingsInvoicesSearch").value.trim().slice(0, 200);
+    const kind = $("settingsInvoicesKind").value;
+    const endpoint = kind === "purchase" ? "/purchases" : "/settings/invoices";
     const visibleCount =
-      search === loadedSearch ? Math.max(20, records.length) : 20;
+      search === loadedSearch && kind === loadedKind ? Math.max(20, records.length) : 20;
     const nextRecords = more ? [...records] : [];
     let data;
     do {
       data = await financeRequest(
-        `/settings/invoices?${new URLSearchParams({ search, skip: nextRecords.length, limit: 20 })}`,
+        `${endpoint}?${new URLSearchParams({ search, skip: nextRecords.length, limit: 20 })}`,
       );
       if (current !== version) return;
       const existing = new Set(nextRecords.map((record) => record.id));
@@ -130,7 +167,8 @@ async function load(more = false) {
     } while (nextRecords.length < Math.min(visibleCount, data.total));
     total = data.total;
     loadedSearch = search;
-    const unchanged = JSON.stringify(records) === JSON.stringify(nextRecords);
+    const unchanged = loadedKind === kind && JSON.stringify(records) === JSON.stringify(nextRecords);
+    loadedKind = kind;
     records = nextRecords;
     if (!unchanged) render();
     $("settingsInvoicesMore").hidden = records.length >= total;
@@ -154,6 +192,18 @@ export async function initializeInvoiceSettings() {
   if (!initialized) {
     initialized = true;
     $("refreshInvoices").addEventListener("click", refreshData(() => load()));
+    $("settingsInvoicesKind").addEventListener("change", () => {
+      const search = $("settingsInvoicesSearch");
+      search.placeholder = $("settingsInvoicesKind").value === "purchase"
+        ? "نام یا کد تأمین‌کننده یا شماره فاکتور…" : "نام یا کد مشتری، کد فاکتور یا شماره سفارش…";
+      clearTimeout(searchTimer);
+      records = [];
+      total = 0;
+      loadedSearch = null;
+      $("settingsInvoicesList").replaceChildren();
+      $("settingsInvoicesMore").hidden = true;
+      load();
+    });
     $("settingsInvoicesMore").addEventListener("click", () => load(true));
     $("settingsInvoicesSearch").addEventListener("input", () => {
       // Invalidate an older response before the debounce expires.

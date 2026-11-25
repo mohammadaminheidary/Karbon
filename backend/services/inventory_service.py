@@ -1,16 +1,19 @@
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import text, func
-from sqlalchemy.orm import aliased
+from sqlalchemy import String, cast, func, or_, text
+from sqlalchemy.orm import aliased, joinedload
 from models.inventory import Brand, InventoryOption, Purchase, PurchaseItem
+from models.customer import Customer
+from services import invoice_settings_service as design
 from models.order import PRODUCT_BRAND_CHECK, Product, OrderItem
 from services.finance_service import FinanceError, require
-from services.fiscal_period import ensure_open, stock_change
+from services.fiscal_period import ensure_open, in_active_period
 from schemas.customer_schema import normalize_text
 import hashlib
 import json
 import jdatetime
-from datetime import timezone
-from collections import Counter
+from datetime import datetime, timezone
+from services.inventory_stock import StockPosting, line_quantities, opposite, post_stock, quantities_for
+from security.password import verify_password
 
 
 DEFAULT_UNITS = (
@@ -18,6 +21,18 @@ DEFAULT_UNITS = (
     "سانتی‌متر", "متر مربع", "متر مکعب", "تن", "رول", "جعبه", "کارتن", "ساعت",
 )
 DEFAULT_CATEGORY_NAME = "عمومی"
+PURCHASE_REVISION_COLUMNS = {
+    "revision": "INTEGER NOT NULL DEFAULT 1", "last_edit_id": "VARCHAR(36)",
+    "last_edit_fingerprint": "VARCHAR(64)", "deleted_at": "DATETIME",
+}
+PURCHASE_INTERNAL_FIELDS = {"request_fingerprint", "invoice_snapshot", "last_edit_id", "last_edit_fingerprint"}
+
+
+def upgrade_purchase_revisions(connection):
+    columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(purchases)")}
+    for column, definition in PURCHASE_REVISION_COLUMNS.items():
+        if column not in columns:
+            connection.exec_driver_sql(f"ALTER TABLE purchases ADD COLUMN {column} {definition}")
 
 
 def initialize_category_storage(engine):
@@ -112,6 +127,7 @@ def initialize_purchase_storage(engine):
     """Add a category to legacy products without changing stock or invoices."""
     with engine.begin() as connection:
         connection.exec_driver_sql("BEGIN IMMEDIATE")
+        upgrade_purchase_revisions(connection)
         columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(products)")}
         if "category_id" not in columns:
             connection.exec_driver_sql("ALTER TABLE products ADD COLUMN category_id INTEGER REFERENCES inventory_options(id) ON DELETE RESTRICT")
@@ -151,10 +167,17 @@ def require_category(db, category_id, *, current=None):
                 (InventoryOption.name == DEFAULT_CATEGORY_NAME).desc(), InventoryOption.id,
             ).first()
             category_id = default.id if default else None
-    parent_alias = aliased(InventoryOption)
-    result = db.query(InventoryOption, parent_alias).outerjoin(
-        parent_alias, parent_alias.id == InventoryOption.parent_id,
-    ).filter(InventoryOption.id == category_id, InventoryOption.kind == "categories").first()
+    return validate_category(category_query(db).filter(InventoryOption.id == category_id).first(), current=current)
+
+
+def category_query(db):
+    parent = aliased(InventoryOption)
+    return db.query(InventoryOption, parent).outerjoin(
+        parent, parent.id == InventoryOption.parent_id,
+    ).filter(InventoryOption.kind == "categories")
+
+
+def validate_category(result, *, current=None):
     if result is None:
         raise FinanceError("دسته‌بندی فعال کالا را از تنظیمات انتخاب کنید.", 422)
     category, parent = result
@@ -163,92 +186,252 @@ def require_category(db, category_id, *, current=None):
     return category, parent
 
 
+def products_by_id(db, ids):
+    return {product.id: product for product in db.query(Product).options(joinedload(Product.brand))
+            .filter(Product.id.in_(ids))}
+
+
 def next_purchase_number(db):
     # A preview only. Final allocation happens under the purchase write lock.
-    return f"PUR-{(db.query(func.max(Purchase.id)).scalar() or 0) + 1:06d}"
+    value = (db.query(func.max(Purchase.id)).scalar() or 0) + 1
+    while db.query(Purchase.id).filter_by(invoice_number=f"PUR-{value:06d}").first():
+        value += 1
+    return f"PUR-{value:06d}"
 
 
 def purchase_category_data(item):
     return {"category_path": category_path(item.category_name, item.category_parent_name)}
 
 
-def purchase_data(db, item):
+def purchase_data(db, item, *, items=None):
+    if items is None:
+        items = db.query(PurchaseItem).filter_by(purchase_id=item.id).order_by(PurchaseItem.position)
     rows = [{**{column.name: getattr(row, column.name) for column in PurchaseItem.__table__.columns},
              **purchase_category_data(row), "total": row.quantity * row.purchase_price}
-            for row in db.query(PurchaseItem).filter_by(purchase_id=item.id).order_by(PurchaseItem.position).all()]
+            for row in items]
+    subtotal = sum(row["total"] for row in rows)
     return {
-        **{column.name: getattr(item, column.name) for column in Purchase.__table__.columns if column.name != "request_fingerprint"},
+        **{column.name: getattr(item, column.name) for column in Purchase.__table__.columns if column.name not in PURCHASE_INTERNAL_FIELDS},
         **purchase_category_data(item),
         "jalali_date": jdatetime.date.fromgregorian(date=item.purchase_date).strftime("%Y/%m/%d"),
         "rows": rows,
         "row_count": len(rows),
         "total_quantity": sum(row["quantity"] for row in rows),
-        "total": sum(row["total"] for row in rows),
+        "subtotal": subtotal, "total": subtotal - item.discount + item.tax + item.shipping,
         "created_at": item.created_at.replace(tzinfo=timezone.utc),
     }
 
 
-def get_purchase(db, purchase_id):
-    item = db.get(Purchase, purchase_id)
-    if item is None:
-        raise FinanceError("خرید موردنظر پیدا نشد.", 404)
-    return purchase_data(db, item)
+def get_purchase(db, purchase_id, for_edit=False):
+    item = require(db, Purchase, purchase_id, "خرید")
+    result = purchase_data(db, item)
+    if not for_edit:
+        return result
+    ensure_open(db, item.purchase_date)
+    supplier = db.get(Customer, item.supplier_id) if item.supplier_id else None
+    rules = (item.invoice_snapshot or {}).get("finance_rules")
+    return {**result, "supplier": design.party_data(supplier),
+            "finance": rules or design.preferences(db).data["purchase_finance"]}
 
 
-def save_purchase(db, data):
-    fingerprint = hashlib.sha256(json.dumps(data.model_dump(mode="json", exclude={"request_id"}), sort_keys=True).encode()).hexdigest()
+def list_purchase_invoices(db, search, skip, limit):
+    supplier_name = (Customer.first_name + " " + Customer.last_name).label("supplier_name")
+    query = db.query(Purchase.id, Purchase.invoice_number, Purchase.purchase_date, Purchase.discount,
+                     Purchase.tax, Purchase.shipping, supplier_name).outerjoin(Customer, Customer.id == Purchase.supplier_id)
+    query = query.filter(Purchase.deleted_at.is_(None), in_active_period(Purchase.purchase_date))
+    term = normalize_text(search)
+    if term:
+        pattern = "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        query = query.filter(or_(Purchase.invoice_number.like(pattern, escape="\\"),
+                                 supplier_name.like(pattern, escape="\\"),
+                                 cast(Customer.customer_code, String).like(pattern, escape="\\")))
+    total = query.count()
+    rows = query.order_by(Purchase.id.desc()).offset(skip).limit(limit).all()
+    ids = [row.id for row in rows]
+    subtotals = dict(db.query(PurchaseItem.purchase_id, func.sum(PurchaseItem.quantity * PurchaseItem.purchase_price))
+                     .filter(PurchaseItem.purchase_id.in_(ids)).group_by(PurchaseItem.purchase_id).all()) if ids else {}
+    return {"total": total, "items": [
+        {"id": row.id, "invoice_number": row.invoice_number, "supplier_name": row.supplier_name,
+         "jalali_date": jdatetime.date.fromgregorian(date=row.purchase_date).strftime("%Y/%m/%d"),
+         "total": subtotals.get(row.id, 0) - row.discount + row.tax + row.shipping} for row in rows
+    ]}
+
+
+def purchase_invoice(db, purchase_id, *, include_deleted=False):
+    item = require(db, Purchase, purchase_id, "خرید", include_deleted=include_deleted)
+    if item.invoice_snapshot:
+        return design.with_presentation(db, {key: value for key, value in item.invoice_snapshot.items() if key != "finance_rules"})
+    # Legacy purchases did not have a designer or a rendered invoice.
+    result = purchase_data(db, item)
+    return build_purchase_invoice(result)
+
+
+def archived_purchase_invoice(db, archive, receipt):
+    purchase_id = receipt["id"]
+    issuance = archive.get("purchase_issuance", {}).get(str(purchase_id))
+    if issuance is None:
+        current = db.get(Purchase, purchase_id)
+        if current is not None and current.revision == 1:
+            return purchase_invoice(db, purchase_id, include_deleted=True)
+    rows = [row for row in archive["purchase_items"] if row["purchase_id"] == purchase_id]
+    codes = {row["id"]: row.get("product_code") for row in archive["products"]}
+    result = build_purchase_invoice({"tax": 0, "shipping": 0, "discount": 0, **receipt,
+                                     "subtotal": sum(row["total"] for row in rows), "rows": rows})
+    for item in result["items"]:
+        item["product_code"] = codes.get(item["product_id"])
+    if issuance:
+        result.update(issuance)
+    elif receipt.get("supplier_id"):
+        supplier = next((row for row in archive["customers"] if row["id"] == receipt["supplier_id"]), None)
+        if supplier:
+            result["supplier"] = {"code": supplier["customer_code"],
+                                  "name": f"{supplier['first_name']} {supplier['last_name']}",
+                                  "phone_numbers": supplier["phone_numbers"], "address": supplier["address"]}
+    return design.with_presentation(db, result)
+
+
+def build_purchase_invoice(result, presentation=None, supplier=None, products=None):
+    items = [{**row, "unit_price": row["purchase_price"],
+              "product_code": products[row["product_id"]].product_code if products else None} for row in result["rows"]]
+    invoice = {key: result[key] for key in ("id", "jalali_date", "subtotal", "discount", "tax", "shipping", "total")}
+    invoice.update(invoice_code=result["invoice_number"], kind="purchase", items=items, supplier=design.party_data(supplier),
+                   status="completed", payments=[], version=1)
+    if presentation:
+        invoice["presentation"] = presentation
+    return invoice
+
+
+def purchase_rows(db, rows):
+    categories = {category.id: (category, parent) for category, parent in category_query(db)
+                  .filter(InventoryOption.id.in_({row.category_id for row in rows}))}
+    products = products_by_id(db, {row.product_id for row in rows})
+    units = enabled_unit_names(db)
+    records = []
+    for position, row in enumerate(rows, 1):
+        category, parent = validate_category(categories.get(row.category_id))
+        product = products.get(row.product_id)
+        if product is None or not product.active or product.deleted_at is not None or product.category_id != category.id:
+            raise FinanceError(f"کالای فعال ردیف {position} را از دسته‌بندی انتخاب‌شده انتخاب کنید.", 422)
+        require_enabled_unit(db, product.unit, enabled=units)
+        if row.unit is not None and normalize_text(row.unit) != normalize_text(product.unit):
+            raise FinanceError(f"واحد ردیف {position} با واحد کالا مطابقت ندارد. فهرست کالاها را بروزرسانی کنید.", 422)
+        if product.stock is None:
+            raise FinanceError(f"کالای ردیف {position} باید دارای کنترل موجودی باشد.", 422)
+        records.append({**row.model_dump(exclude={"unit"}), "position": position, "product_name": product.name,
+                        "category_name": category.name, "category_parent_name": parent.name if parent else None,
+                        "brand_name": product.brand.name if product.brand else None, "unit": product.unit})
+    return records, products
+
+
+def purchase_stock(db, purchase):
+    quantities = quantities_for(db, f"purchase:{purchase.id}:{purchase.revision}:apply")
+    # Legacy purchases always posted tracked stock. The immutable receipt
+    # quantities provide the source when the older journal has no reference.
+    return quantities or line_quantities(db.query(PurchaseItem).filter_by(purchase_id=purchase.id))
+
+
+def save_purchase(db, data, purchase_id=None):
+    values = data.model_dump(mode="json", exclude={"request_id", "invoice_settings_revision"})
+    values["rows"] = [row.model_dump(exclude_none=True) for row in data.rows]
+    fingerprint = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
     fingerprints = {fingerprint}
-    if len(data.rows) == 1:
-        legacy = {"purchase_date": data.purchase_date.isoformat(), **data.rows[0].model_dump()}
+    if data.invoice_number is None and data.supplier_id is None:
+        legacy = {key: values[key] for key in ("purchase_date", "rows")}
         fingerprints.add(hashlib.sha256(json.dumps(legacy, sort_keys=True).encode()).hexdigest())
+        if len(data.rows) == 1:
+            legacy = {"purchase_date": data.purchase_date.isoformat(), **values["rows"][0]}
+            fingerprints.add(hashlib.sha256(json.dumps(legacy, sort_keys=True).encode()).hexdigest())
     db.rollback()
     try:
         # Serialize stock increments with sales, Settings edits and other purchases.
         db.execute(text("BEGIN IMMEDIATE"))
-        previous = db.query(Purchase).filter_by(request_id=str(data.request_id)).first()
-        if previous:
+        request_id = str(data.request_id)
+        previous = db.query(Purchase).filter_by(request_id=request_id).first() if purchase_id is None else None
+        if previous is not None:
+            if previous.deleted_at is not None or previous.revision != 1:
+                raise FinanceError("این خرید پس از ثبت تغییر کرده است. فهرست فاکتورها را بررسی کنید.", 409, code="PURCHASE_CHANGED")
             if previous.request_fingerprint not in fingerprints:
-                raise FinanceError("این درخواست قبلاً با اطلاعات دیگری ثبت شده است. نتیجه خرید را بررسی کنید.", 409)
+                raise FinanceError("این درخواست قبلاً با اطلاعات دیگری ثبت شده است. نتیجه خرید را بررسی کنید.", 409, code="PURCHASE_CHANGED")
             result = purchase_data(db, previous)
             db.commit()
             return result
-        ensure_open(db, data.purchase_date)
-        records, products, quantities = [], {}, Counter()
-        for position, row in enumerate(data.rows, 1):
-            category, parent = require_category(db, row.category_id)
-            product = db.query(Product).filter_by(id=row.product_id, active=True, deleted_at=None).first()
-            if product is None or product.category_id != category.id:
-                raise FinanceError(f"کالای فعال ردیف {position} را از دسته‌بندی انتخاب‌شده انتخاب کنید.", 422)
-            require_enabled_unit(db, product.unit)
-            if product.stock is None:
-                raise FinanceError(f"کالای ردیف {position} باید دارای کنترل موجودی باشد.", 422)
-            quantities[product.id] += row.quantity
-            products[product.id] = product
-            records.append({**row.model_dump(), "position": position, "product_name": product.name,
-                            "category_name": category.name, "category_parent_name": parent.name if parent else None,
-                            "brand_name": product.brand.name if product.brand else None, "unit": product.unit})
-        for product_id, quantity in quantities.items():
-            product = products[product_id]
-            if product.stock + quantity > 1000000000:
-                raise FinanceError("موجودی پس از خرید بیش از حد مجاز است.", 422)
-            product.stock += quantity
-            product.revision += 1
-            stock_change(db, product, data.purchase_date, quantity)
+        item = require(db, Purchase, purchase_id, "خرید") if purchase_id is not None else None
+        if item is not None and item.last_edit_id == request_id:
+            if item.last_edit_fingerprint != fingerprint:
+                raise FinanceError("شناسه درخواست قبلاً برای ویرایش دیگری استفاده شده است.", 409, code="PURCHASE_CHANGED")
+            result = purchase_data(db, item)
+            db.commit()
+            return result
+        if item is not None and (item.revision != data.revision or data.invoice_number not in (None, item.invoice_number)):
+            raise FinanceError("خرید تغییر کرده است. فاکتور را دوباره برای ویرایش باز کنید.", 409, code="PURCHASE_CHANGED")
+        ensure_open(db, data.purchase_date, item.purchase_date if item else data.purchase_date)
+        settings = design.preferences(db)
+        design.check_workflow_revision(settings, data.invoice_settings_revision)
+        supplier = require(db, Customer, data.supplier_id, "تأمین‌کننده") if data.supplier_id else None
+        snapshot = (item.invoice_snapshot or {}) if item else {}
+        previous_supplier_id = item.supplier_id if item else None
+        rules = snapshot.get("finance_rules", settings.data["purchase_finance"])
+        totals = design.calculate_totals(sum(row.quantity * row.purchase_price for row in data.rows), rules)
+        records, products = purchase_rows(db, data.rows)
+        postings = []
         # Retain the original receipt columns as the first-row snapshot for older
         # readers; purchase_items owns the complete invoice and its row totals.
         first = {key: value for key, value in records[0].items() if key != "position"}
-        item = Purchase(**first, purchase_date=data.purchase_date, request_id=str(data.request_id),
-                        request_fingerprint=fingerprint, invoice_number=next_purchase_number(db))
-        db.add(item)
+        if item is None:
+            invoice_number = design.allocate_number(db, "purchase", settings.data["purchase_numbering"], data.purchase_date,
+                                                    data.invoice_number, Purchase.invoice_number, lambda: next_purchase_number(db))
+            item = Purchase(request_id=request_id, request_fingerprint=fingerprint, invoice_number=invoice_number)
+            db.add(item)
+            revision = 1
+        else:
+            old = purchase_stock(db, item)
+            for product_id in old.keys() - products.keys():
+                products[product_id] = require(db, Product, product_id, "کالا")
+            revision = item.revision + 1
+            postings.append(StockPosting(f"purchase:{item.id}:{revision}:reverse", item.purchase_date, opposite(old)))
+            db.query(PurchaseItem).filter_by(purchase_id=item.id).delete(synchronize_session=False)
+        item.purchase_date, item.supplier_id = data.purchase_date, data.supplier_id
+        for key, value in {**first, **{key: totals[key] for key in ("discount", "tax", "shipping")}}.items():
+            setattr(item, key, value)
         db.flush()
-        db.add_all([PurchaseItem(purchase_id=item.id, **record) for record in records])
+        postings.append(StockPosting(f"purchase:{item.id}:{revision}:apply", data.purchase_date, line_quantities(data.rows)))
+        post_stock(db, products, *postings)
+        items = [PurchaseItem(purchase_id=item.id, **record) for record in records]
+        db.add_all(items)
         db.flush()
-        result = purchase_data(db, item)
+        if purchase_id is not None:
+            item.revision = revision
+            item.last_edit_id, item.last_edit_fingerprint = request_id, fingerprint
+        result = purchase_data(db, item, items=items)
+        presentation = snapshot.get("presentation") or design.freeze_presentation(db, "purchase", settings.data)
+        item.invoice_snapshot = {**build_purchase_invoice(result, presentation, supplier, products), "finance_rules": rules}
+        if previous_supplier_id == item.supplier_id and "supplier" in snapshot:
+            item.invoice_snapshot = {**item.invoice_snapshot, "supplier": snapshot["supplier"]}
         db.commit()
         return result
     except IntegrityError:
         db.rollback()
-        raise FinanceError("شماره خرید تکراری است. اطلاعات را بروزرسانی کنید.", 409)
+        raise FinanceError("ثبت یا ویرایش خرید ممکن نشد. اطلاعات را دوباره دریافت کنید.", 409)
+    except Exception:
+        db.rollback()
+        raise
+
+
+def cancel_purchase(db, purchase_id, data, user):
+    if not verify_password(data.password, user.password_hash):
+        raise FinanceError("رمز حساب کاربری صحیح نیست.", 403)
+    db.rollback()
+    try:
+        db.execute(text("BEGIN IMMEDIATE"))
+        item = require(db, Purchase, purchase_id, "خرید", include_deleted=True)
+        if item.deleted_at is None:
+            ensure_open(db, item.purchase_date)
+            quantities = purchase_stock(db, item)
+            products = {product_id: require(db, Product, product_id, "کالا") for product_id in quantities}
+            post_stock(db, products, StockPosting(f"purchase:{item.id}:cancel", item.purchase_date, opposite(quantities)))
+            item.deleted_at = datetime.now(timezone.utc)
+        db.commit()
+        return {"id": purchase_id, "deleted": True}
     except Exception:
         db.rollback()
         raise
@@ -278,16 +461,22 @@ def enabled_units(db):
     return db.query(InventoryOption.name).filter_by(kind="units", active=True)
 
 
-def require_enabled_unit(db, name, *, current=None):
+def enabled_unit_names(db):
+    return tuple(name for (name,) in enabled_units(db))
+
+
+def require_enabled_unit(db, name, *, current=None, enabled=None):
     # Editing an existing record may retain its original disabled/legacy unit;
     # changing it, or creating any new record, requires an enabled catalog entry.
     if current is not None and name == normalize_text(current):
         return current
-    if enabled_units(db).filter(InventoryOption.name == name).first():
+    if enabled is None:
+        enabled = enabled_unit_names(db)
+    if name in enabled:
         return name
     # Free-text units from older installations may use Arabic letters or extra
     # spaces. Match normalized input while retaining the catalog's original name.
-    for (configured,) in enabled_units(db).all():
+    for configured in enabled:
         if name == normalize_text(configured):
             return configured
     raise FinanceError("واحد انتخاب‌شده فعال نیست. واحد را از تنظیمات ← واحد انتخاب یا فعال کنید.", 422)
@@ -335,7 +524,7 @@ def save_option(db, kind, data, option_id=None):
         if kind == "units" and option_id is not None and name == normalize_text(item.name):
             name = item.name
         if kind == "units" and option_id is not None and item.name != name:
-            if db.query(Product.id).filter(Product.unit == item.name).first() or db.query(OrderItem.id).filter(OrderItem.unit == item.name).first():
+            if any(db.query(model.id).filter(model.unit == item.name).first() for model in (Product, OrderItem, PurchaseItem)):
                 raise FinanceError("نام واحد استفاده‌شده قابل تغییر نیست. واحد جدید اضافه کنید؛ واحد قبلی را می‌توانید غیرفعال کنید.", 409)
         item.name = name
         item.active = data.active

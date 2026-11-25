@@ -183,7 +183,7 @@ def get_document(db, document_id):
         BankDirectory, BankAccount.bank == BankDirectory.code).filter(Transaction.document_id == document.id, Transaction.deleted_at.is_(None)).order_by(Transaction.id).all()
     income = sum(item.amount for item, _, _ in rows if item.kind == "income")
     expense = sum(item.amount for item, _, _ in rows if item.kind == "expense")
-    links = invoice_links(db, [item.id for item, _, _ in rows])
+    links = invoice_links(db, [item for item, _, _ in rows])
     return {**summary(document, income, expense, len(rows)), "rows": [serialize(item, bank, directory, links=links) for item, bank, directory in rows]}
 
 

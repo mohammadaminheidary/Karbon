@@ -28,6 +28,7 @@ class PurchaseRowWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     category_id: int = Field(strict=True, gt=0, le=9223372036854775807)
     product_id: int = Field(strict=True, gt=0, le=9223372036854775807)
+    unit: str | None = Field(default=None, min_length=1, max_length=80)
     quantity: int = Field(strict=True, gt=0, le=1000000)
     purchase_price: int = Field(strict=True, ge=0, le=999999999999)
 
@@ -42,6 +43,9 @@ class PurchaseWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     request_id: UUID
     purchase_date: date
+    invoice_number: str | None = Field(default=None, min_length=1, max_length=32)
+    invoice_settings_revision: int | None = Field(default=None, strict=True, ge=1)
+    supplier_id: int | None = Field(default=None, strict=True, gt=0, le=9223372036854775807)
     rows: list[PurchaseRowWrite] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="before")
@@ -50,7 +54,7 @@ class PurchaseWrite(BaseModel):
         # Preserve pending requests and integrations from the single-item form.
         if isinstance(value, dict) and "rows" not in value:
             value = dict(value)
-            fields = {"category_id", "product_id", "quantity", "purchase_price"}
+            fields = {"category_id", "product_id", "unit", "quantity", "purchase_price"}
             value["rows"] = [{key: value.pop(key) for key in fields if key in value}]
         return value
 
@@ -64,3 +68,7 @@ class PurchaseWrite(BaseModel):
         if sum(row.quantity * row.purchase_price for row in self.rows) > 999999999999:
             raise ValueError("جمع مبلغ خرید بیش از حد مجاز است.")
         return self
+
+
+class PurchaseEdit(PurchaseWrite):
+    revision: int = Field(strict=True, gt=0)

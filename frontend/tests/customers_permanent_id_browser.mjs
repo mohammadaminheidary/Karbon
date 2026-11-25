@@ -69,7 +69,7 @@ async function createCustomer(index) {
     await page.waitForFunction(() => document.getElementById("createOrderModal")?.open);
     assert.equal(new URL(page.url()).pathname, "/page/customers-page.html");
     assert.equal(await page.locator("#orderCustomerSearch").inputValue(), `${customer.customer_code} · ${customer.first_name} ${customer.last_name}`);
-    assert.equal(await page.locator("#orderCustomerDetails").isVisible(), true);
+    await page.locator("#orderCustomerDetails").waitFor({ state: "visible" });
     await page.locator("#createOrderModal footer [data-dialog-close]").click();
     await page.waitForFunction(() => !document.getElementById("createOrderModal").open);
   } else {
@@ -101,6 +101,27 @@ try {
   const first = await createCustomer(1);
   const second = await createCustomer(2);
   assert.notEqual(first.permanent_id, second.permanent_id);
+  const search = page.locator("#customerSearchInput");
+  await search.fill(String(second.customer_code));
+  await card(first).waitFor({ state: "detached" });
+  const customersUrl = page.url();
+  await assertDetails(second);
+  assert.equal(page.url(), customersUrl);
+  assert.equal(await page.locator("#customerDetailsModal").evaluate(
+    (dialog) => dialog.matches(":modal") && !dialog.closest("#navbarHost"),
+  ), true);
+  assert.equal(await card(second).getAttribute("aria-expanded"), "true");
+  assert.equal(await search.evaluate((input) => {
+    input.focus();
+    return document.getElementById("customerDetailsModal").contains(document.activeElement);
+  }), true);
+  await page.keyboard.press("Escape");
+  await page.locator("#customerDetailsModal").waitFor({ state: "hidden" });
+  assert.equal(await card(second).getAttribute("aria-expanded"), "false");
+  assert.equal(await card(second).evaluate((button) => button === document.activeElement), true);
+  assert.equal(await search.inputValue(), String(second.customer_code));
+  await search.fill("");
+  await card(first).waitFor();
   await assertDetails(second);
   await page.locator("#editCustomerButton").click();
   await page.locator("#customerLastName").fill("ویرایش آزمون مرورگر");

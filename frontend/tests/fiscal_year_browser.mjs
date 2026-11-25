@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { readDate } from "./date-input-helpers.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.KARBON_PLAYWRIGHT_PATH || "playwright");
@@ -130,14 +131,15 @@ try {
   await invoice.getByLabel("روش دریافت").selectOption("transfer");
   await invoice.getByLabel("حساب مقصد").selectOption(bank);
   await invoice.getByLabel("شماره پیگیری").fill("12345678");
-  assert.equal(await invoice.getByLabel("تاریخ دریافت").inputValue(), `${next}/01/01`);
+  const receiptDateId = await invoice.locator("[data-date-input]").getAttribute("data-date-input");
+  assert.equal(await readDate(invoice, receiptDateId), `${next}/01/01`);
   const [payment] = await Promise.all([
     page.waitForResponse((r) => r.url().endsWith(`/orders/${order}/payments`)),
     invoice.getByRole("button", { name: "ثبت دریافت", exact: true }).click(),
   ]);
   assert.equal(payment.status(), 201, await payment.text());
   assert.equal((await payment.json()).outstanding, 2_000_000);
-  await text("#customerDetailsBody summary", fmt.format(2_000_000));
+  await text("#customerFiscalCarryovers summary", fmt.format(2_000_000));
   await go("/page/finance-page.html");
   await text("#financeFiscalOpening", fmt.format(12_000_000));
   await text("#totalIncome", fmt.format(1_000_000));

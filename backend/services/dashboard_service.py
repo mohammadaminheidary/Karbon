@@ -4,7 +4,7 @@ Money is returned as decimal strings: totals and stock * price can exceed
 JavaScript's safe integer range. No inventory history is inferred from invoices.
 """
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import case, func, text
 
@@ -13,26 +13,22 @@ from models.attendance import Attendance
 from models.customer import Customer
 from models.document import Document, DocumentAccount
 from models.finance import ExpenseCategory, FinancialTransaction as Transaction
-from models.fiscal_year import FiscalYear
 from models.inventory import Brand, Purchase, PurchaseItem
 from models.member import Member
-from models.order import Order, OrderItem, OrderPayment, Product
+from models.order import Order, OrderItem, Product
 from models.task import Task
 from services.inventory_service import category_path, with_category_names
 from services.finance_service import bank_list
-from services.fiscal_period import active_period, active_value, effective_day, in_active_period
+from services.fiscal_period import active_period, effective_day, in_active_period
+from services.receivables import active_bounds, invoice_positions
 
 
 def debt_rows(db, today):
-    end = func.coalesce(active_value(FiscalYear.end_date).scalar_subquery(), date.max)
-    paid = db.query(OrderPayment.order_id.label("order_id"), func.sum(Transaction.amount).label("paid")).join(
-        Transaction, Transaction.id == OrderPayment.transaction_id,
-    ).filter(Transaction.deleted_at.is_(None), Transaction.transaction_date <= end).group_by(OrderPayment.order_id).subquery()
-    remaining = case((Order.subtotal - Order.discount - func.coalesce(paid.c.paid, 0) > 0,
-                      Order.subtotal - Order.discount - func.coalesce(paid.c.paid, 0)), else_=0)
-    return db.query(Order.customer_id, func.sum(remaining), func.sum(case((Order.payment_date < today, remaining), else_=0))).outerjoin(paid, paid.c.order_id == Order.id).filter(
-        Order.deleted_at.is_(None), Order.invoice_date <= end,
-    ).group_by(Order.customer_id).all()
+    _, end = active_bounds()
+    balances = invoice_positions(end).c
+    return db.query(balances.customer_id, func.sum(balances.remaining),
+                    func.sum(case((balances.payment_date < today, balances.remaining), else_=0))
+                    ).group_by(balances.customer_id).all()
 
 
 def debtor_list(rows, names):
@@ -103,7 +99,7 @@ def dashboard(db, start, end, view="full", include_debtors=False, include_produc
     order_counts = dict(orders_query.with_entities(Order.status, func.count(Order.id)).group_by(Order.status).all())
     order_summary = dict(count=0, sales=0, discount=0, active=0, completed=0)
     for day, status, count, total, discount in orders_query.with_entities(
-        Order.invoice_date, Order.status, func.count(Order.id), func.sum(Order.subtotal - Order.discount), func.sum(Order.discount),
+        Order.invoice_date, Order.status, func.count(Order.id), func.sum(Order.total), func.sum(Order.discount),
     ).filter(Order.invoice_date.between(previous_start, end)).group_by(Order.invoice_date, Order.status).all():
         if day >= start:
             order_summary["count"] += count
@@ -150,10 +146,13 @@ def dashboard(db, start, end, view="full", include_debtors=False, include_produc
     banks = [dict(id=bank["id"], name=bank["name"], active=bank["active"],
                   balance=str(bank["balance"]), opening_balance=str(bank["opening_balance"]))
              for bank in bank_list(db)]
-    purchase_count, purchase_value = db.query(func.count(func.distinct(Purchase.id)),
-        func.coalesce(func.sum(PurchaseItem.quantity * PurchaseItem.purchase_price), 0)).join(
-        PurchaseItem, PurchaseItem.purchase_id == Purchase.id,
-    ).filter(Purchase.purchase_date.between(start, end), in_active_period(Purchase.purchase_date)).one()
+    purchase_lines = db.query(PurchaseItem.purchase_id.label("id"),
+        func.sum(PurchaseItem.quantity * PurchaseItem.purchase_price).label("subtotal")
+    ).group_by(PurchaseItem.purchase_id).subquery()
+    purchase_count, purchase_value = db.query(func.count(Purchase.id), func.coalesce(func.sum(
+        purchase_lines.c.subtotal - Purchase.discount + Purchase.tax + Purchase.shipping), 0)
+    ).join(purchase_lines, purchase_lines.c.id == Purchase.id).filter(
+        Purchase.deleted_at.is_(None), Purchase.purchase_date.between(start, end), in_active_period(Purchase.purchase_date)).one()
 
     expenses = [dict(name=name, amount=str(int(amount)), count=count) for name, amount, count in db.query(
         func.coalesce(ExpenseCategory.title, DocumentAccount.title, Transaction.title).label("source"),
@@ -210,7 +209,7 @@ def dashboard(db, start, end, view="full", include_debtors=False, include_produc
         customers=customer_summary,
         inventory=dict(value=str(sum(int(row["value"]) for row in inventory)), products=inventory,
                        tracked=len(inventory), services=sum(p.stock is None for p in products),
-                       out_of_stock=sum(row["stock"] == 0 and row["active"] for row in inventory)),
+                       out_of_stock=sum(row["stock"] <= 0 and row["active"] for row in inventory)),
         banks=dict(items=banks, balance=str(sum(int(row["balance"]) for row in banks)),
                    opening_balance=str(sum(int(row["opening_balance"]) for row in banks))),
         purchases=dict(count=purchase_count, value=str(purchase_value)),

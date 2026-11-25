@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 import base64
 import re
 from pathlib import Path
 
 import jdatetime
-from sqlalchemy import case, func, text, or_, and_, cast, String, select
+from sqlalchemy import case, func, literal, text, or_, and_, cast, String, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import object_session
 
@@ -20,6 +20,7 @@ from schemas.customer_schema import normalize_text, DIGITS
 from security.password import verify_password
 from services.reference_codes import compact_customer_codes, compact_category_codes, compact_transaction_numbers
 from services.fiscal_period import active_period, active_value, effective_day, ensure_open, in_active_period
+from services.receivables import active_bounds, customer_financial_totals, general_allocations, invoice_positions
 
 
 def initialize_bank_storage(engine):
@@ -43,7 +44,8 @@ def initialize_bank_storage(engine):
                 # Identifiers come exclusively from the constant map above.
                 connection.exec_driver_sql(f"ALTER TABLE bank_accounts ADD COLUMN {column} {sql_type}")
         for table, fields in {"customers": {"deleted_at": "DATETIME"}, "expense_categories": {"deleted_at": "DATETIME", "display_code": "INTEGER"},
-                              "financial_transactions": {"updated_at": "DATETIME", "deleted_at": "DATETIME", "transaction_number": "INTEGER"}}.items():
+                              "financial_transactions": {"updated_at": "DATETIME", "deleted_at": "DATETIME", "transaction_number": "INTEGER",
+                                                         "payment_method": "VARCHAR(12)"}}.items():
             existing = {row[1] for row in connection.exec_driver_sql(f"PRAGMA table_info({table})")}
             for column, sql_type in fields.items():
                 if column not in existing:
@@ -64,8 +66,8 @@ def bank_catalog(db):
 
 
 class FinanceError(Exception):
-    def __init__(self, message, status=400):
-        self.message, self.status = message, status
+    def __init__(self, message, status=400, *, code=None):
+        self.message, self.status, self.code = message, status, code
 
 
 def require(db, model, record_id, label, active=False, include_deleted=False):
@@ -190,28 +192,50 @@ def save_bank(db, data, record_id=None):
     return result
 
 
-def invoice_links(db, transaction_ids):
-    """Resolve invoice metadata once per response, including shared receipt totals."""
-    if not transaction_ids:
+def invoice_links(db, transactions, *, cutoff=None):
+    """Batch invoice links without counting a split receipt twice in the ledger."""
+    receipts = [item for item in transactions if item.kind == "income" and item.customer_id is not None]
+    if not receipts:
         return {}
-    links = db.query(OrderPayment, Order).join(Order, OrderPayment.order_id == Order.id).filter(OrderPayment.transaction_id.in_(transaction_ids)).all()
-    if not links:
-        return {}
-    order_ids = {order.id for _, order in links}
-    paid = dict(db.query(OrderPayment.order_id, func.sum(Transaction.amount)).join(Transaction, OrderPayment.transaction_id == Transaction.id).filter(OrderPayment.order_id.in_(order_ids), Transaction.deleted_at.is_(None)).group_by(OrderPayment.order_id).all())
-    return {payment.transaction_id: {"order_id": order.id, "invoice_code": order.invoice_code, "method": payment.method,
-            "subtotal": order.subtotal, "discount": order.discount, "total": order.subtotal-order.discount,
-            "paid": int(paid[order.id]), "remaining": order.subtotal-order.discount-int(paid[order.id])}
-            for payment, order in links}
+    ids = [item.id for item in receipts]
+    customer_ids = {item.customer_id for item in receipts}
+    if cutoff is None:
+        _, cutoff = active_bounds()
+    positions = invoice_positions(cutoff, customer_ids)
+    direct = select(OrderPayment.order_id, OrderPayment.transaction_id, Transaction.amount, OrderPayment.method).join(
+        Transaction, Transaction.id == OrderPayment.transaction_id,
+    ).where(OrderPayment.transaction_id.in_(ids))
+    general = general_allocations(positions, cutoff, customer_ids).subquery()
+    allocations = direct.union_all(select(general, literal(None).label("method")).where(
+        general.c.transaction_id.in_(ids),
+    )).subquery()
+    # Receipts for an invoice beyond the active cutoff retain their direct link.
+    direct_paid = select(func.coalesce(func.sum(Transaction.amount), 0)).join(
+        OrderPayment, OrderPayment.transaction_id == Transaction.id,
+    ).where(OrderPayment.order_id == Order.id, Transaction.deleted_at.is_(None)).correlate(Order).scalar_subquery()
+    paid = func.coalesce(positions.c.paid, direct_paid)
+    rows = db.execute(select(allocations, Order.invoice_code, Order.subtotal, Order.discount, Order.total,
+                             paid, func.coalesce(positions.c.remaining, func.max(Order.total - paid, 0))).join(
+        Order, Order.id == allocations.c.order_id,
+    ).outerjoin(positions, positions.c.id == Order.id).order_by(Order.invoice_date, Order.id))
+    links = {}
+    for order_id, transaction_id, amount, method, code, subtotal, discount, total, paid, remaining in rows:
+        metadata = links.setdefault(transaction_id, {})
+        invoice = {"order_id": order_id, "invoice_code": code, "subtotal": subtotal, "discount": discount, "total": total,
+                   "paid": paid, "remaining": remaining}
+        if method is not None:
+            metadata["invoice"] = {**invoice, "method": method}
+        else:
+            metadata.setdefault("invoice_allocations", []).append({**invoice, "amount": amount})
+    return links
 
 
 def serialize(item, bank, directory=None, *, links=None):
-    db = object_session(item)
     if links is None:
-        links = invoice_links(db, [item.id])
-    invoice = links.get(item.id)
+        links = invoice_links(object_session(item), [item])
     return {
-        "invoice": invoice,
+        "invoice": None,
+        **links.get(item.id, {}),
         **{column.name: getattr(item, column.name) for column in Transaction.__table__.columns},
         "jalali_date": jdatetime.date.fromgregorian(date=item.transaction_date).strftime("%Y/%m/%d"),
         "bank": {"id": bank.id, "name": directory.name if directory else bank.name,
@@ -220,11 +244,56 @@ def serialize(item, bank, directory=None, *, links=None):
     }
 
 
+def validate_receipt_reference(db, bank_id, day, tracking_number, *, exclude_id=None):
+    if tracking_number is None:
+        return
+    duplicate = select(Transaction.id).where(
+        Transaction.bank_id == bank_id, Transaction.transaction_date == day,
+        Transaction.tracking_number == tracking_number, Transaction.customer_id.is_not(None),
+        Transaction.kind == "income", Transaction.deleted_at.is_(None),
+    )
+    if exclude_id is not None:
+        duplicate = duplicate.where(Transaction.id != exclude_id)
+    if db.scalar(duplicate.limit(1)) is not None:
+        raise FinanceError("رسیدی با این شماره پیگیری در این حساب و تاریخ ثبت شده است.", 409,
+                           code="DUPLICATE_RECEIPT_REFERENCE")
+
+
+def cash_account(db):
+    account = db.query(BankAccount).filter(BankAccount.account_number == CASH_ACCOUNT_NUMBER).first()
+    if not account:
+        account = BankAccount(name="صندوق نقدی", account_number=CASH_ACCOUNT_NUMBER, opening_balance=0, active=True)
+        db.add(account)
+        db.flush()
+    if not account.active or account.deleted_at is not None:
+        raise FinanceError("صندوق نقدی غیرفعال است.", 409)
+    return account
+
+
+def payment_bank(db, method, bank_id, *, active=True):
+    if method == "cash":
+        bank = cash_account(db)
+        if bank_id is not None and bank_id != bank.id:
+            raise FinanceError("پرداخت نقدی فقط در صندوق نقدی ثبت می‌شود.", 422)
+        return bank
+    bank = require(db, BankAccount, bank_id, "حساب بانکی" if method else "بانک", active=active)
+    if method and bank.account_number == CASH_ACCOUNT_NUMBER:
+        raise FinanceError("برای پرداخت غیرنقدی، حساب بانکی انتخاب کنید.", 422)
+    return bank
+
+
 def apply_transaction_fields(db, item, data, now=None):
     """Validate references and apply a row without committing its owner's unit of work."""
     existing = item.id is not None
     ensure_open(db, data.transaction_date, item.transaction_date if existing else data.transaction_date)
-    bank = require(db, BankAccount, data.bank_id, "بانک", active=not existing or data.bank_id != item.bank_id)
+    method = data.payment_method
+    if data.kind == "income" and "payment_method" not in data.model_fields_set:
+        method = item.payment_method
+    bank = payment_bank(db, method, data.bank_id, active=not existing or data.bank_id != item.bank_id)
+    if data.kind == "income" and data.customer_id is not None:
+        reference = (bank.id, data.transaction_date, data.tracking_number)
+        if reference != (item.bank_id, item.transaction_date, item.tracking_number) or item.kind != "income":
+            validate_receipt_reference(db, *reference, exclude_id=item.id)
     if data.document_account_id is not None:
         if item.document_id is None:
             raise FinanceError("حساب مستقل سند فقط در ثبت سند قابل استفاده است.", 422)
@@ -242,8 +311,9 @@ def apply_transaction_fields(db, item, data, now=None):
         if not unchanged:
             item.title = f"{source.first_name} {source.last_name}" if data.kind == "income" else source.title
             item.account_code = str(source.customer_code) if data.kind == "income" else source.account_code
-    for key, value in data.model_dump(exclude={"request_id", "hour", "minute"}).items():
+    for key, value in data.model_dump(exclude={"request_id", "hour", "minute", "bank_id", "payment_method"}).items():
         setattr(item, key, value)
+    item.bank_id, item.payment_method = bank.id, method
     if data.time_mode == "manual":
         item.transaction_time = f"{data.hour:02d}:{data.minute:02d}:00"
     elif not existing:
@@ -261,14 +331,17 @@ def save_transaction(db, data):
             if prior.deleted_at is not None:
                 raise FinanceError("این تراکنش حذف شده است و درخواست قبلی قابل تکرار نیست.", 410)
             # Retrying the same POST after a lost response cannot double-charge.
-            fields = ("kind", "customer_id", "expense_category_id", "bank_id", "amount", "description", "tracking_number", "transaction_date", "time_mode")
-            matches = all(getattr(prior, field) == getattr(data, field) for field in fields)
+            fields = ("kind", "customer_id", "expense_category_id", "document_account_id", "amount", "description", "tracking_number", "payment_method", "transaction_date", "time_mode")
+            matches = (prior.document_id is None and data.bank_id in (None, prior.bank_id)
+                       and all(getattr(prior, field) == getattr(data, field) for field in fields))
             if data.time_mode == "manual":
                 matches = matches and prior.transaction_time == f"{data.hour:02d}:{data.minute:02d}:00"
             if not matches:
                 raise FinanceError("شناسه درخواست قبلاً برای تراکنش دیگری استفاده شده است.", 409)
             bank = require(db, BankAccount, prior.bank_id, "بانک")
             result = serialize(prior, bank, db.get(BankDirectory, bank.bank) if bank.bank else None)
+            if result["invoice"] is not None:
+                raise FinanceError("شناسه درخواست قبلاً برای پرداخت فاکتور استفاده شده است.", 409)
             db.commit()
             return result
         item = Transaction(request_id=str(data.request_id), transaction_number=next_transaction_number(db))
@@ -292,7 +365,7 @@ def daily(db, day):
         BankDirectory, BankAccount.bank == BankDirectory.code).filter(
         Transaction.transaction_date == day, Transaction.deleted_at.is_(None),
         in_active_period(Transaction.transaction_date)).order_by(Transaction.transaction_time, Transaction.id).all()
-    links = invoice_links(db, [item.id for item, _, _ in rows])
+    links = invoice_links(db, [item for item, _, _ in rows])
     income = expense = 0
     points = [{"time": "00:00:00", **totals(0, 0)}]
     for item, bank, directory in rows:
@@ -375,10 +448,8 @@ def bank_activity(db, bank_id, period, anchor=None):
 
 def bank_transactions(db, bank_id, *, start_date=None, end_date=None, day=None, month=None, year=None,
                       min_amount=None, max_amount=None, search=None, cursor=None):
-    bank = require(db, BankAccount, bank_id, "حساب بانکی")
-    directory = db.get(BankDirectory, bank.bank) if bank.bank else None
-    query = db.query(Transaction).filter(Transaction.bank_id == bank_id, Transaction.deleted_at.is_(None),
-                                        in_active_period(Transaction.transaction_date))
+    require(db, BankAccount, bank_id, "حساب بانکی")
+    query = ledger_rows(db).filter(Transaction.bank_id == bank_id, in_active_period(Transaction.transaction_date))
     start = jalali_filter(start_date) if start_date else None
     end = jalali_filter(end_date) if end_date else None
     if start and end and end < start:
@@ -413,23 +484,38 @@ def bank_transactions(db, bank_id, *, start_date=None, end_date=None, day=None, 
         query = query.filter(or_(Transaction.description.contains(value, autoescape=True),
                                  Transaction.tracking_number.contains(value, autoescape=True),
                                  cast(Transaction.transaction_number, String).contains(value, autoescape=True)))
-    # Freeze the newest ID at the first page: new inserts cannot reorder later pages.
-    snapshot = db.query(func.coalesce(func.max(Transaction.id), 0)).filter(Transaction.bank_id == bank_id).scalar()
+    rows, next_cursor, total = transaction_page(query, cursor, include_total=True)
+    links = invoice_links(db, [item for item, _, _ in rows])
+    return {"items": [serialize(item, bank, directory, links=links) for item, bank, directory in rows],
+            "total": total, "next_cursor": next_cursor}
+
+
+def ledger_rows(db):
+    return db.query(Transaction, BankAccount, BankDirectory).join(
+        BankAccount, Transaction.bank_id == BankAccount.id,
+    ).outerjoin(BankDirectory, BankAccount.bank == BankDirectory.code).filter(Transaction.deleted_at.is_(None))
+
+
+def transaction_page(query, cursor, *, include_total=False):
     position = None
     if cursor:
         try:
             position = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
-            if set(position) != {"date", "time", "id", "snapshot"} or any(type(position[key]) is not int or position[key] < 0 for key in ("id", "snapshot")):
+            if (set(position) != {"date", "time", "id", "snapshot"}
+                    or any(type(position[key]) is not int for key in ("id", "snapshot"))
+                    or not 0 < position["id"] <= position["snapshot"] <= 2**63 - 1):
                 raise ValueError()
-            from datetime import date as date_type
-            position["date"] = date_type.fromisoformat(position["date"])
+            position["date"] = date.fromisoformat(position["date"])
             if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]", position["time"]):
                 raise ValueError()
             snapshot = position["snapshot"]
         except (ValueError, TypeError, KeyError, UnicodeError):
             raise FinanceError("اطلاعات صفحه‌بندی معتبر نیست؛ فهرست را دوباره دریافت کنید.", 422) from None
+    else:
+        # Freeze the newest ID at the first page across the filtered ledger.
+        snapshot = query.with_entities(func.coalesce(func.max(Transaction.id), 0)).scalar()
     query = query.filter(Transaction.id <= snapshot)
-    total = query.count()
+    total = query.count() if include_total else None
     if position:
         query = query.filter(or_(Transaction.transaction_date < position["date"],
                                  and_(Transaction.transaction_date == position["date"], Transaction.transaction_time < position["time"]),
@@ -439,11 +525,47 @@ def bank_transactions(db, bank_id, *, start_date=None, end_date=None, day=None, 
     rows = rows[:15]
     next_cursor = None
     if more:
-        last = rows[-1]
+        last, _, _ = rows[-1]
         next_cursor = base64.urlsafe_b64encode(json.dumps({"date": last.transaction_date.isoformat(), "time": last.transaction_time,
                                                           "id": last.id, "snapshot": snapshot}).encode()).decode()
-    links = invoice_links(db, [item.id for item in rows])
-    return {"items": [serialize(item, bank, directory, links=links) for item in rows], "total": total, "next_cursor": next_cursor}
+    return rows, next_cursor, total
+
+
+def customer_payment_history(db, customer_id, cursor=None):
+    period = active_period(db)
+    cutoff = period.end_date if period else date.max
+    rows, next_cursor, _ = transaction_page(ledger_rows(db).filter(Transaction.customer_id == customer_id), cursor)
+    links = invoice_links(db, [item for item, _, _ in rows], cutoff=cutoff)
+    items = []
+    for item, bank, directory in rows:
+        record = serialize(item, bank, directory, links=links)
+        invoice = record["invoice"]
+        allocations = [{**invoice, "amount": item.amount}] if invoice else record.get("invoice_allocations", [])
+        status = "posted"
+        unallocated = 0
+        if item.transaction_date > cutoff:
+            status = "outside_period"
+        elif item.kind == "income" and not invoice:
+            unallocated = item.amount - sum(allocation["amount"] for allocation in allocations)
+            if unallocated == item.amount:
+                status = "unallocated"
+            elif unallocated > 0:
+                status = "partially_allocated"
+        method = invoice["method"] if invoice else item.payment_method or ("cash" if record["bank"]["is_cash"] else "bank")
+        items.append({
+            "id": item.id, "kind": item.kind, "transaction_date": item.transaction_date,
+            "jalali_date": record["jalali_date"], "transaction_time": item.transaction_time,
+            "transaction_number": item.transaction_number, "tracking_number": item.tracking_number,
+            "amount": item.amount, "method": method, "unallocated": unallocated,
+            "account_name": record["bank"]["name"], "status": status, "description": item.description,
+            "invoices": allocations,
+        })
+    result = {"items": items, "next_cursor": next_cursor}
+    if cursor is None:
+        totals = customer_financial_totals(db, customer_id, cutoff)
+        result["summary"] = {key: exact_amount(value) for key, value in totals.items()}
+        result["fiscal_year"] = period.year if period else None
+    return result
 
 
 def edit_transaction(db, transaction_id, data):

@@ -26,9 +26,7 @@ export function initializeProductForm({ onSaved }) {
     <div class="navbar-panel-content flex w-full flex-col" aria-labelledby="productFormTitle">
       <header class="flex shrink-0 items-center justify-between border-b border-french-gray/30 px-5 py-4 sm:px-6">
         <h2 id="productFormTitle">کالای جدید</h2>
-        <button data-dialog-close type="button" class="flex h-10 w-10 items-center justify-center rounded-xl text-mirage/40 transition-colors hover:bg-alizarin-crimson/10 hover:text-alizarin-crimson" aria-label="بستن">
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" d="M6 6l12 12M18 6 6 18" /></svg>
-        </button>
+        <button data-dialog-close type="button" class="dialog-close-button" aria-label="بستن"></button>
       </header>
       <form id="settingsProductForm" class="flex min-h-0 flex-1 flex-col" novalidate>
         <div class="orders-dialog-body flex-1">
@@ -44,7 +42,7 @@ export function initializeProductForm({ onSaved }) {
               <span id="settingsProductUnitHint"><a class="mt-1 inline-block underline" href="#units">تنظیمات واحدها</a></span>
             </label>
             <label>قیمت (تومان، اختیاری)<input id="settingsProductPrice" inputmode="numeric" maxlength="21" dir="ltr" /></label>
-            <label>موجودی فعلی<input id="settingsProductStock" inputmode="numeric" maxlength="10" dir="ltr" placeholder="خالی: بدون کنترل موجودی" /></label>
+            <label>موجودی فعلی<input id="settingsProductStock" inputmode="text" maxlength="11" dir="ltr" placeholder="خالی: بدون کنترل موجودی" /></label>
             <label>وضعیت<select id="settingsProductActive"><option value="true">فعال</option><option value="false">غیرفعال</option></select></label>
             <label class="self-end"><span class="flex min-h-11 items-center gap-2"><input id="settingsProductRequiresBrand" type="checkbox" />نیاز به برند</span></label>
             <div id="productBrandField" hidden>
@@ -213,12 +211,12 @@ export function initializeProductForm({ onSaved }) {
         brand.focus();
         throw new Error("برند کالا را از تنظیمات انتخاب کنید.");
       }
-      const quantity = normalizeDigits(stock.value).trim();
+      const quantity = normalizeDigits(stock.value).trim().replace(/^−/, "-");
       if (
         quantity &&
-        (!/^\d+$/.test(quantity) || Number(quantity) > 1000000000)
+        (!/^-?\d+$/.test(quantity) || Math.abs(Number(quantity)) > 1000000000)
       )
-        throw new Error("موجودی باید عدد صحیح نامنفی باشد.");
+        throw new Error("موجودی باید عدد صحیح بین منفی یک میلیارد و یک میلیارد باشد.");
       const body = {
         name: name.value.trim(),
         unit: unit.value,

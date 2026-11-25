@@ -5,10 +5,7 @@ from fastapi.middleware.cors import (
     CORSMiddleware,
 )
 
-from database import (
-    Base,
-    engine,
-)
+from database import engine
 
 import models
 
@@ -26,22 +23,17 @@ from routes.attendance import (
 from routes.customers import router as customers_router
 from routes.finance import router as finance_router
 from routes.orders import router as orders_router
-from routes.inventory import router as inventory_settings_router, brand_router, purchase_router
+from routes.invoice_settings import router as invoice_settings_router
+from routes.inventory import router as inventory_settings_router, brand_router, purchase_router, stock_router
 from routes.tasks import router as tasks_router
 from routes.documents import router as documents_router, settings_router as document_settings_router
-from services.finance_service import initialize_bank_storage
-from services.order_service import initialize_order_storage
-from services.inventory_service import initialize_brand_storage, initialize_category_storage, initialize_unit_storage, initialize_purchase_storage
-from services.document_service import initialize_document_storage
-from services.customer_ids import initialize_customer_ids
-from services.auth_settings import initialize_auth_storage
 from routes.faces import router as faces_router
 from routes.dashboard import router as dashboard_router
 from routes.reports import router as reports_router
 from routes.backup import router as backup_router
+from services.database_setup import initialize_database
 from routes.fiscal_years import router as fiscal_years_router
 from services.database_maintenance import DatabaseMaintenanceMiddleware, database_access
-from services.fiscal_period import initialize_fiscal_storage
 from config import KARBON_VERSION
 from security.face_requests import FaceRequestMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -140,17 +132,7 @@ app.add_middleware(NegotiatedGZipMiddleware, minimum_size=1024, compresslevel=1)
 # تمام Modelها قبل از create_all
 # از طریق import models لود شده‌اند.
 with database_access():
-    Base.metadata.create_all(bind=engine)
-    initialize_auth_storage(engine)
-    initialize_customer_ids(engine)
-    initialize_bank_storage(engine)
-    initialize_document_storage(engine)
-    initialize_category_storage(engine)
-    initialize_brand_storage(engine)
-    initialize_purchase_storage(engine)
-    initialize_order_storage(engine)
-    initialize_unit_storage(engine)
-    initialize_fiscal_storage(engine)
+    initialize_database(engine)
 
 
 # ======================================================
@@ -209,9 +191,11 @@ app.include_router(
 app.include_router(customers_router)
 app.include_router(finance_router)
 app.include_router(orders_router)
+app.include_router(invoice_settings_router)
 app.include_router(inventory_settings_router)
 app.include_router(brand_router)
 app.include_router(purchase_router)
+app.include_router(stock_router)
 app.include_router(tasks_router)
 app.include_router(documents_router)
 app.include_router(document_settings_router)
