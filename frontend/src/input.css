@@ -4,6 +4,7 @@
 @import "./notifications.css";
 @import "./reports.css";
 @import "./card-tilt.css";
+@import "./date-input.css";
 
 @font-face {
   font-family: "Vazirmatn";

@@ -1,3 +1,4 @@
+import { mountDateInput } from "../components/date-input.js";
 import { startPage } from "../components/page-ready.js";
 import { refreshData } from "../components/api-cache.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
@@ -21,6 +22,7 @@ import {
 import { initializeTaskDrag } from "../tasks/task-drag.js";
 
 const $ = (id) => document.getElementById(id);
+const taskDate = mountDateInput($("taskDate"));
 const curtain = $("taskCurtain");
 const details = $("taskDetails");
 const formDialog = new NavbarPanelDialog("taskCurtain", {
@@ -266,7 +268,7 @@ function openForm(task = null) {
   $("taskForm").reset();
   $("taskTitle").setCustomValidity("");
   $("taskDate").setCustomValidity("");
-  $("taskDate").value = formatJalaliInput(task?.date || todayKey());
+  taskDate.value = formatJalaliInput(task?.date || todayKey());
   $("taskTitle").value = task?.title || "";
   $("taskDescription").value = task?.description || "";
   $("taskFormHeading").textContent = editingId ? "ویرایش کار" : "افزودن کار";
@@ -292,7 +294,7 @@ async function closeForm() {
 $("taskTitle").addEventListener("input", () =>
   $("taskTitle").setCustomValidity(""),
 );
-$("taskDate").addEventListener("input", () =>
+taskDate.group.addEventListener("input", () =>
   $("taskDate").setCustomValidity(""),
 );
 $("taskForm").addEventListener("submit", async (event) => {
@@ -306,7 +308,7 @@ $("taskForm").addEventListener("submit", async (event) => {
   }
   let date;
   try {
-    date = normalizeJalaliDate($("taskDate").value);
+    date = normalizeJalaliDate(taskDate.value);
     if (!date) throw new Error("تاریخ شمسی الزامی است.");
   } catch (error) {
     $("taskDate").setCustomValidity(error.message);

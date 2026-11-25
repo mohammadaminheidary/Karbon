@@ -1,4 +1,5 @@
 import { startPage } from "../components/page-ready.js";
+import { mountDateInput, normalizeGregorianDate } from "../components/date-input.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { financeRequest } from "../finance/finance-api.js";
@@ -660,8 +661,10 @@ function startPolling() {
 startPage(async () => {
   if (!(await protectPage())) return false;
   requestedRange = rollingRange(30);
-  $("dashboardStart").value = requestedRange.start_date;
-  $("dashboardEnd").value = requestedRange.end_date;
+  const start = mountDateInput($("dashboardStart"), { separator: "-" });
+  const end = mountDateInput($("dashboardEnd"), { separator: "-" });
+  start.value = requestedRange.start_date;
+  end.value = requestedRange.end_date;
   document.querySelectorAll("[data-period]").forEach((button) =>
     button.addEventListener("click", () => {
       const custom = button.dataset.period === "custom";
@@ -681,13 +684,19 @@ startPage(async () => {
   );
   $("dashboardDates").addEventListener("submit", (event) => {
     event.preventDefault();
-    const start = $("dashboardStart"),
-      end = $("dashboardEnd");
-    end.setCustomValidity("");
+    for (const date of [start, end]) {
+      try {
+        normalizeGregorianDate(date.value);
+      } catch (error) {
+        date.first.setCustomValidity(error.message);
+        date.first.reportValidity();
+        return;
+      }
+    }
     const days = (Date.parse(end.value) - Date.parse(start.value)) / 86400000;
     if (days < 0 || days >= 366 || start.value < "1901-01-01") {
-      end.setCustomValidity("بازه مرتب و حداکثر ۳۶۶ روز باشد.");
-      end.reportValidity();
+      end.first.setCustomValidity("بازه مرتب و حداکثر ۳۶۶ روز باشد.");
+      end.first.reportValidity();
       return;
     }
     requestedRange = { start_date: start.value, end_date: end.value };
@@ -702,12 +711,11 @@ startPage(async () => {
       );
     void load();
   });
-  $("dashboardEnd").addEventListener("input", () =>
-    $("dashboardEnd").setCustomValidity(""),
-  );
-  $("dashboardStart").addEventListener("input", () =>
-    $("dashboardEnd").setCustomValidity(""),
-  );
+  for (const date of [start, end])
+    date.group.addEventListener("input", () => {
+      start.first.setCustomValidity("");
+      end.first.setCustomValidity("");
+    });
   $("refreshDashboard").addEventListener("click", load);
   $("retryDashboard").addEventListener("click", load);
   // A mutation during an existing snapshot must fetch again after it settles.

@@ -1,3 +1,4 @@
+import { mountDateInput } from "../components/date-input.js";
 import { financeRequest, getBanks } from "../finance/finance-api.js";
 import { amountValue, bindStrictAmount, money, node, normalizeJalaliDate } from "../finance/finance-utils.js";
 import { archiveLink, fiscalLabel, fiscalRequest } from "./fiscal-api.js";
@@ -85,6 +86,7 @@ async function receiptForm(host, invoice, data, refresh) {
   syncMethod();
   fields.append(field("تاریخ دریافت", date), field("مبلغ دریافتی (تومان)", amount), field("روش دریافت", method),
                 accountField, field("شماره پیگیری", tracking));
+  const receiptDate = mountDateInput(date);
   const status = node("p", "orders-hint");
   status.setAttribute("role", "status");
   const submit = node("button", "orders-primary justify-self-start", pending ? "تلاش مجدد ثبت دریافت" : "ثبت دریافت");
@@ -100,7 +102,7 @@ async function receiptForm(host, invoice, data, refresh) {
         const value = amountValue(amount.value);
         if (value > invoice.outstanding) throw new Error("مبلغ دریافتی از مانده فاکتور بیشتر است.");
         pending = {
-          request_id: crypto.randomUUID(), transaction_date: normalizeJalaliDate(date.value), amount: value,
+          request_id: crypto.randomUUID(), transaction_date: normalizeJalaliDate(receiptDate.value), amount: value,
           method: method.value, bank_id: method.value === "cash" ? null : Number(bank.value),
           tracking_number: tracking.value.trim() || null,
         };

@@ -1,3 +1,4 @@
+import { mountDateInput } from "../components/date-input.js";
 import { createNavbarPanelTransition } from "./navbar-panel-transition.js";
 import { notify } from "../components/notifications.js";
 import { financeRequest, getBanks } from "../finance/finance-api.js";
@@ -6,6 +7,7 @@ import {
   money,
   todayKey,
   formatJalaliInput,
+  normalizeDigits,
   normalizeJalaliDate,
   amountValue,
   bindStrictAmount,
@@ -13,6 +15,7 @@ import {
 
 export function initializeDocumentForm({ onSaved, onIdle }) {
   const $ = (id) => document.getElementById(id);
+  const documentDate = mountDateInput($("documentDate"));
   const curtain = $("documentCurtain"),
     navbar = $("mainNavbar");
   document.body.append(curtain);
@@ -93,8 +96,8 @@ export function initializeDocumentForm({ onSaved, onIdle }) {
       banks = bankAccounts;
       accounts = documentAccounts;
       $("documentNumber").textContent = preview.number;
-      if (!editing && preview.business_jalali && $("documentDate").value === formatJalaliInput(todayKey()))
-        $("documentDate").value = preview.business_jalali;
+      if (!editing && preview.business_jalali && documentDate.value === normalizeDigits(formatJalaliInput(todayKey())))
+        documentDate.value = preview.business_jalali;
       rows.forEach((row) => {
         renderSources(row);
         renderBanks(row);
@@ -261,7 +264,7 @@ export function initializeDocumentForm({ onSaved, onIdle }) {
     requestId = requestFingerprint = null;
     $("documentForm").reset();
     $("documentRows").replaceChildren();
-    $("documentDate").value = formatJalaliInput(item?.date || todayKey());
+    documentDate.value = formatJalaliInput(item?.date || todayKey());
     $("documentDescription").value = item?.description || "";
     $("documentModalTitle").textContent = item ? "ویرایش سند" : "ثبت سند";
     $("documentNumber").textContent = item?.number || "در حال دریافت...";
@@ -299,7 +302,7 @@ export function initializeDocumentForm({ onSaved, onIdle }) {
     $("documentFormError").hidden = true;
     let body;
     try {
-      const date = normalizeJalaliDate($("documentDate").value);
+      const date = normalizeJalaliDate(documentDate.value);
       if (!date) throw new Error("تاریخ سند الزامی است.");
       body = {
         date,

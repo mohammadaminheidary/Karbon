@@ -1,3 +1,4 @@
+import { mountDateInput } from "../components/date-input.js";
 import { startPage } from "../components/page-ready.js";
 import { transactionActions } from "../finance/transaction-actions.js";
 import { onPageRefresh } from "../components/data-events.js";
@@ -15,6 +16,13 @@ import {
 } from "../finance/finance-utils.js";
 
 const $ = (id) => document.getElementById(id);
+const dateFilters = new Map([
+  ["ledgerStart", 3],
+  ["ledgerEnd", 3],
+  ["ledgerDay", 3],
+  ["ledgerMonth", 2],
+  ["ledgerYear", 1],
+].map(([id, count]) => [id, mountDateInput($(id), { count })]));
 const bankId = new URLSearchParams(window.location.search).get("bank");
 const validBank = /^[1-9]\d*$/.test(bankId || "");
 const number = (value) => new Intl.NumberFormat("fa-IR").format(value);
@@ -327,7 +335,7 @@ async function loadList(more = false) {
 function readFilters() {
   const query = {};
   const mode = $("ledgerDateMode").value;
-  const value = (id) => normalizeDigits($(id).value.trim());
+  const value = (id) => normalizeDigits((dateFilters.get(id) ?? $(id)).value.trim());
   if (mode === "range") {
     if (!value("ledgerStart") && !value("ledgerEnd"))
       throw new Error("شروع یا پایان بازه را وارد کنید.");

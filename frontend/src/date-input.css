@@ -1,0 +1,41 @@
+.segmented-date-label:not(.hidden, [hidden]) {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+.segmented-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  min-width: 0;
+  padding-inline: clamp(4px, 2vw, 12px);
+  border: 1px solid #b6c0c666;
+  border-radius: 12px;
+  background: white;
+  color: var(--color-mirage);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 160ms, box-shadow 160ms;
+}
+.segmented-date:focus-within {
+  border-color: var(--color-persian-blue);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-persian-blue) 10%, transparent);
+}
+.segmented-date:has([aria-invalid="true"]) {
+  border-color: var(--color-alizarin-crimson);
+}
+.segmented-date:has(input:disabled, input[readonly]) {
+  background: var(--color-alabaster);
+}
+.segmented-date-part {
+  width: var(--date-part-width);
+  min-width: 0;
+  text-align: center;
+  border-radius: 4px;
+}
+.segmented-date-part:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--color-persian-blue) 10%, transparent);
+}

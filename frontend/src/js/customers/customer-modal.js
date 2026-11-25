@@ -2,7 +2,7 @@ import { onExternalDataChange } from "../components/data-events.js";
 import { Dialog } from "../components/dialog.js";
 import { NavbarPanelDialog } from "../components/navbar-panel-dialog.js";
 import { createSpinner } from "../components/loader.js";
-import { initializeCustomerContactDate } from "./customer-contact-date.js";
+import { initializeDateSegments } from "../components/date-input.js";
 import {
   createCustomer,
   updateCustomer,
@@ -16,6 +16,7 @@ import {
   fullName,
   formatNumber,
   formatJalaliInput,
+  normalizeJalaliDate,
 } from "./customer-utils.js";
 
 const get = (id) => document.getElementById(id);
@@ -122,7 +123,7 @@ function collectData() {
   };
   let valid = true;
   try {
-    data.last_contact_date = lastContactDate.getValue();
+    data.last_contact_date = normalizeJalaliDate(lastContactDate.value);
   } catch (error) {
     showError("last_contact_date", error.message);
     valid = false;
@@ -264,7 +265,7 @@ export async function openCreateCustomerModal() {
   const current = ++generation;
   editingCustomer = null;
   get("customerForm").reset();
-  lastContactDate.setValue(formatJalaliInput(new Date()));
+  lastContactDate.value = formatJalaliInput(new Date());
   clearErrors();
   get("customerFormTitle").textContent = "مشتری جدید";
   get("customerCode").value = "در حال دریافت...";
@@ -299,7 +300,7 @@ export function openEditCustomerModal(customer) {
     ["customerNotes", "notes"],
   ])
     get(id).value = customer[key] || "";
-  lastContactDate.setValue(formatJalaliInput(customer.last_contact_date));
+  lastContactDate.value = formatJalaliInput(customer.last_contact_date);
   if (customer.gender)
     document.querySelector(
       `input[name="customerGender"][value="${customer.gender}"]`,
@@ -313,7 +314,7 @@ export function openEditCustomerModal(customer) {
 export function initializeCustomerModal({ onSaved: saved, prepareCreateOrder: prepare }) {
   onSaved = saved;
   prepareCreateOrder = prepare;
-  lastContactDate = initializeCustomerContactDate(get("customerLastContact"));
+  lastContactDate = initializeDateSegments(get("customerLastContact"));
   onExternalDataChange(async () => {
     if (
       submitting ||

@@ -32,7 +32,7 @@
   cursor: wait;
   opacity: 0.55;
 }
-.dashboard :is(button, a, input, summary, [tabindex]):focus-visible {
+.dashboard :is(button, a, input:not([data-date-part]), summary, [tabindex]):focus-visible {
   outline: 3px solid var(--dash-blue, var(--color-persian-blue));
   outline-offset: 4px;
 }
@@ -187,16 +187,6 @@
 .dash-date-form label {
   font-size: 0.6875rem;
   color: #52627e;
-  display: grid;
-  gap: 5px;
-}
-.dash-date-form input {
-  border: 1px solid #dce3ef;
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: white;
-  direction: ltr;
-  max-width: 100%;
 }
 .dash-primary-grid,
 .dash-operations-grid {
@@ -825,12 +815,10 @@
   .dash-date-form {
     gap: 10px;
   }
-  .dash-date-form label {
-    min-width: 0;
+  .dash-date-form .segmented-date-label {
     width: calc(50% - 5px);
   }
-  .dash-date-form input {
-    width: 100%;
+  .dash-date-form .segmented-date {
     font-size: 0.75rem;
   }
   .dash-error {

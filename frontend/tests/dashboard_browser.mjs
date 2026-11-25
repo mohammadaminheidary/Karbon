@@ -1,5 +1,6 @@
 // Run with frontend/tests/serve_customers_fixture.py --customers 25 --bank-ledger 25
 // --orders --members 3. All writes go to that disposable database.
+import { fillDate } from "./date-input-helpers.mjs";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -213,8 +214,8 @@ try {
     "7",
   );
   await page.locator('[data-period="custom"]').click();
-  await page.locator("#dashboardStart").fill("2020-01-01");
-  await page.locator("#dashboardEnd").fill("2020-01-02");
+  await fillDate(page, "dashboardStart", "2020-01-01");
+  await fillDate(page, "dashboardEnd", "2020-01-02");
   await page.locator('#dashboardDates button[type="submit"]').click();
   await settled();
   assert.equal(await page.locator("#revenueValue").textContent(), "۰");
