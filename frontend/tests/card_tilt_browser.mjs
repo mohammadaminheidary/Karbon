@@ -84,6 +84,10 @@ async function flat(selector) {
 const appearancePath = "/page/settings-page.html#appearance";
 const toggle = (id) => page.locator(`label:has(#appearance-card-tilt-${id})`);
 const checked = (id) => page.locator(`#appearance-card-tilt-${id}`).isChecked();
+async function revealCardTiltSections() {
+  const more = page.locator("#appearanceCardTiltMore");
+  if (!(await more.evaluate((summary) => summary.parentElement.open))) await more.click();
+}
 
 try {
   context = await chromium.launchPersistentContext(profile, options);
@@ -182,6 +186,20 @@ try {
     ["login", "/page/login-page.html", "#loginForm"],
   ];
   await open(appearancePath);
+  const bulkToggle = page.locator("#appearanceCardTiltAll");
+  const sectionList = page.locator("#appearanceCardTiltList");
+  assert.equal(await sectionList.isVisible(), false);
+  await bulkToggle.click();
+  assert.equal(await bulkToggle.textContent(), "روشن کردن همه");
+  await open("/page/customers-page.html");
+  await flat(customerCard);
+  await open(appearancePath);
+  await revealCardTiltSections();
+  assert.equal(await sectionList.isVisible(), true);
+  assert.equal(await sectionList.locator("[role=switch]:checked").count(), 0);
+  await bulkToggle.click();
+  assert.equal(await bulkToggle.textContent(), "خاموش کردن همه");
+  assert.equal(await sectionList.locator("[role=switch]:checked").count(), sections.length);
   assert.equal(
     await page.locator("#appearanceCardTiltList [role=switch]").count(),
     sections.length,
@@ -278,16 +296,19 @@ try {
 
   for (const [id, path, selector] of sections) {
     await open(appearancePath);
+    await revealCardTiltSections();
     await toggle(id).click();
     assert.equal(await checked(id), false);
     await open(path);
     await flat(selector);
     await open(appearancePath);
+    await revealCardTiltSections();
     await toggle(id).click();
     assert.equal(await checked(id), true);
   }
 
   await open(appearancePath);
+  await revealCardTiltSections();
   await page.locator("#appearance-card-tilt-customers").focus();
   await page.keyboard.press("Space");
   assert.equal(await checked("customers"), false);
@@ -298,6 +319,7 @@ try {
   await open("/page/settings-page.html#products");
   await tilted(productCard);
   await open(appearancePath);
+  await revealCardTiltSections();
   await toggle("settings").click();
   await toggle("products").click();
   await open("/page/settings-page.html#products");
@@ -338,6 +360,7 @@ try {
     page = await mobile.newPage();
     await authenticate(token);
     await open(appearancePath);
+    await revealCardTiltSections();
     await toggle("banks").tap();
     assert.equal(await checked("banks"), false);
     assert.ok(

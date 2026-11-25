@@ -1405,88 +1405,114 @@
               <div class="settings-section-heading">
                 <div>
                   <h2>تنظیمات ظاهر</h2>
-                  <p>رنگ، اندازه نوشته‌ها و انیمیشن داک را تنظیم کنید. تغییرات در این مرورگر ذخیره می‌شود.</p>
+                  <p>تغییرات ظاهر در این مرورگر ذخیره می‌شوند.</p>
                 </div>
               </div>
-              <fieldset class="appearance-section">
-                <legend>رنگ برنامه</legend>
-                <p class="appearance-description">رنگ انتخابی در تمام صفحات اعمال می‌شود.</p>
-                <div class="appearance-swatches" role="group" aria-label="رنگ برنامه">
-                  <button type="button" class="appearance-swatch" data-appearance-theme="blue" aria-pressed="true">
-                    <span class="appearance-swatch-color" style="--swatch: #1e40af" aria-hidden="true">✓</span><span>آبی</span>
-                  </button>
-                  <button type="button" class="appearance-swatch" data-appearance-theme="red" aria-pressed="false">
-                    <span class="appearance-swatch-color" style="--swatch: #b91c1c" aria-hidden="true">✓</span><span>قرمز</span>
-                  </button>
-                  <button type="button" class="appearance-swatch" data-appearance-theme="green" aria-pressed="false">
-                    <span class="appearance-swatch-color" style="--swatch: #15803d" aria-hidden="true">✓</span><span>سبز</span>
-                  </button>
-                  <button type="button" class="appearance-swatch" data-appearance-theme="black" aria-pressed="false">
-                    <span class="appearance-swatch-color" style="--swatch: #18181b" aria-hidden="true">✓</span><span>مشکی</span>
-                  </button>
-                </div>
-              </fieldset>
-              <div id="appearanceFontControls" class="appearance-section">
-                <div class="appearance-font-heading">
-                  <label for="appearanceFontSize">اندازه عمومی قلم</label>
-                </div>
-                <p id="appearanceFontHint" class="appearance-description">برای همه صفحات؛ اندازه اختصاصی هر صفحه بر این تنظیم اولویت دارد.</p>
-                <div class="appearance-slider-row">
-                  <input id="appearanceFontSize" type="range" min="85" max="125" step="5" value="100" dir="ltr" aria-describedby="appearanceFontHint" />
-                  <output id="appearanceFontValue" for="appearanceFontSize">۱۰۰٪</output>
-                  <button id="appearancePageMenuButton" type="button" class="appearance-menu-button" aria-label="اندازه قلم هر صفحه" aria-expanded="false" aria-controls="appearancePageMenu">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-                  </button>
-                </div>
-                <div class="appearance-scale-labels" aria-hidden="true"><span>کوچک‌تر</span><span>بزرگ‌تر</span></div>
-                <div id="appearancePageMenu" class="appearance-page-menu" role="region" aria-labelledby="appearancePageMenuTitle" hidden>
-                  <h3 id="appearancePageMenuTitle">اندازه قلم هر صفحه</h3>
-                  <p class="appearance-description">با بازنشانی، صفحه دوباره از اندازه عمومی پیروی می‌کند.</p>
-                  <div id="appearancePageList" class="appearance-page-list"></div>
-                </div>
+              <div class="appearance-sections">
+                <section class="appearance-section" aria-labelledby="appearanceThemeTitle">
+                  <h3 id="appearanceThemeTitle">رنگ برنامه</h3>
+                  <p class="appearance-description">رنگ انتخابی در تمام صفحات اعمال می‌شود.</p>
+                  <div class="appearance-swatches" role="group" aria-label="رنگ برنامه">
+                    <button type="button" class="appearance-swatch" data-appearance-theme="blue" aria-pressed="true">
+                      <span class="appearance-swatch-color" style="--swatch: #1e40af" aria-hidden="true">✓</span><span>آبی</span>
+                    </button>
+                    <button type="button" class="appearance-swatch" data-appearance-theme="red" aria-pressed="false">
+                      <span class="appearance-swatch-color" style="--swatch: #b91c1c" aria-hidden="true">✓</span><span>قرمز</span>
+                    </button>
+                    <button type="button" class="appearance-swatch" data-appearance-theme="green" aria-pressed="false">
+                      <span class="appearance-swatch-color" style="--swatch: #15803d" aria-hidden="true">✓</span><span>سبز</span>
+                    </button>
+                    <button type="button" class="appearance-swatch" data-appearance-theme="black" aria-pressed="false">
+                      <span class="appearance-swatch-color" style="--swatch: #18181b" aria-hidden="true">✓</span><span>مشکی</span>
+                    </button>
+                  </div>
+                </section>
+                <section id="appearanceFontControls" class="appearance-section" aria-labelledby="appearanceTypographyTitle">
+                  <h3 id="appearanceTypographyTitle">نوشته‌ها</h3>
+                  <div class="appearance-font-heading">
+                    <label for="appearanceFontSize">اندازه عمومی قلم</label>
+                  </div>
+                  <p id="appearanceFontHint" class="appearance-description">برای همه صفحات؛ اندازه اختصاصی هر صفحه بر این تنظیم اولویت دارد.</p>
+                  <div class="appearance-slider-row">
+                    <input id="appearanceFontSize" type="range" min="85" max="125" step="5" value="100" dir="ltr" aria-describedby="appearanceFontHint" />
+                    <output id="appearanceFontValue" for="appearanceFontSize">۱۰۰٪</output>
+                    <button id="appearancePageMenuButton" type="button" class="appearance-menu-button" aria-label="اندازه قلم هر صفحه" aria-expanded="false" aria-controls="appearancePageMenu">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                    </button>
+                  </div>
+                  <div class="appearance-scale-labels" aria-hidden="true"><span>کوچک‌تر</span><span>بزرگ‌تر</span></div>
+                  <div id="appearancePageMenu" class="appearance-page-menu" role="region" aria-labelledby="appearancePageMenuTitle" hidden>
+                    <h4 id="appearancePageMenuTitle">اندازه قلم هر صفحه</h4>
+                    <p class="appearance-description">با بازنشانی، صفحه دوباره از اندازه عمومی پیروی می‌کند.</p>
+                    <div id="appearancePageList" class="appearance-page-list"></div>
+                  </div>
+                  <div class="appearance-preview card-tilt">
+                    <strong>پیش‌نمایش نوشته‌ها</strong>
+                    <p>مدیریت کسب و کار با کربن؛ اندازه نوشته‌ها بلافاصله تغییر می‌کند.</p>
+                    <span>نمایش این صفحه تابع اندازه اختصاصی تنظیمات است، اگر آن را انتخاب کرده باشید.</span>
+                  </div>
+                </section>
+                <section class="appearance-section" aria-labelledby="appearanceCardTiltTitle">
+                  <h3 id="appearanceCardTiltTitle">جلوهٔ سه‌بعدی کارت‌ها</h3>
+                  <button id="appearanceCardTiltAll" type="button" class="settings-secondary-button">خاموش کردن همه</button>
+                  <details class="appearance-card-tilt-details">
+                    <summary id="appearanceCardTiltMore">تنظیمات بیشتر</summary>
+                    <ul id="appearanceCardTiltList" class="appearance-card-tilt-list" aria-label="جلوهٔ سه‌بعدی هر بخش"></ul>
+                  </details>
+                </section>
+                <section class="appearance-section" aria-labelledby="appearanceNavigationTitle">
+                  <h3 id="appearanceNavigationTitle">نوبار</h3>
+                  <fieldset class="appearance-subsection">
+                    <legend>انیمیشن و بزرگ‌نمایی</legend>
+                    <label class="appearance-toggle appearance-dock-toggle">
+                      <input id="appearanceDockAnimation" class="sr-only" type="checkbox" role="switch" checked />
+                      <span class="appearance-switch" aria-hidden="true"></span>
+                      <span>انیمیشن داک</span>
+                    </label>
+                    <div class="appearance-font-heading">
+                      <label for="appearanceDockMagnification">میزان بزرگ‌نمایی</label>
+                    </div>
+                    <div class="appearance-slider-row">
+                      <input id="appearanceDockMagnification" type="range" min="110" max="180" step="5" value="160" dir="ltr" />
+                      <output id="appearanceDockMagnificationValue" for="appearanceDockMagnification">۱۶۰٪</output>
+                    </div>
+                  </fieldset>
+                  <fieldset class="appearance-subsection">
+                    <legend>شیشهٔ نوبار</legend>
+                    <div class="appearance-font-heading">
+                      <label for="appearanceNavbarTransparency">شفافیت نوبار</label>
+                    </div>
+                    <div class="appearance-slider-row">
+                      <input id="appearanceNavbarTransparency" type="range" min="0" max="100" value="30" dir="ltr" />
+                      <output id="appearanceNavbarTransparencyValue" for="appearanceNavbarTransparency">۳۰٪</output>
+                    </div>
+                    <div class="appearance-font-heading mt-4">
+                      <label for="appearanceNavbarBlur">بلور پس‌زمینهٔ نوبار</label>
+                    </div>
+                    <div class="appearance-slider-row">
+                      <input id="appearanceNavbarBlur" type="range" min="0" max="240" value="24" dir="ltr" />
+                      <output id="appearanceNavbarBlurValue" for="appearanceNavbarBlur">۲۴ پیکسل</output>
+                    </div>
+                  </fieldset>
+                  <fieldset class="appearance-subsection">
+                    <legend>هالهٔ آیتم فعال نوبار</legend>
+                    <div class="appearance-font-heading">
+                      <label for="appearanceDockHighlightTransparency">شفافیت هاله</label>
+                    </div>
+                    <div class="appearance-slider-row">
+                      <input id="appearanceDockHighlightTransparency" type="range" min="0" max="100" value="45" dir="ltr" />
+                      <output id="appearanceDockHighlightTransparencyValue" for="appearanceDockHighlightTransparency">۴۵٪</output>
+                    </div>
+                    <div class="appearance-font-heading mt-4">
+                      <label for="appearanceDockHighlightDarkness">تیرگی رنگ هاله</label>
+                    </div>
+                    <div class="appearance-slider-row">
+                      <input id="appearanceDockHighlightDarkness" type="range" min="0" max="100" value="0" dir="ltr" />
+                      <output id="appearanceDockHighlightDarknessValue" for="appearanceDockHighlightDarkness">۰٪</output>
+                    </div>
+                  </fieldset>
+                </section>
               </div>
-              <div class="appearance-preview card-tilt">
-                <strong>پیش‌نمایش نوشته‌ها</strong>
-                <p>مدیریت کسب و کار با کربن؛ اندازه نوشته‌ها بلافاصله تغییر می‌کند.</p>
-                <span>نمایش این صفحه تابع اندازه اختصاصی تنظیمات است، اگر آن را انتخاب کرده باشید.</span>
-              </div>
-              <fieldset class="appearance-section">
-                <legend>جلوهٔ سه‌بعدی کارت‌ها</legend>
-                <p class="appearance-description">جلوهٔ حرکت و نور کارت‌ها را برای هر بخش جداگانه روشن یا خاموش کنید.</p>
-                <div id="appearanceCardTiltList" class="appearance-card-tilt-list"></div>
-              </fieldset>
-              <fieldset class="appearance-section">
-                <legend>داک ناوبری</legend>
-                <label class="appearance-toggle appearance-dock-toggle">
-                  <input id="appearanceDockAnimation" class="sr-only" type="checkbox" role="switch" checked />
-                  <span class="appearance-switch" aria-hidden="true"></span>
-                  <span>انیمیشن داک</span>
-                </label>
-                <div class="appearance-font-heading">
-                  <label for="appearanceDockMagnification">میزان بزرگ‌نمایی</label>
-                </div>
-                <div class="appearance-slider-row">
-                  <input id="appearanceDockMagnification" type="range" min="110" max="180" step="5" value="160" dir="ltr" />
-                  <output id="appearanceDockMagnificationValue" for="appearanceDockMagnification">۱۶۰٪</output>
-                </div>
-              </fieldset>
-              <fieldset class="appearance-section">
-                <legend>هالهٔ آیتم فعال نوبار</legend>
-                <div class="appearance-font-heading">
-                  <label for="appearanceDockHighlightTransparency">شفافیت هاله</label>
-                </div>
-                <div class="appearance-slider-row">
-                  <input id="appearanceDockHighlightTransparency" type="range" min="0" max="100" value="45" dir="ltr" />
-                  <output id="appearanceDockHighlightTransparencyValue" for="appearanceDockHighlightTransparency">۴۵٪</output>
-                </div>
-                <div class="appearance-font-heading mt-4">
-                  <label for="appearanceDockHighlightDarkness">تیرگی رنگ هاله</label>
-                </div>
-                <div class="appearance-slider-row">
-                  <input id="appearanceDockHighlightDarkness" type="range" min="0" max="100" value="0" dir="ltr" />
-                  <output id="appearanceDockHighlightDarknessValue" for="appearanceDockHighlightDarkness">۰٪</output>
-                </div>
-              </fieldset>
               <p id="appearanceMessage" class="appearance-description" role="status" aria-live="polite"></p>
               <div class="settings-form-footer">
                 <button id="appearanceResetDefaults" type="button" class="settings-secondary-button">بازنشانی تنظیمات ظاهر به پیش‌فرض</button>

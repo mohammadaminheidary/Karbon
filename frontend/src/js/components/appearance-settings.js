@@ -7,6 +7,8 @@ export function initializeAppearanceSettings() {
   const dockToggle = document.getElementById("appearanceDockAnimation");
   const dockControls = [
     ["dockMagnification", "appearanceDockMagnification"],
+    ["navbarTransparency", "appearanceNavbarTransparency"],
+    ["navbarBlur", "appearanceNavbarBlur"],
     ["dockHighlightTransparency", "appearanceDockHighlightTransparency"],
     ["dockHighlightDarkness", "appearanceDockHighlightDarkness"],
   ].map(([key, id]) => ({
@@ -16,6 +18,7 @@ export function initializeAppearanceSettings() {
   }));
   const pageList = document.getElementById("appearancePageList");
   const cardTiltList = document.getElementById("appearanceCardTiltList");
+  const cardTiltAll = document.getElementById("appearanceCardTiltAll");
   const trigger = document.getElementById("appearancePageMenuButton");
   const menu = document.getElementById("appearancePageMenu");
   const message = document.getElementById("appearanceMessage");
@@ -46,7 +49,9 @@ export function initializeAppearanceSettings() {
     const title = document.createElement("span");
     title.textContent = label;
     control.append(input, track, title);
-    cardTiltList.append(control);
+    const item = document.createElement("li");
+    item.append(control);
+    cardTiltList.append(item);
     cardTiltSwitches.set(id, input);
     input.addEventListener("change", () => {
       const { cardTiltBySection } = appearance.getPreferences();
@@ -54,6 +59,17 @@ export function initializeAppearanceSettings() {
       save({ cardTiltBySection });
     });
   }
+
+  function anyCardTiltEnabled() {
+    return appearance.cardTiltSections.some(({ id }) => appearance.cardTiltEnabled(id));
+  }
+
+  cardTiltAll.addEventListener("click", () => {
+    const cardTiltBySection = anyCardTiltEnabled()
+      ? Object.fromEntries(appearance.cardTiltSections.map(({ id }) => [id, false]))
+      : {};
+    save({ cardTiltBySection });
+  });
 
   for (const { id, label } of appearance.pages) {
     const row = document.createElement("div");
@@ -122,12 +138,14 @@ export function initializeAppearanceSettings() {
     for (const [id, input] of cardTiltSwitches) {
       input.checked = appearance.cardTiltEnabled(id);
     }
+    cardTiltAll.textContent = anyCardTiltEnabled() ? "خاموش کردن همه" : "روشن کردن همه";
     for (const { key, slider, output } of dockControls) {
       if (key === "dockMagnification") slider.disabled = !dockAnimation;
       const value = preferences[key];
+      const display = key === "navbarBlur" ? `${formatter.format(value)} پیکسل` : formatSize(value);
       slider.value = value;
-      slider.setAttribute("aria-valuetext", formatSize(value));
-      output.value = formatSize(value);
+      slider.setAttribute("aria-valuetext", display);
+      output.value = display;
     }
     for (const [id, { slider, output, hint, reset }] of rows) {
       const custom = Object.hasOwn(pageFontSizes, id);
@@ -162,7 +180,7 @@ export function initializeAppearanceSettings() {
     .addEventListener("click", () => {
       if (
         !window.confirm(
-          "تنظیمات ظاهر به حالت پیش‌فرض بازگردد؟ رنگ آبی و اندازه قلم ۱۰۰٪ اعمال و اندازه‌های اختصاصی صفحات پاک می‌شود. جلوهٔ سه‌بعدی کارت‌ها برای همه بخش‌ها فعال می‌شود. انیمیشن داک با بزرگ‌نمایی ۱۶۰٪ فعال و شفافیت و تیرگی هاله بازنشانی می‌شود.",
+          "تنظیمات ظاهر به حالت پیش‌فرض بازگردد؟ رنگ آبی و اندازه قلم ۱۰۰٪ اعمال و اندازه‌های اختصاصی صفحات پاک می‌شود. جلوهٔ سه‌بعدی کارت‌ها برای همه بخش‌ها فعال می‌شود. انیمیشن داک با بزرگ‌نمایی ۱۶۰٪ فعال می‌شود و تنظیمات شیشه و هالهٔ نوبار بازنشانی می‌شوند.",
         )
       )
         return;

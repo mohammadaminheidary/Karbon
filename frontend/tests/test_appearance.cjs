@@ -77,10 +77,24 @@ test("first paint defaults and corrupt or unsupported preferences remain usable"
       dockMagnification: 160,
       dockHighlightTransparency: 45,
       dockHighlightDarkness: 0,
+      navbarTransparency: 30,
+      navbarBlur: 24,
     });
     assert.equal(document.documentElement.dataset.theme, "blue");
     assert.equal(document.documentElement.style.fontSize, "100%");
   }
+});
+test("navbar glass settings restore independently and validate their ranges", () => {
+  const first = app();
+  first.api.updatePreferences({ navbarTransparency: 100, navbarBlur: 240 });
+  assert.equal(first.document.documentElement.style["--navbar-blur"], "240px");
+  first.api.updatePreferences({ navbarBlur: 0 });
+  const restored = app({ value: first.storage.get(first.api.STORAGE_KEY) });
+  assert.equal(restored.document.documentElement.style["--navbar-transparency"], "100%");
+  assert.equal(restored.document.documentElement.style["--navbar-blur"], "0px");
+  restored.api.updatePreferences({ navbarTransparency: -1, navbarBlur: 241 });
+  assert.equal(restored.api.getPreferences().navbarTransparency, 30);
+  assert.equal(restored.api.getPreferences().navbarBlur, 24);
 });
 test("card tilt defaults on for each section and persists independent overrides", () => {
   const first = app({ pathname: "/page/settings-page.html" });
@@ -226,6 +240,8 @@ test("reset restores initial appearance, persists and preserves unrelated storag
     dockMagnification: 180,
     dockHighlightTransparency: 8,
     dockHighlightDarkness: 80,
+    navbarTransparency: 76,
+    navbarBlur: 3,
   });
   assert.equal(api.resetPreferences(), true);
   assert.deepEqual(plain(api.getPreferences()), {
@@ -237,6 +253,8 @@ test("reset restores initial appearance, persists and preserves unrelated storag
     dockMagnification: 160,
     dockHighlightTransparency: 45,
     dockHighlightDarkness: 0,
+    navbarTransparency: 30,
+    navbarBlur: 24,
   });
   assert.equal(document.documentElement.dataset.theme, "blue");
   assert.equal(document.documentElement.style.fontSize, "100%");

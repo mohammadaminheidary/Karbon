@@ -98,6 +98,26 @@ try {
   assert.equal(await page.locator(dockToggle).isChecked(), true);
   assert.equal(await page.locator(dockSlider).inputValue(), "160");
   assert.equal(await page.locator(dockValue).textContent(), "۱۶۰٪");
+  const glassTransparency = "#appearanceNavbarTransparency";
+  const glassBlur = "#appearanceNavbarBlur";
+  assert.equal(await page.locator(glassTransparency).inputValue(), "30");
+  assert.equal(await page.locator(glassBlur).inputValue(), "24");
+  await range(glassTransparency, 100);
+  await range(glassBlur, 240);
+  const glassStyles = await page.locator(".navbar-dock .navbar-glass").evaluateAll((layers) =>
+    layers.map((layer) => {
+      const { backgroundImage, backdropFilter } = getComputedStyle(layer);
+      return { backgroundImage, backdropFilter };
+    }),
+  );
+  assert.equal(glassStyles.length, 3);
+  for (const { backgroundImage, backdropFilter } of glassStyles) {
+    assert.match(backgroundImage, /rgba\(255, 255, 255, 0\)/);
+    assert.match(backdropFilter, /blur\(240px\)/);
+  }
+  assert.equal(await page.locator(`${glassBlur}Value`).textContent(), "۲۴۰ پیکسل");
+  await range(glassTransparency, 30);
+  await range(glassBlur, 24);
   const slots = await dockSlots();
   const restWidth = await dockWidth();
   const pointer = (index) => ({
@@ -444,6 +464,8 @@ try {
     dockMagnification: 160,
     dockHighlightTransparency: 45,
     dockHighlightDarkness: 0,
+    navbarTransparency: 30,
+    navbarBlur: 24,
   };
   assert.deepEqual(
     await page.evaluate(() => window.KarbonAppearance.getPreferences()),

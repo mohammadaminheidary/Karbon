@@ -262,6 +262,8 @@ html:has(> body > .navigation-content) {
 }
 
 .navbar-glass {
+  --glass-top-opacity: 90%;
+  --glass-bottom-opacity: 85%;
   position: absolute;
   inset: -1px;
   z-index: -1;
@@ -270,8 +272,8 @@ html:has(> body > .navigation-content) {
   border-radius: inherit;
   background: linear-gradient(
     165deg,
-    rgb(255 255 255 / 90%),
-    rgb(248 250 252 / 85%)
+    rgb(255 255 255 / var(--glass-top-opacity)),
+    rgb(248 250 252 / var(--glass-bottom-opacity))
   );
   box-shadow:
     0 12px 36px rgb(15 23 42 / 12%),
@@ -280,15 +282,19 @@ html:has(> body > .navigation-content) {
     inset 0 -1px 0 rgb(182 192 198 / 25%);
 }
 
+.navbar-dock .navbar-glass {
+  --glass-transparency: var(--navbar-transparency, 30%);
+  --glass-top-opacity: calc(100% - var(--glass-transparency));
+  --glass-bottom-opacity: max(0%, calc(var(--glass-top-opacity) - min(28%, var(--glass-transparency))));
+  --glass-blur: var(--navbar-blur, 24px);
+}
+
 @supports (backdrop-filter: blur(24px)) or (-webkit-backdrop-filter: blur(24px)) {
   .navbar-glass {
-    background: linear-gradient(
-      165deg,
-      rgb(255 255 255 / 70%),
-      rgb(248 250 252 / 42%)
-    );
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
-    backdrop-filter: blur(24px) saturate(160%);
+    --glass-top-opacity: 70%;
+    --glass-bottom-opacity: 42%;
+    -webkit-backdrop-filter: blur(var(--glass-blur, 24px)) saturate(160%);
+    backdrop-filter: blur(var(--glass-blur, 24px)) saturate(160%);
   }
 }
 

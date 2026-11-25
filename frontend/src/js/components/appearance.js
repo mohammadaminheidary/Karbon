@@ -31,6 +31,8 @@
         path: "/page/bank-transactions-page.html",
         label: "تراکنش‌های حساب",
       },
+      { id: "vision", path: "/page/vision-page.html", label: "چشم‌انداز" },
+      { id: "production", path: "/page/production-page.html", label: "تولید" },
       { id: "warehouse", path: "/page/warehouse-page.html", label: "انبار" },
       {
         id: "reports",
@@ -87,6 +89,10 @@
           : DEFAULT_DOCK_MAGNIFICATION,
       dockHighlightTransparency: percentage(source.dockHighlightTransparency, 45),
       dockHighlightDarkness: percentage(source.dockHighlightDarkness, 0),
+      navbarTransparency: percentage(source.navbarTransparency, 30),
+      navbarBlur: Number.isInteger(source.navbarBlur) && source.navbarBlur >= 0 && source.navbarBlur <= 240
+        ? source.navbarBlur
+        : 24,
     };
   }
 
@@ -129,6 +135,8 @@
       "--dock-highlight-darkness",
       `${preferences.dockHighlightDarkness}%`,
     );
+    document.documentElement.style.setProperty("--navbar-transparency", `${preferences.navbarTransparency}%`);
+    document.documentElement.style.setProperty("--navbar-blur", `${preferences.navbarBlur}px`);
     window.dispatchEvent(new CustomEvent("karbon:appearance-change"));
   }
 
