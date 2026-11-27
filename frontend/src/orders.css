@@ -72,6 +72,20 @@
 .orders-workspace {
   margin-top: 32px;
 }
+.orders-confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  overflow: clip;
+  pointer-events: none;
+}
+.orders-confetti span {
+  position: absolute;
+  top: 0;
+  width: 7px;
+  height: 11px;
+  border-radius: 2px;
+}
 
 .orders-tabs {
   display: flex;

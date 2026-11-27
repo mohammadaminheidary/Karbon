@@ -58,6 +58,36 @@ let records = [];
 let recordTotal = 0;
 const changingOrderStatuses = new Set();
 
+function celebrateCompletion() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const layer = node("div", "orders-confetti");
+  layer.setAttribute("aria-hidden", "true");
+  document.body.append(layer);
+  const colors = ["#2254d1", "#f05167", "#f3a621", "#19ad86", "#8b5cf6"];
+  const animations = [];
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 20; i++) {
+      const piece = node("span");
+      piece.style[side === 1 ? "left" : "right"] = `${Math.random() * 8}vw`;
+      piece.style.backgroundColor = colors[i % colors.length];
+      layer.append(piece);
+      const drift = side * (12 + Math.random() * 24);
+      const fall = 56 + Math.random() * 42;
+      animations.push(piece.animate([
+        { transform: "translate3d(0, -15px, 0) rotate(0deg)" },
+        { opacity: 1, offset: 0.65 },
+        { transform: `translate3d(${drift}vw, ${fall}vh, 0) rotate(${side * (180 + i * 28)}deg)`, opacity: 0 },
+      ], {
+        duration: 950 + Math.random() * 300,
+        delay: Math.random() * 170,
+        easing: "cubic-bezier(.22,.45,.62,1)",
+        fill: "both",
+      }).finished);
+    }
+  }
+  void Promise.allSettled(animations).then(() => layer.remove());
+}
+
 function finishOrderStatusChange(id) {
   changingOrderStatuses.delete(id);
   for (const [attribute, label] of [
@@ -200,9 +230,10 @@ async function loadOrders(more = false) {
             complete.disabled = true;
             complete.textContent = "در حال تکمیل…";
             try {
-              await financeRequest(`/orders/${order.id}/complete`, {
+              const result = await financeRequest(`/orders/${order.id}/complete`, {
                 method: "POST",
               });
+              if (result.completed_now) celebrateCompletion();
               notify(
                 `سفارش ${order.order_number} به سفارشات تکمیل‌شده منتقل شد.`,
                 { type: "success" },

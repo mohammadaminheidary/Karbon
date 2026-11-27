@@ -328,6 +328,7 @@ class OrdersIntegrationTests(unittest.TestCase):
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
             results = list(pool.map(lambda _:self.request("POST",path+"/complete"),range(8)))
         self.assertTrue(all(status==200 and row["status"]=="completed" for status,row in results),results)
+        self.assertEqual(sum(row["completed_now"] for _, row in results), 1)
         self.assertEqual(self.request("GET",path)[1]["status"],"completed")
         self.assertEqual(self.request("GET",path+"/invoice")[1],original_invoice)
         active = self.request("GET","/orders?status=active")[1]

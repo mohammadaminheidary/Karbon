@@ -60,6 +60,7 @@ try {
     (item) => item.stock === null,
   );
   for (const width of [1440, 390]) {
+    await page.emulateMedia({ reducedMotion: width === 390 ? "reduce" : "no-preference" });
     const order = await api("POST", "/orders", {
       request_id: randomUUID(),
       customer_id: customer.id,
@@ -171,10 +172,35 @@ try {
     assert.equal(await card("completed", order.id).count(), 0);
     await tab("active");
     // The returned order can still be completed and returned again.
+    const search = page.locator("#orderSearchInput");
+    await search.fill("عبارت بدون نتیجه");
+    await page.getByText("سفارشی مطابق جستجو پیدا نشد.").waitFor();
+    await search.fill(order.invoice_code);
+    await card("active", order.id).waitFor();
+    assert.equal(await page.locator("#activeOrdersPanel .orders-record").count(), 1);
+    await page.locator("#clearOrderSearchButton").click();
+    await card("active", order.id).waitFor();
+    await page.evaluate(() => {
+      window.confettiBursts = 0;
+      new MutationObserver((mutations) => {
+        for (const mutation of mutations)
+          for (const child of mutation.addedNodes)
+            if (child.classList?.contains("orders-confetti")) window.confettiBursts++;
+      }).observe(document.body, { childList: true });
+    });
     await card("active", order.id).locator("[data-complete-order]").click();
+    if (width === 1440) {
+      const pieces = page.locator(".orders-confetti span");
+      await pieces.first().waitFor({ state: "attached" });
+      assert.equal(await pieces.count(), 40);
+      assert.equal(await pieces.locator("xpath=..").first().evaluate((layer) =>
+        [...layer.children].filter((piece) => piece.style.left).length), 20);
+      await page.locator(".orders-confetti").waitFor({ state: "detached" });
+    }
     await card("active", order.id).waitFor({ state: "detached" });
     await tab("completed");
     await button().waitFor({ state: "visible" });
+    assert.equal(await page.evaluate(() => window.confettiBursts), width === 1440 ? 1 : 0);
     await page.waitForFunction(
       (id) =>
         !document.querySelector(`[data-reactivate-order="${id}"]`).disabled,

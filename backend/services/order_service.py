@@ -351,11 +351,12 @@ def complete_order(db, order_id):
         if order.status not in ("active", "completed"):
             raise FinanceError("وضعیت سفارش اجازه تکمیل را نمی‌دهد.", 409)
         # Repeated/concurrent completion is safe and changes no financial data.
+        completed_now = order.status == "active"
         order.status = "completed"
         db.flush()
         result = order_details(db, order.id)
         db.commit()
-        return result
+        return {**result, "completed_now": completed_now}
     except Exception:
         db.rollback()
         raise
