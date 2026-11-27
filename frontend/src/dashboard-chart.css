@@ -24,7 +24,6 @@
   position: absolute;
   z-index: 5;
   top: 7px;
-  direction: rtl;
   display: grid;
   gap: 5px;
   padding: 10px 12px;
@@ -153,6 +152,7 @@
   padding: 9px 0 2px;
   cursor: pointer;
   width: fit-content;
+  margin-left: auto;
 }
 .dash-data-details[open] summary {
   margin-bottom: 10px;
@@ -160,7 +160,9 @@
 .dash-table-scroll {
   overflow: auto;
   max-height: 280px;
-  scrollbar-width: thin;
+}
+.dash-table-scroll > .dash-empty {
+  width: 100%;
 }
 .dash-table {
   width: 100%;

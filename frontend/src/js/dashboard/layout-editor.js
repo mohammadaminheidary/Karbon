@@ -38,7 +38,7 @@ export class LayoutEditor {
       resize.title = "کشیدن برای تغییر اندازه؛ کلیدهای جهت برای عرض و ارتفاع";
       grid.replaceChild(wrapper, surface);
       wrapper.append(toolbar, surface, resize);
-      surface.classList.add("dash-widget-surface", "card-tilt-surface");
+      surface.classList.add("dash-widget-surface", "card-tilt-surface", "scrollbar-right");
       this.widgets.set(id, wrapper);
       [handle, resize].forEach((control, index) => {
         control.addEventListener("pointerdown", (event) =>

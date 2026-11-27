@@ -114,7 +114,7 @@ export class Chart {
           ? "نمودار؛ جهت چپ و راست برای تغییر تاریخ، بالا و پایین برای تغییر نوع، مثبت و منفی برای بزرگ‌نمایی، Escape برای بازنشانی"
           : "نمودار؛ کلیدهای جهت برای مشاهده، مثبت و منفی برای بزرگ‌نمایی، Escape برای بازنشانی",
     );
-    this.tip = element("div", "dash-tooltip");
+    this.tip = element("div", "dash-tooltip scrollbar-right");
     this.tip.hidden = true;
     this.readout = element("p", "dash-sr");
     this.readout.setAttribute("aria-live", "polite");
@@ -159,13 +159,13 @@ export class Chart {
     });
     this.rangeLabel = element("span");
     this.range.append(this.rangeLabel);
-    this.details = element("details", "dash-data-details");
+    this.details = element("details", "dash-data-details scrollbar-right");
     const tableSummary = element("summary", "", "مشاهده جدول داده‌ها");
     tableSummary.addEventListener("click", () => {
       if (!this.details.open && this.tableDirty) this.renderTable();
     });
     this.details.append(tableSummary);
-    this.tableHost = element("div", "dash-table-scroll");
+    this.tableHost = element("div", "dash-table-scroll scrollbar-right-inline");
     this.details.append(this.tableHost);
     this.details.addEventListener("toggle", () => {
       if (this.details.open && this.tableDirty) this.renderTable();
@@ -289,7 +289,7 @@ export class Chart {
     this.range.hidden = rows.length <= 1 || this.donut;
     if (this.donut && !rows.length) {
       // An empty period must not retain the previous categories or their amounts.
-      this.legend.classList.remove("dash-donut-legend");
+      this.legend.classList.remove("dash-donut-legend", "scrollbar-right");
       this.legend.replaceChildren(...this.series.map(series => {
         const label = element("span", "", series.label);
         label.style.setProperty("--series-color", series.color);
@@ -813,7 +813,7 @@ export class Chart {
       this.palette.light,
       this.palette.strong,
     ];
-    this.legend.classList.add("dash-donut-legend");
+    this.legend.classList.add("dash-donut-legend", "scrollbar-right");
     this.legend.replaceChildren(
       ...rows.map((row, index) => {
         const label = element("span", "", row.label);

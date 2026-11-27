@@ -586,13 +586,15 @@
               </select></label
             >
             <div id="transactionCustomer" class="sm:col-span-2" hidden>
-              <dl class="orders-customer-details">
-                <div><dt>نام و نام خانوادگی</dt><dd id="transactionCustomerName"></dd></div>
-                <div><dt>شماره تماس</dt><dd id="transactionCustomerPhone"></dd></div>
-                <div class="col-span-2 sm:col-span-1"><dt>آدرس</dt><dd id="transactionCustomerAddress"></dd></div>
-                <div><dt>مجموع مبالغ فاکتورها</dt><dd id="transactionCustomerInvoiced" class="font-bold"></dd></div>
-                <div><dt>بدهی باقی‌مانده</dt><dd id="transactionCustomerDebt" class="font-bold text-alizarin-crimson"></dd></div>
-              </dl>
+              <div class="orders-customer-details-scroll scrollbar-right">
+                <dl class="orders-customer-details">
+                  <div><dt>نام و نام خانوادگی</dt><dd id="transactionCustomerName"></dd></div>
+                  <div><dt>شماره تماس</dt><dd id="transactionCustomerPhone"></dd></div>
+                  <div class="col-span-2 sm:col-span-1"><dt>آدرس</dt><dd id="transactionCustomerAddress"></dd></div>
+                  <div><dt>مجموع مبالغ فاکتورها</dt><dd id="transactionCustomerInvoiced" class="font-bold"></dd></div>
+                  <div><dt>بدهی باقی‌مانده</dt><dd id="transactionCustomerDebt" class="font-bold text-alizarin-crimson"></dd></div>
+                </dl>
+              </div>
               <p id="transactionCustomerStatus" class="mt-1 text-xs text-mirage/60" role="status" hidden></p>
             </div>
             <label

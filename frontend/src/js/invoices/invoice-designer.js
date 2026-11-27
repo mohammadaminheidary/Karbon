@@ -37,10 +37,10 @@ export function mountInvoiceDesigner(template, { previewInvoice, onSave, onExit,
   const toolbar = node("div", "designer-toolbar");
   toolbar.setAttribute("aria-label", "ابزارهای طراحی");
   const workspace = node("div", "designer-workspace");
-  const left = node("aside", "designer-sidebar designer-library");
-  const right = node("aside", "designer-sidebar designer-inspector");
+  const left = node("aside", "designer-sidebar designer-library scrollbar-right");
+  const right = node("aside", "designer-sidebar designer-inspector scrollbar-right");
   const properties = node("section", "designer-properties");
-  const layers = node("section", "designer-layers");
+  const layers = node("section", "designer-layers scrollbar-right");
   const viewport = node("main", "designer-viewport");
   viewport.tabIndex = 0;
   viewport.dir = "ltr";
@@ -319,7 +319,7 @@ export function mountInvoiceDesigner(template, { previewInvoice, onSave, onExit,
         more.setAttribute("aria-expanded", String(open));
       }, { title: "عملیات عنصر" });
       more.setAttribute("aria-expanded", "false");
-      const menu = node("div", "designer-element-menu");
+      const menu = node("div", "designer-element-menu scrollbar-right");
       menu.hidden = true;
       menu.append(button("ویژگی‌ها", () => {
         menu.hidden = true;

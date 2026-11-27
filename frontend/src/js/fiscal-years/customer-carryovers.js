@@ -33,7 +33,9 @@ function invoiceFacts(invoice) {
     item.append(node("dt", "", label), node("dd", "", value));
     facts.append(item);
   }
-  return facts;
+  const scroll = node("div", "orders-customer-details-scroll scrollbar-right");
+  scroll.append(facts);
+  return scroll;
 }
 
 function retryKey(invoice, year) {

@@ -61,7 +61,10 @@ function values(entries, classes = "orders-customer-details") {
     );
     list.append(cell);
   });
-  return list;
+  if (classes !== "orders-customer-details") return list;
+  const scroll = node("div", "orders-customer-details-scroll scrollbar-right");
+  scroll.append(list);
+  return scroll;
 }
 function render(order, year) {
   const content = $("orderDetailsContent");

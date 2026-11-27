@@ -69,7 +69,6 @@
   background: white;
   box-shadow: 0 8px 28px #0f172a04;
   overflow: auto;
-  scrollbar-width: thin;
 }
 .dash-widget .dash-card {
   display: flex;
@@ -240,7 +239,6 @@
   flex-shrink: 0;
   max-height: 175px;
   overflow: auto;
-  scrollbar-width: thin;
 }
 .dash-widget .dash-data-details .dash-table-scroll {
   max-height: 140px;
@@ -263,7 +261,6 @@
   padding: 11px 13px;
   max-height: calc(100% - 8px);
   overflow: auto;
-  scrollbar-width: thin;
   pointer-events: auto;
 }
 .dash-widget .dash-tooltip small {
@@ -465,6 +462,6 @@
 .dash-widget .dash-donut-legend {
   max-height: 66px;
   overflow: auto;
+  flex-direction: row-reverse;
   padding: 2px;
-  scrollbar-width: thin;
 }

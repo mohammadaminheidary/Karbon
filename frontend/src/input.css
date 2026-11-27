@@ -126,6 +126,57 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Style the viewport and nested scrollers, including dialogs added on demand. */
+:where(html[data-auth-state], html[data-auth-state] *) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--theme-soft) transparent;
+}
+
+/* The viewport uses a right-hand scrollbar while the Persian workspace stays RTL. */
+html[dir="rtl"] {
+  direction: ltr;
+}
+
+html[dir="rtl"] > body {
+  direction: rtl;
+}
+
+/* A scroll container needs LTR direction for a right-hand vertical scrollbar.
+   Keep the contents RTL unless a child declares its own direction. */
+:is(
+  dialog,
+  .scrollbar-right,
+  .scrollbar-right-inline,
+  .overflow-y-auto,
+  .overflow-auto,
+  .overflow-y-scroll,
+  .overflow-scroll,
+  .orders-dialog-body,
+  .orders-picker-dropdown
+) {
+  direction: ltr;
+
+  :where(&) > :where(:not([dir])) {
+    direction: rtl;
+  }
+}
+
+/* For wide RTL tables, start at the first (rightmost) column. */
+.scrollbar-right-inline {
+  display: flex;
+  flex-direction: row-reverse;
+}
+
+.scrollbar-right-inline > * {
+  flex: none;
+}
+
+html[data-auth-state] textarea:not([dir="ltr"]) {
+  direction: ltr;
+  text-align: right;
+  unicode-bidi: plaintext;
+}
+
 html:has(> body > .navigation-content) {
   scroll-padding-top: var(--floating-back-clearance);
 }

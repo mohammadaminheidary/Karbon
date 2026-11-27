@@ -57,7 +57,9 @@ function paymentRow(payment) {
   }
   if (payment.unallocated) facts.append(fact("اعتبار تخصیص‌نیافته", money(payment.unallocated)));
   if (payment.description) facts.append(fact("شرح", payment.description));
-  details.append(summary, facts);
+  const scroll = element("div", "orders-customer-details-scroll scrollbar-right");
+  scroll.append(facts);
+  details.append(summary, scroll);
   const row = element("li", "min-w-0");
   row.append(details);
   return row;

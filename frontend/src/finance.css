@@ -32,9 +32,11 @@
   font-size: 0.8125rem;
   font-weight: 600;
 }
+#transactionCustomer .orders-customer-details-scroll {
+  margin-top: 0;
+}
 #transactionCustomer .orders-customer-details {
   gap: 8px 12px;
-  margin-top: 0;
   padding: 12px;
 }
 #transactionPaymentMethods {

@@ -98,8 +98,9 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
   gap: 12px;
+}
+.reports-columns-scroll {
   max-height: 230px;
-  overflow: auto;
   padding: 12px 2px;
 }
 .reports-content small {

@@ -118,8 +118,8 @@
 .designer-in-preview .designer-workspace { grid-template-columns: minmax(0, 1fr); }
 .designer-in-preview .designer-sidebar { display: none; }
 .designer-sidebar { overflow: auto; min-height: 0; padding: 10px; background: var(--designer-subtle); }
-.designer-library { border-inline-end: 1px solid var(--designer-line); }
-.designer-inspector { border-inline-start: 1px solid var(--designer-line); }
+.designer-library { border-left: 1px solid var(--designer-line); }
+.designer-inspector { border-right: 1px solid var(--designer-line); }
 .designer-sidebar h3, .designer-sidebar h4 { font-size: .86rem; margin-block: 0 8px; }
 .designer-sidebar h4 { margin-top: 14px; font-weight: 800; }
 .designer-sidebar .designer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
