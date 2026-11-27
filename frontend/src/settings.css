@@ -514,8 +514,7 @@
   margin-top: 5px;
   color: var(--settings-muted);
 }
-#backupControls[hidden],
-#backupLogin[hidden] {
+#backupControls[hidden] {
   display: none;
 }
 .settings-shell :is(button, a):focus-visible {

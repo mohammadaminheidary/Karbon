@@ -2,8 +2,22 @@ import { loginUser } from "./auth-api.js";
 import { getRememberedUsername, saveAuth, setRememberedUsername } from "./auth-storage.js";
 import { validateLogin } from "../utils/validator.js";
 import { notify } from "../components/notifications.js";
+import { resetBackupReminderVisit } from "../components/backup-reminder.js";
 
 export function initLogin() {
+  if (window.location.search) {
+    const url = new URL(window.location.href);
+    const restore = url.searchParams.get("restore");
+    if (restore === "completed" || restore === "preferences-unavailable") {
+      const completed = restore === "completed";
+      notify(completed
+        ? "بازیابی تکمیل شد. با اطلاعات حسابِ موجود در پشتیبان وارد شوید."
+        : "بازیابی اطلاعات تکمیل شد. ذخیره تنظیمات ظاهری در این مرورگر انجام نشد.",
+      { type: completed ? "success" : "warning", duration: 7000 });
+      url.searchParams.delete("restore");
+      history.replaceState(null, "", url);
+    }
+  }
   const form = document.getElementById("loginForm");
 
   if (!form) {
@@ -80,6 +94,7 @@ export function initLogin() {
       if (response.success) {
         // ذخیره اطلاعات ورود
         saveAuth(response);
+        resetBackupReminderVisit();
 
         // انتقال به صفحه اصلی
         window.location.href = "../index.html";

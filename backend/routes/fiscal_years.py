@@ -68,7 +68,8 @@ def close(year: Year, body: ConfirmClose, background: BackgroundTasks, db: Sessi
     if not body.confirm:
         raise HTTPException(422, "بستن سال مالی را تأیید کنید.")
     with backup_errors("بستن سال مالی انجام نشد. سال مالی همچنان باز است."), finance_errors():
-        result = service.close(db, year, body.digest, encode_passphrase(body.passphrase.get_secret_value()))
+        result = service.close(db, year, body.digest, encode_passphrase(body.passphrase.get_secret_value()),
+                               browser_preferences=body.browser_preferences)
     if result["export_status"] == "pending":
         background.add_task(service.publish_exports, year, result["version"])
     return result

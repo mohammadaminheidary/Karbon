@@ -2,6 +2,7 @@ import { node, money, fullDate } from "../finance/finance-utils.js";
 import { formatNumber } from "../customers/customer-utils.js";
 import { downloadBlob } from "../reports/report-api.js";
 import { onPageRefresh } from "../components/data-events.js";
+import { readBackupPreferences } from "../components/backup-preferences.js";
 import { showOrderDetails } from "../orders/order-details.js";
 import { archiveLink, fiscalLabel as yearLabel, fiscalRequest } from "./fiscal-api.js";
 
@@ -305,7 +306,7 @@ function setup(panel) {
     message(confirmStatus, "در حال تهیه و بررسی پشتیبان ایمنی و بستن سال…");
     try {
       const result = await fiscalRequest(`/${period.year}/close`, {
-        method: "POST", body: { digest, passphrase, confirm: true }, timeoutMs: 180000,
+        method: "POST", body: { digest, passphrase, confirm: true, browser_preferences: readBackupPreferences() }, timeoutMs: 180000,
       });
       hidePreview();
       message(status, `سال ${yearLabel(result.year)} بسته شد. سال فعال ${yearLabel(result.active_year)} است.`, "success");

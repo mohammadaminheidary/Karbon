@@ -60,6 +60,11 @@ async function validateSession() {
       }
     } catch { /* Server validation remains authoritative. */ }
     state("authenticated");
+    if (auth.user?.username === "admin") {
+      void import("../components/backup-reminder.js")
+        .then(({ checkBackupReminder }) => checkBackupReminder(token))
+        .catch(() => {});
+    }
     return true;
   } catch (error) {
     if (getToken() !== token) { redirectToLogin(); return false; }

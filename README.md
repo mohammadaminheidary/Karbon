@@ -68,15 +68,22 @@ from the global size. Preferences are saved in this browser's local storage,
 applied before each page paints, and synchronized between open tabs. They remain
 after logout and browser restarts; clearing site data restores the defaults.
 
-Settings → Backup is available to the `admin` account. It creates AES-encrypted
+Settings → Backup Management is available to the `admin` account. It creates AES-encrypted
 ZIP files in `backup/` beside `start.py`. Keep the passphrase separately from
 the ZIP. The archive contains the complete configured SQLite database, including
 saved reports, the application timezone, and the original key when face data
-is present. The limits are 512 MiB for the SQLite snapshot and 513 MiB for the ZIP.
-After upload and validation, confirm restoration within 30 minutes. Karbon
-creates a safety backup using the upload passphrase, then restores the data and
-requires users to sign in again. The folder shortcut requires a local browser
-and a desktop file manager. Downloads are also available for remote sessions.
+is present. Backups made through the interface also include appearance and the
+admin dashboard layout from that browser. The limits are 512 MiB for the SQLite
+snapshot and 513 MiB for the ZIP. The login reminder is enabled by default after
+24 hours, measured from the last verified backup or from initialization before
+the first backup. Dismissing it suppresses it for the current visit.
+
+Use the list to download, delete or select an archive for restore, or import a
+ZIP from your device. After validation, confirm restoration within 30 minutes.
+Karbon creates a safety backup using the selected archive's passphrase, then
+restores the data and requires users to sign in again. The last backup status
+uses the restored archive's creation time. Deleting an archive preserves that
+history. The folder shortcut requires a local browser and a desktop file manager.
 
 ```sh
 npm --prefix frontend run build

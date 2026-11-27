@@ -79,3 +79,12 @@ export function logout() {
   invalidateApiCache({ auth: true });
   localStorage.removeItem("karbon_auth");
 }
+
+export function returnToLoginAfterDatabaseReplacement(path = "/page/login-page.html") {
+  try {
+    logout();
+    localStorage.setItem("karbon-reset-generation", crypto.randomUUID());
+  } finally {
+    window.location.replace(path);
+  }
+}

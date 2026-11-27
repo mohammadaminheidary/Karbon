@@ -1,21 +1,10 @@
 import { financeRequest } from "../finance/finance-api.js";
 import { normalizeDigits } from "../finance/finance-utils.js";
-import { logout } from "./auth-storage.js";
+import { returnToLoginAfterDatabaseReplacement } from "./auth-storage.js";
 
 const path = "/settings/factory-reset";
 const confirmation = "ریست داده‌های کاری";
 const panels = new WeakSet();
-
-function returnToLogin() {
-  const key = "karbon-reset-generation";
-  try {
-    logout();
-    const generation = crypto.randomUUID();
-    localStorage.setItem(key, generation);
-  } finally {
-    window.location.replace("/page/login-page.html");
-  }
-}
 
 export function initializeFactoryReset(panel) {
   if (panels.has(panel)) return;
@@ -90,7 +79,7 @@ export function initializeFactoryReset(panel) {
         current_password: $("Current").value,
       } });
       form.reset();
-      returnToLogin();
+      returnToLoginAfterDatabaseReplacement();
     } catch (error) {
       message(error.message, true);
     } finally {

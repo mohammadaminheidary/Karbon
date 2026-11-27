@@ -51,6 +51,7 @@ class RecoverySettings:
     generation: str = ""
     timezone: ZoneInfo = APP_TIMEZONE
     face_key: bytes | None = field(default=None, repr=False)
+    backup_created_at: str | None = None
 
 
 def recovery_directory():
@@ -71,7 +72,8 @@ def _load_recovery_settings(database, directory, revision):
         raise ValueError("Invalid Karbon recovery generation")
     settings = json.loads((directory / f"{row[0]}.json").read_bytes())
     return RecoverySettings(row[0], ZoneInfo(settings["timezone"]),
-                            settings["face_key"].encode("ascii") if settings["face_key"] else None)
+                            settings["face_key"].encode("ascii") if settings["face_key"] else None,
+                            settings.get("backup_created_at"))
 
 
 def recovery_settings():

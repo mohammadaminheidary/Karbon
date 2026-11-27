@@ -8,13 +8,14 @@ from sqlalchemy import create_engine
 import config
 from database import Base
 from services.backup_service import database_connection, publish_snapshot, recovery_payload
+from services.backup_settings import last_successful_backup
 from services.database_setup import initialize_database
 from services.fiscal_period import initialize_fiscal_storage
 
 
 MASTER_TABLES = frozenset({
     "users", "members", "member_faces", "member_face_photos",
-    "bank_directory", "bank_accounts", "expense_categories", "document_accounts",
+    "bank_directory", "bank_accounts", "expense_categories", "document_accounts", "backup_settings",
     "inventory_options", "brands", "products",
     "invoice_settings", "invoice_assets", "invoice_templates", "invoice_layout_versions", "invoice_template_defaults",
 })
@@ -51,4 +52,4 @@ def reset_operational_data():
             initialize_fiscal_storage(staged, zone=zone)
         finally:
             staged.dispose()
-        publish_snapshot(snapshot, recovery_payload(snapshot))
+        publish_snapshot(snapshot, recovery_payload(snapshot), last_backup_at=last_successful_backup())

@@ -49,6 +49,7 @@ function fixture({ response = { success: true, token: "session" }, saveError,
       },
     },
     validateLogin: () => ({ success: true }),
+    resetBackupReminderVisit() {},
     notify: (message, options) => notifications.push({ message, ...options }),
     console: { error() {} },
     document: { getElementById: (id) => ({

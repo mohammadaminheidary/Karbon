@@ -1,5 +1,5 @@
 """Encrypted SQLite snapshots and portable Karbon recovery settings."""
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
@@ -22,12 +22,15 @@ from sqlalchemy import create_engine, inspect
 
 import config
 from database import Base
+from models.backup_settings import BackupSettings
 from models.fiscal_year import FISCAL_TABLES
 from models.factory_reset import CHALLENGE_COLUMNS, FactoryResetChallenge, upgrade_factory_reset_challenges
 from models.inventory import ProductionRun
+from schemas.backup_schema import BrowserPreferences
+from services.backup_settings import initialize_backup_settings, parse_timestamp, record_backup_success, sync_directory
+from services.default_customer import initialize_default_customer
 from services.invoice_settings_service import INVOICE_COLUMNS, SETTINGS_TABLES, initialize_invoice_storage
 from security.face_templates import template_key
-from services.default_customer import initialize_default_customer
 from services.fiscal_period import initialize_fiscal_storage
 from services.inventory_service import PURCHASE_REVISION_COLUMNS, upgrade_purchase_revisions
 from services.order_service import upgrade_product_constraints
@@ -41,7 +44,7 @@ MANIFEST = "manifest.json"
 DATABASE_LIMIT = 512 * 1024 * 1024
 UPLOAD_LIMIT = DATABASE_LIMIT + 1024 * 1024
 PASSPHRASE_LIMIT = 1024
-ENTRY_LIMITS = {DATABASE: DATABASE_LIMIT, CONFIGURATION: 4096, MANIFEST: 4096}
+ENTRY_LIMITS = {DATABASE: DATABASE_LIMIT, CONFIGURATION: 4096, MANIFEST: 32 * 1024}
 ARCHIVE_NAME = re.compile(r"karbon-backup-\d{8}-\d{6}\.zip", re.ASCII)
 CHUNK = 1024 * 1024
 logger = logging.getLogger(__name__)
@@ -80,9 +83,9 @@ def list_archives():
         if ARCHIVE_NAME.fullmatch(path.name):
             try:
                 info = archive_info(path)
-                check_zip_directory(path)
-                archives.append(info)
-            except (FileNotFoundError, BackupError, pyzipper.BadZipFile):
+                with open_backup_zip(path):
+                    archives.append(info)
+            except (FileNotFoundError, BackupError):
                 continue
     return sorted(archives, key=lambda archive: (archive["created_at"], archive["filename"]), reverse=True)
 
@@ -92,11 +95,18 @@ def archive_path(name):
         path = backup_directory() / name
         try:
             archive_info(path)
-            check_zip_directory(path)
-            return path
-        except (FileNotFoundError, BackupError, pyzipper.BadZipFile):
+            with open_backup_zip(path):
+                return path
+        except (FileNotFoundError, BackupError):
             pass
     raise BackupError("فایل پشتیبان پیدا نشد.", 404)
+
+
+def delete_archive(name):
+    try:
+        archive_path(name).unlink()
+    except FileNotFoundError as error:
+        raise BackupError("فایل پشتیبان پیدا نشد.", 404) from error
 
 
 def database_connection(path, *, read_only=False, immutable=False, must_exist=False):
@@ -204,7 +214,8 @@ def validate_database(path, recovery):
                 continue
             if legacy_invoices and table.name in invoice_names:
                 continue
-            if table in (ProductionRun.__table__, FactoryResetChallenge.__table__) and table.name not in table_names:
+            if table in (ProductionRun.__table__, FactoryResetChallenge.__table__, BackupSettings.__table__) \
+                    and table.name not in table_names:
                 continue
             required = set(table.columns.keys())
             if table is FactoryResetChallenge.__table__:
@@ -219,6 +230,12 @@ def validate_database(path, recovery):
                 required -= added.get(table.name, set())
             if table.name not in table_names or not required <= columns[table.name]:
                 raise BackupError("ساختار پایگاه داده پشتیبان با این نسخه کاربن سازگار نیست.")
+        if BackupSettings.__tablename__ in table_names:
+            rows = db.execute("SELECT id, reminder_enabled, reminder_hours, started_at FROM backup_settings LIMIT 2").fetchall()
+            if len(rows) != 1 or rows[0][0] != 1 or rows[0][1] not in (0, 1) \
+                    or type(rows[0][2]) is not int or not 1 <= rows[0][2] <= 8760:
+                raise BackupError("تنظیمات یادآوری پشتیبان نامعتبر است.")
+            parse_timestamp(rows[0][3])
         if not db.execute("SELECT 1 FROM users WHERE username = ?", (config.ADMIN_USERNAME,)).fetchone():
             raise BackupError("پایگاه داده پشتیبان حساب مدیر کاربن را ندارد.")
         for encrypted, prefix in face_rows(db):
@@ -247,11 +264,11 @@ def check_zip_directory(path):
         raise pyzipper.BadZipFile()
 
 
-def verify_archive(path, passphrase, snapshot):
+@contextmanager
+def open_backup_zip(path):
     try:
         check_zip_directory(path)
         with pyzipper.AESZipFile(path) as archive:
-            archive.setpassword(passphrase)
             entries = archive.infolist()
             if len(entries) != len(ENTRY_LIMITS) or {entry.filename for entry in entries} != set(ENTRY_LIMITS):
                 raise BackupError("فایل‌های داخل پشتیبان با قالب کاربن مطابقت ندارند.")
@@ -264,6 +281,15 @@ def verify_archive(path, passphrase, snapshot):
                     raise BackupError("فایل ZIP باید با قالب رمزنگاری‌شده کاربن مطابقت داشته باشد.")
                 if not 0 < entry.file_size <= ENTRY_LIMITS[entry.filename]:
                     raise BackupError("حجم فایل‌های داخل پشتیبان از حد مجاز بیشتر است.", 413)
+            yield archive
+    except (pyzipper.BadZipFile, struct.error, EOFError, IndexError, NotImplementedError) as error:
+        raise BackupError("فایل پشتیبان خراب یا نامعتبر است.") from error
+
+
+def verify_archive(path, passphrase, snapshot):
+    try:
+        with open_backup_zip(path) as archive:
+            archive.setpassword(passphrase)
             manifest = json.loads(archive.read(MANIFEST))
             if not isinstance(manifest, dict) or type(manifest.get("format_version")) is not int \
                     or manifest["format_version"] != FORMAT_VERSION:
@@ -271,9 +297,10 @@ def verify_archive(path, passphrase, snapshot):
             version = manifest["karbon_version"]
             if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version, re.ASCII):
                 raise ValueError()
-            created = datetime.fromisoformat(manifest["created_at"])
-            if created.tzinfo is None:
-                raise ValueError()
+            created = parse_timestamp(manifest["created_at"])
+            metadata = {"created_at": created.isoformat(), "karbon_version": version}
+            if "browser_preferences" in manifest:
+                metadata["browser_preferences"] = BrowserPreferences.model_validate(manifest["browser_preferences"]).model_dump()
             checksums = manifest["checksums"]
             if not isinstance(checksums, dict) or set(checksums) != {DATABASE, CONFIGURATION}:
                 raise ValueError()
@@ -294,7 +321,7 @@ def verify_archive(path, passphrase, snapshot):
         if not isinstance(recovery, dict):
             raise ValueError()
         validate_database(snapshot, recovery)
-        return {"created_at": created.isoformat(), "karbon_version": version}, recovery
+        return metadata, recovery
     except RuntimeError as error:
         if str(error).startswith("Bad password for file"):
             raise BackupError("عبارت عبور پشتیبان صحیح نیست.") from error
@@ -304,16 +331,7 @@ def verify_archive(path, passphrase, snapshot):
         raise BackupError("فایل پشتیبان خراب یا نامعتبر است.") from error
 
 
-def sync_directory(directory):
-    if os.name == "posix":
-        fd = os.open(directory, os.O_RDONLY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-
-
-def create_archive(passphrase):
+def create_archive(passphrase, *, browser_preferences=None, record=True):
     usable_passphrase(passphrase)
     directory = backup_directory()
     with TemporaryDirectory(prefix=".creating-", dir=directory, ignore_cleanup_errors=True) as name:
@@ -329,6 +347,11 @@ def create_archive(passphrase):
             "created_at": created.isoformat(),
             "checksums": {DATABASE: checksum(snapshot), CONFIGURATION: sha256(recovery).hexdigest()},
         }
+        if browser_preferences is not None:
+            manifest["browser_preferences"] = browser_preferences.model_dump()
+        manifest_data = json_bytes(manifest)
+        if len(manifest_data) > ENTRY_LIMITS[MANIFEST]:
+            raise BackupError("حجم تنظیمات مرورگر از حد مجاز بیشتر است.", 413)
         path = staging / "archive.zip"
         with pyzipper.AESZipFile(path, "x", compression=pyzipper.ZIP_DEFLATED, compresslevel=3,
                                  encryption=pyzipper.WZ_AES, allowZip64=False) as archive:
@@ -336,7 +359,7 @@ def create_archive(passphrase):
             archive.setpassword(passphrase)
             archive.write(snapshot, DATABASE)
             archive.writestr(CONFIGURATION, recovery)
-            archive.writestr(MANIFEST, json_bytes(manifest))
+            archive.writestr(MANIFEST, manifest_data)
         snapshot.unlink()
         verify_archive(path, passphrase, snapshot)
         path.chmod(0o600)
@@ -353,13 +376,16 @@ def create_archive(passphrase):
                 stamp += timedelta(seconds=1)
         try:
             sync_directory(directory)
-        except OSError:
+            info = archive_info(final)
+            if record:
+                record_backup_success(created.isoformat())
+        except Exception:
             final.unlink(missing_ok=True)
             raise
-        return archive_info(final)
+        return info
 
 
-def restore_snapshot(snapshot, recovery):
+def restore_snapshot(snapshot, recovery, created_at):
     staged = create_engine(f"sqlite:///{snapshot.as_posix()}")
     try:
         if not inspect(staged).has_table("fiscal_years"):
@@ -371,15 +397,17 @@ def restore_snapshot(snapshot, recovery):
             upgrade_purchase_revisions(connection)
             upgrade_factory_reset_challenges(connection)
         initialize_invoice_storage(staged)
+        initialize_backup_settings(staged)
         upgrade_product_constraints(staged)
         initialize_default_customer(staged)
         initialize_fiscal_storage(staged, zone=ZoneInfo(recovery["timezone"]))
     finally:
         staged.dispose()
-    publish_snapshot(snapshot, recovery)
+    validate_database(snapshot, recovery)
+    publish_snapshot(snapshot, recovery, last_backup_at=created_at)
 
 
-def publish_snapshot(snapshot, recovery):
+def publish_snapshot(snapshot, recovery, *, last_backup_at):
     """Replace the active SQLite database and invalidate previous sessions."""
     directory = config.recovery_directory()
     directory.mkdir(mode=0o700, exist_ok=True)
@@ -391,7 +419,7 @@ def publish_snapshot(snapshot, recovery):
     prepare_snapshot_for_restore(snapshot, generation)
     try:
         with os.fdopen(os.open(settings, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as stream:
-            stream.write(json_bytes(recovery))
+            stream.write(json_bytes({**recovery, "backup_created_at": last_backup_at}))
             stream.flush()
             os.fsync(stream.fileno())
         sync_directory(directory)

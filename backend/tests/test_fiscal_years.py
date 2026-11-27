@@ -50,10 +50,10 @@ backup_service.BACKUP_DIRECTORY = root / "backups"
 backup = backup_service.create_archive
 render = fiscal_year_export.render_exports
 
-def controlled_backup(passphrase):
+def controlled_backup(passphrase, **options):
     if (root / "fail-backup").exists():
         raise OSError("fixture backup failure")
-    archive = backup(passphrase)
+    archive = backup(passphrase, **options)
     hold = root / "hold-backup"
     if hold.exists():
         (root / "backup-verified").touch()

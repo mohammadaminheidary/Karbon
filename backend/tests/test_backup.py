@@ -2,6 +2,7 @@
 import base64
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from io import BytesIO
 import json
@@ -223,7 +224,10 @@ class BackupIntegrationTests(unittest.TestCase):
         origin = {"Origin": "http://localhost:5501"}
         for path, method, body in [
             ("", "GET", None), ("", "POST", {"passphrase": PASSPHRASE}),
+            ("/status", "GET", None), ("/reminder", "PUT", {"reminder_enabled": False, "reminder_hours": 24}),
             ("/download/karbon-backup-20261122-123456.zip", "GET", None),
+            ("/archives/karbon-backup-20261122-123456.zip", "DELETE", None),
+            ("/validate/karbon-backup-20261122-123456.zip", "POST", {"passphrase": PASSPHRASE}),
             ("/validate", "POST", None), ("/open-folder", "POST", None),
             ("/restore", "POST", {"passphrase": PASSPHRASE, "validation_id": "0" * 32, "confirm": True}),
         ]:
@@ -232,6 +236,10 @@ class BackupIntegrationTests(unittest.TestCase):
                 self.assertEqual(self.call(self.source, API + path, method, body, staff, origin)[0], 403)
 
         self.assertTrue(self.call(self.source, API, token=token, headers=origin)[1]["folder"]["available"])
+        backup_status = self.call(self.source, API + "/status", token=token)[1]
+        self.assertIsNone(backup_status["last_backup_at"])
+        self.assertEqual((backup_status["reminder_enabled"], backup_status["reminder_hours"], backup_status["reminder_due"]),
+                         (True, 24, False))
         self.assertEqual(self.call(self.source, API + "/open-folder", "POST", token=token, headers=origin)[0], 204)
         self.assertEqual((self.root / "opened-folder").read_text(), str(self.root / "backup"))
         for remote in ({"Origin": "https://karbon.example.com"}, {**origin, "Forwarded": "for=203.0.113.7"}):
@@ -249,6 +257,10 @@ class BackupIntegrationTests(unittest.TestCase):
 
     def test_create_download_validate_rollback_and_restore(self):
         source_token, target_token = self.login(self.source), self.login(self.target)
+        source_reminder = {"reminder_enabled": False, "reminder_hours": 48}
+        self.assertEqual(self.call(self.source, API + "/reminder", "PUT", source_reminder, source_token)[0], 200)
+        browser_preferences = {"appearance": {"theme": "green", "fontSize": 115}, "dashboard_layout": None}
+        create_payload = {"passphrase": PASSPHRASE, "browser_preferences": browser_preferences}
         reports = {}
         for fmt in ("xlsx", "pdf"):
             status, data, _ = self.call(self.source, f"/api/reports/customers/export/{fmt}", "POST",
@@ -262,7 +274,7 @@ class BackupIntegrationTests(unittest.TestCase):
         # A writer holds an uncommitted change in WAL while Karbon snapshots.
         with closing(sqlite3.connect(self.root / "source.db")) as writer, ThreadPoolExecutor() as pool:
             writer.execute("UPDATE tasks SET title='uncommitted'")
-            calls = [pool.submit(self.call, self.source, API, "POST", {"passphrase": PASSPHRASE}, source_token)
+            calls = [pool.submit(self.call, self.source, API, "POST", create_payload, source_token)
                      for _ in range(2)]
             results = [job.result() for job in calls]
             writer.rollback()
@@ -283,6 +295,7 @@ class BackupIntegrationTests(unittest.TestCase):
         self.assertEqual(headers["Cache-Control"], "no-store")
         self.assertEqual(archive, (self.root / "backup" / name).read_bytes())
         self.assertEqual(items[0]["size_bytes"], len(archive))
+        self.assertEqual(listing["last_backup_at"], items[0]["created_at"])
 
         original = self.dump()
         self.assertEqual(self.upload(archive, target_token, "incorrect test passphrase")[0], 422)
@@ -294,6 +307,13 @@ class BackupIntegrationTests(unittest.TestCase):
         manifest = json.loads(files["manifest.json"])
         self.assertEqual(manifest["format_version"], 1)
         self.assertEqual(manifest["checksums"]["karbon.db"], sha256(files["karbon.db"]).hexdigest())
+        self.assertEqual(manifest["browser_preferences"], browser_preferences)
+
+        status, local, _ = self.call(self.source, API + "/validate/" + name, "POST",
+                                     {"passphrase": PASSPHRASE}, source_token)
+        self.assertEqual(status, 200, local)
+        self.assertEqual(local["created_at"], manifest["created_at"])
+        self.assertNotIn("browser_preferences", local)
 
         wrong_db = self.root / "invalid.db"
         wrong_db.write_bytes(files["karbon.db"])
@@ -334,10 +354,12 @@ class BackupIntegrationTests(unittest.TestCase):
         self.assertEqual(self.call(self.target, API + "/restore", "POST", {**payload, "confirm": False}, target_token)[0], 400)
 
         fail = self.root / "fail"
+        target_backup_status = self.call(self.target, API + "/status", token=target_token)[1]
         fail.touch()
         try:
             self.assertEqual(self.call(self.target, API + "/restore", "POST", payload, target_token)[0], 500)
             self.assertEqual(self.dump(), original)
+            self.assertEqual(self.call(self.peer, API + "/status", token=target_token)[1], target_backup_status)
         finally:
             fail.unlink()
         self.assertEqual(self.call(self.peer, "/api/auth/me", token=target_token)[0], 200)
@@ -357,6 +379,7 @@ class BackupIntegrationTests(unittest.TestCase):
                 hold.unlink()
             status, result, _ = pending.result()
         self.assertEqual(status, 200, result)
+        self.assertEqual(result["browser_preferences"], browser_preferences)
         self.assertEqual(self.call(self.peer, "/api/auth/me", token=target_token)[0], 401)
 
         with closing(sqlite3.connect(self.root / "target.db")) as db:
@@ -373,7 +396,11 @@ class BackupIntegrationTests(unittest.TestCase):
                 ("SELECT COUNT(*) FROM member_face_photos", 1),
             ]:
                 self.assertEqual(db.execute(sql).fetchone(), (expected,))
+            self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
         new_token = self.login(self.peer)
+        restored_status = self.call(self.peer, API + "/status", token=new_token)[1]
+        self.assertEqual(restored_status["last_backup_at"], manifest["created_at"])
+        self.assertEqual({key: restored_status[key] for key in source_reminder}, source_reminder)
         self.assertEqual(self.call(self.peer, "/api/dashboard?view=summary", token=new_token)[1]["timezone"], "Asia/Tehran")
         self.assertEqual(self.call(self.peer, "/api/faces/check-in", "POST",
                                    {"images": ["x" * 32] * 2}, new_token)[1]["member"]["id"], 1)
@@ -390,6 +417,41 @@ class BackupIntegrationTests(unittest.TestCase):
         safety_db.write_bytes(safety["karbon.db"])
         with closing(sqlite3.connect(safety_db)) as db:
             self.assertEqual(db.execute("SELECT title FROM tasks").fetchone(), ("target task",))
+
+    def test_reminder_clock_and_backup_deletion(self):
+        token = self.login(self.source)
+        status_path = API + "/status"
+        reminder_path = API + "/reminder"
+        self.assertEqual(self.call(self.source, reminder_path, "PUT",
+                                   {"reminder_enabled": True, "reminder_hours": 0}, token)[0], 422)
+        with closing(sqlite3.connect(self.root / "source.db")) as db:
+            generation = db.execute("SELECT 1 FROM sqlite_schema WHERE name='karbon_recovery'").fetchone()
+        self.assertIsNone(generation)
+        state_path = self.root / "source.db.karbon-backup-success.json"
+        old_state = state_path.read_text() if state_path.exists() else None
+        try:
+            old = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+            state_path.write_text(json.dumps({"generation": "", "created_at": old}))
+            for enabled, hours, due in [(True, 24, True), (True, 26, False), (False, 24, False)]:
+                status, value, _ = self.call(self.source, reminder_path, "PUT",
+                                             {"reminder_enabled": enabled, "reminder_hours": hours}, token)
+                self.assertEqual(status, 200, value)
+                self.assertEqual(value["reminder_due"], due)
+            self.call(self.source, reminder_path, "PUT", {"reminder_enabled": True, "reminder_hours": 24}, token)
+            self.assertEqual(self.call(self.source, API, "POST", {"passphrase": "too short"}, token)[0], 422)
+            self.assertEqual(self.call(self.source, status_path, token=token)[1]["last_backup_at"], old)
+            status, backup, _ = self.call(self.source, API, "POST", {"passphrase": PASSPHRASE}, token)
+            self.assertEqual(status, 201, backup)
+            self.assertFalse(self.call(self.source, status_path, token=token)[1]["reminder_due"])
+            path = API + "/archives/" + backup["filename"]
+            self.assertEqual(self.call(self.source, path, "DELETE", token=token)[0], 204)
+            self.assertEqual(self.call(self.source, path, "DELETE", token=token)[0], 404)
+            self.assertEqual(self.call(self.source, status_path, token=token)[1]["last_backup_at"], backup["created_at"])
+        finally:
+            if old_state is None:
+                state_path.unlink(missing_ok=True)
+            else:
+                state_path.write_text(old_state)
 
 
 if __name__ == "__main__":

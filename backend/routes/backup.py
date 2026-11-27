@@ -7,6 +7,7 @@ import logging
 import os
 from pathlib import Path
 import re
+from shutil import copyfile
 from tempfile import TemporaryDirectory
 from time import time
 from typing import Annotated
@@ -22,9 +23,12 @@ from starlette.concurrency import run_in_threadpool
 
 import config
 from database import SessionLocal, get_database
+from models.backup_settings import BackupSettings
+from schemas.backup_schema import BrowserPreferences, ReminderSettings
 from security.auth import bearer_scheme, get_current_user, require_admin
 from services import backup_service as service
 from services.backup_folder import folder_access, open_backup_folder
+from services.backup_settings import backup_status
 from services.database_maintenance import DatabaseBusy, exclusive_database_access, lock_file
 
 
@@ -36,6 +40,7 @@ ValidationId = Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{32}$")]
 
 class CreateBackup(BaseModel):
     passphrase: SecretStr
+    browser_preferences: BrowserPreferences | None = None
 
 
 class RestoreBackup(CreateBackup):
@@ -91,16 +96,34 @@ def staged_path(directory, credentials, validation_id):
 
 
 @router.get("")
-def backups(request: Request):
+def backups(request: Request, db: Session = Depends(get_database)):
     with backup_errors("فهرست پشتیبان‌ها در دسترس نیست."):
         opener, reason = folder_access(request)
-        return {"items": service.list_archives(), "folder": {"available": bool(opener), "reason": reason}}
+        return {"items": service.list_archives(), "folder": {"available": bool(opener), "reason": reason},
+                **backup_status(db.get(BackupSettings, 1))}
+
+
+@router.get("/status")
+def status(db: Session = Depends(get_database)):
+    with backup_errors("وضعیت پشتیبان‌گیری در دسترس نیست."):
+        return backup_status(db.get(BackupSettings, 1))
+
+
+@router.put("/reminder")
+def update_reminder(body: ReminderSettings, db: Session = Depends(get_database)):
+    with backup_errors("ذخیره تنظیمات یادآوری انجام نشد."):
+        settings = db.get(BackupSettings, 1)
+        settings.reminder_enabled = body.reminder_enabled
+        settings.reminder_hours = body.reminder_hours
+        db.commit()
+        return backup_status(settings)
 
 
 @router.post("", status_code=201)
 def create(body: CreateBackup):
     with backup_errors("ساخت پشتیبان انجام نشد. فضای ذخیره‌سازی و دسترسی پوشه را بررسی کنید."):
-        return service.create_archive(encode_passphrase(body.passphrase.get_secret_value()))
+        return service.create_archive(encode_passphrase(body.passphrase.get_secret_value()),
+                                      browser_preferences=body.browser_preferences)
 
 
 @router.post("/open-folder", status_code=204)
@@ -116,6 +139,12 @@ def download(filename: str):
                             headers={"Content-Encoding": "identity"})
 
 
+@router.delete("/archives/{filename}", status_code=204)
+def delete(filename: str):
+    with backup_errors("حذف فایل پشتیبان انجام نشد."):
+        service.delete_archive(filename)
+
+
 async def save_upload(request, path):
     if request.headers.get("content-type") != "application/zip":
         raise service.BackupError("یک فایل ZIP کاربن را انتخاب کنید.", 415)
@@ -126,6 +155,21 @@ async def save_upload(request, path):
             if size > service.UPLOAD_LIMIT:
                 raise service.BackupError("حجم فایل پشتیبان از حد مجاز بیشتر است.", 413)
             await stream.write(chunk)
+
+
+def stage_validated_archive(archive, passphrase, directory, credentials):
+    manifest, _ = service.verify_archive(archive, passphrase, archive.parent / service.DATABASE)
+    validation_id = uuid4().hex
+    destination = staged_path(directory, credentials, validation_id)
+    owner = destination.name.rsplit("-", 1)[0]
+    now = time()
+    for old in directory.glob("*.zip"):
+        if old.name.startswith(owner + "-") or now - old.stat().st_mtime > VALIDATION_LIFETIME:
+            old.unlink(missing_ok=True)
+    os.utime(archive, None)
+    archive.replace(destination)
+    return {"created_at": manifest["created_at"], "karbon_version": manifest["karbon_version"],
+            "validation_id": validation_id}
 
 
 @router.post("/validate")
@@ -141,29 +185,37 @@ async def validate(request: Request, credentials=Depends(bearer_scheme)):
         directory = staging_directory()
         with lock_file(directory / ".lock", portalocker.LOCK_EX), \
                 TemporaryDirectory(prefix=".upload-", dir=directory) as temporary:
-            stage = Path(temporary)
-            archive = stage / "upload.zip"
+            archive = Path(temporary) / "upload.zip"
             await save_upload(request, archive)
-            manifest, _ = await run_in_threadpool(service.verify_archive, archive, passphrase, stage / service.DATABASE)
-            validation_id = uuid4().hex
-            for old in directory.glob("*.zip"):
-                old.unlink(missing_ok=True)
-            os.utime(archive, None)
-            archive.replace(staged_path(directory, credentials, validation_id))
-    return {**manifest, "validation_id": validation_id}
+            return await run_in_threadpool(stage_validated_archive, archive, passphrase, directory, credentials)
 
 
-def apply_restore(snapshot, recovery, passphrase, credentials):
+@router.post("/validate/{filename}")
+def validate_local(filename: str, body: CreateBackup, credentials=Depends(bearer_scheme)):
+    with backup_errors("بررسی فایل پشتیبان انجام نشد."):
+        passphrase = encode_passphrase(body.passphrase.get_secret_value())
+        directory = staging_directory()
+        with lock_file(directory / ".lock", portalocker.LOCK_EX), \
+                TemporaryDirectory(prefix=".local-", dir=directory) as temporary:
+            archive = Path(temporary) / "local.zip"
+            try:
+                copyfile(service.archive_path(filename), archive)
+            except FileNotFoundError as error:
+                raise service.BackupError("فایل پشتیبان پیدا نشد.", 404) from error
+            return stage_validated_archive(archive, passphrase, directory, credentials)
+
+
+def apply_restore(snapshot, recovery, created_at, passphrase, credentials, browser_preferences):
     # The original dependency closed its session before maintenance began.
     # Recheck the account after all previously admitted writes have drained.
     with SessionLocal() as db:
         require_admin(get_current_user(credentials, db))
     try:
-        service.create_archive(passphrase)
+        service.create_archive(passphrase, browser_preferences=browser_preferences, record=False)
     except Exception as error:
         logger.warning("Pre-restore safety backup failed", exc_info=True)
         raise service.BackupError("تهیه پشتیبان ایمنی انجام نشد. بازیابی آغاز نشد.", 409) from error
-    service.restore_snapshot(snapshot, recovery)
+    service.restore_snapshot(snapshot, recovery, created_at)
 
 
 @router.post("/restore")
@@ -181,12 +233,16 @@ async def restore(body: RestoreBackup, request: Request, credentials=Depends(bea
             if not archive.is_file() or time() - archive.stat().st_mtime > VALIDATION_LIFETIME:
                 raise service.BackupError("اعتبار بررسی فایل پایان یافته است. فایل را دوباره بارگذاری کنید.", 409)
             snapshot = Path(temporary) / service.DATABASE
-            _, recovery = await run_in_threadpool(service.verify_archive, archive, passphrase, snapshot)
+            manifest, recovery = await run_in_threadpool(service.verify_archive, archive, passphrase, snapshot)
             await run_in_threadpool(db.close)
             async with exclusive_database_access(request.state.database_lease):
-                await run_in_threadpool(apply_restore, snapshot, recovery, passphrase, credentials)
+                await run_in_threadpool(apply_restore, snapshot, recovery, manifest["created_at"], passphrase,
+                                        credentials, body.browser_preferences)
             try:
                 archive.unlink(missing_ok=True)
             except OSError:
                 logger.warning("Could not remove the validated encrypted archive", exc_info=True)
-    return {"status": "completed"}
+    result = {"status": "completed"}
+    if "browser_preferences" in manifest:
+        result["browser_preferences"] = manifest["browser_preferences"]
+    return result

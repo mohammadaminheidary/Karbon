@@ -10,6 +10,7 @@ from services.document_service import initialize_document_storage
 from services.customer_ids import initialize_customer_ids
 from services.default_customer import initialize_default_customer
 from services.auth_settings import initialize_auth_storage
+from services.backup_settings import initialize_backup_settings
 from services.fiscal_period import initialize_fiscal_storage
 
 
@@ -19,6 +20,7 @@ def initialize_database(engine, *, zone=None):
         connection.exec_driver_sql("BEGIN IMMEDIATE")
         upgrade_factory_reset_challenges(connection)
     initialize_auth_storage(engine)
+    initialize_backup_settings(engine)
     initialize_customer_ids(engine)
     initialize_default_customer(engine)
     initialize_bank_storage(engine)

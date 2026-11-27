@@ -48,7 +48,8 @@ class FixtureHandler(SimpleHTTPRequestHandler):
     def proxy_api(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))) or None
         request = Request(f"http://127.0.0.1:{args.backend_port}{self.path}", data=body,
-                          headers={key: self.headers[key] for key in ("Authorization", "Content-Type") if key in self.headers}, method=self.command)
+                          headers={key: self.headers[key] for key in ("Authorization", "Content-Type", "X-Karbon-Backup-Passphrase")
+                                   if key in self.headers}, method=self.command)
         try:
             response = urlopen(request, timeout=20)
         except HTTPError as error:
@@ -79,7 +80,7 @@ class FixtureHandler(SimpleHTTPRequestHandler):
         # environment can run beside the user's normal app without logging out
         # their session or changing any production JavaScript configuration.
         path = urlsplit(self.path).path
-        if path in ["/src/js/components/connection.js", "/src/js/reports/report-api.js", "/src/js/auth/auth-api.js", "/src/js/customers/customer-api.js", "/src/js/finance/finance-api.js", "/src/js/members/members-api.js", "/src/js/attendance/attendance-api.js", "/src/js/attendance/face-api.js", "/src/js/tasks/tasks-api.js"]:
+        if path in ["/src/js/components/connection.js", "/src/js/components/backup-api.js", "/src/js/reports/report-api.js", "/src/js/auth/auth-api.js", "/src/js/customers/customer-api.js", "/src/js/finance/finance-api.js", "/src/js/members/members-api.js", "/src/js/attendance/attendance-api.js", "/src/js/attendance/face-api.js", "/src/js/tasks/tasks-api.js"]:
             content = (ROOT / path.lstrip("/")).read_text().replace(
                 "http://127.0.0.1:8000/api",
                 f"http://127.0.0.1:{args.backend_port if args.direct_api else args.frontend_port}/api",
@@ -110,12 +111,14 @@ from models.order import Product
 from models.inventory import InventoryOption
 from models.finance import BankAccount, ExpenseCategory, FinancialTransaction
 from datetime import datetime, timedelta
-from config import APP_TIMEZONE
+from config import APP_TIMEZONE, DATABASE_PATH
 from security.password import hash_password
+from services import backup_service
 from services.reference_codes import compact_category_codes, compact_transaction_numbers
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-app.app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:{args.frontend_port}"], allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type", "Authorization"], expose_headers=["Retry-After"])
+backup_service.BACKUP_DIRECTORY = DATABASE_PATH.parent / "backups"
+app.app.add_middleware(CORSMiddleware, allow_origins=["http://127.0.0.1:{args.frontend_port}"], allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Content-Type", "Authorization", "X-Karbon-Backup-Passphrase"], expose_headers=["Retry-After"])
 with SessionLocal() as db:
     db.add(User(username="customers-test", password_hash=hash_password("test-password")))
     if {args.invoice_designer or args.factory_reset!r}:
