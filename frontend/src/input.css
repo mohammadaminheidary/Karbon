@@ -171,7 +171,7 @@ html[dir="rtl"] > body {
   flex: none;
 }
 
-html[data-auth-state] textarea:not([dir="ltr"]) {
+html[data-auth-state] textarea:not([dir]) {
   direction: ltr;
   text-align: right;
   unicode-bidi: plaintext;
