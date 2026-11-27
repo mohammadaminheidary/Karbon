@@ -206,7 +206,12 @@ async function loadOrders(more = false) {
         open.setAttribute("aria-label", `جزئیات سفارش ${order.order_number}`);
         open.setAttribute("aria-haspopup", "dialog");
         open.addEventListener("click", () =>
-          showOrderDetails(order.id, { onEdit: (details) => openOrderForm({ order: details }) }),
+          showOrderDetails(order.id, {
+            onEdit: (details) => openOrderForm({ order: details }),
+            restoreFocus: () => document.querySelector(
+              `.orders-panel:not([hidden]) [data-order-id="${order.id}"] .orders-card-open`,
+            ) ?? searchInput,
+          }),
         );
         card.append(open);
         if (order.status === "active") {
