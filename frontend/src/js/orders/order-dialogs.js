@@ -33,6 +33,10 @@ const amountFormatter = new Intl.NumberFormat("en-US");
 const formatted = (value) => amountFormatter.format(value);
 const moneyLimit = 999999999999;
 
+function setOutput(output, value) {
+  if (output.textContent !== value) output.textContent = value;
+}
+
 function modal(id, title, content, footer) {
   const registration = id === "createOrderModal";
   const root = node(
@@ -623,14 +627,17 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
     let validItems = true;
     for (const row of $("orderItems").querySelectorAll(".orders-item-row")) {
       const output = row.querySelector(".item-total");
+      let value = "—";
       try {
         const item = invoiceItem(row);
-        if (item) items.push(item);
-        output.textContent = item ? money(item.lineTotal) : "—";
+        if (item) {
+          items.push(item);
+          value = money(item.lineTotal);
+        }
       } catch {
         validItems = false;
-        output.textContent = "—";
       }
+      setOutput(output, value);
     }
     let itemTotals, totals;
     try {
@@ -639,20 +646,22 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
         totals = invoiceValues(itemTotals.subtotal);
       }
     } catch { /* Keep the row outputs visible while a value is being corrected. */ }
-    if (!discountEdited && discountKind.value === "fixed" && totals)
-      fixedDiscount.value = formatted(totals.discount);
+    if (!discountEdited && discountKind.value === "fixed" && totals) {
+      const discount = formatted(totals.discount);
+      if (fixedDiscount.value !== discount) fixedDiscount.value = discount;
+    }
     invoiceTotal = totals?.total;
-    $("orderQuantityTotal").textContent = itemTotals ? formatNumber(itemTotals.quantity) : "—";
-    $("orderUnitPriceTotal").textContent = itemTotals ? money(itemTotals.unitPrices) : "—";
-    $("orderSubtotal").textContent = itemTotals ? money(itemTotals.subtotal) : "—";
-    $("orderTaxes").hidden = !totals?.tax;
-    $("orderShippingRow").hidden = !totals?.shipping;
+    setOutput($("orderQuantityTotal"), itemTotals ? formatNumber(itemTotals.quantity) : "—");
+    setOutput($("orderUnitPriceTotal"), itemTotals ? money(itemTotals.unitPrices) : "—");
+    setOutput($("orderSubtotal"), itemTotals ? money(itemTotals.subtotal) : "—");
+    $("orderTaxes").toggleAttribute("hidden", !totals?.tax);
+    $("orderShippingRow").toggleAttribute("hidden", !totals?.shipping);
     for (const [id, value] of [
       ["orderDiscountAmount", totals?.discount],
       ["orderTax", totals?.tax],
       ["orderShipping", totals?.shipping],
       ["orderTotal", invoiceTotal],
-    ]) $(id).textContent = value === undefined ? "—" : money(value);
+    ]) setOutput($(id), value === undefined ? "—" : money(value));
   }
   function changeDiscount(input) {
     discountEdited = true;
@@ -769,11 +778,11 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
         paid = (purchase ? editing?.paid ?? 0 : 0) + paidAmount(submitted?.payments ?? paymentValues());
     } catch { /* Keep the totals pending until all enabled amounts are valid. */ }
     const remaining = paid === undefined ? undefined : invoiceTotal - paid;
-    $("paymentPaid").textContent = paid === undefined ? "—" : money(paid);
-    $("paymentRemaining").textContent = remaining === undefined ? "—" : money(remaining);
+    setOutput($("paymentPaid"), paid === undefined ? "—" : money(paid));
+    setOutput($("paymentRemaining"), remaining === undefined ? "—" : money(remaining));
     $("paymentRemaining").classList.toggle("orders-negative", remaining < 0);
-    if (purchase) $("paymentState").textContent = remaining === undefined || remaining < 0 ? "—"
-      : remaining === 0 ? "تسویه‌شده" : paid ? "پرداخت جزئی" : "پرداخت‌نشده";
+    if (purchase) setOutput($("paymentState"), remaining === undefined || remaining < 0 ? "—"
+      : remaining === 0 ? "تسویه‌شده" : paid ? "پرداخت جزئی" : "پرداخت‌نشده");
   }
   function validateInvoice() {
     clearInvalid(create);
@@ -821,7 +830,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
       customerDropdown(false);
       productPicker.close();
       invoiceTotal = total;
-      $("paymentInvoiceTotal").textContent = money(total);
+      setOutput($("paymentInvoiceTotal"), money(total));
       if (!paymentStarted) {
         renderPaymentMethods();
         paymentDate.value = editing?.jalali_payment_date ??
@@ -920,7 +929,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
       }
       if (err.code === "INVOICE_SETTINGS_CHANGED") {
         await loadReferences();
-        $("paymentInvoiceTotal").textContent = $("orderTotal").textContent;
+        setOutput($("paymentInvoiceTotal"), $("orderTotal").textContent);
         calculatePayments();
       }
       error(payment, err.message);
@@ -1009,7 +1018,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
       });
       calculate();
       if (!submitted && payment.getAttribute("aria-hidden") === "false") {
-        $("paymentInvoiceTotal").textContent = $("orderTotal").textContent;
+        setOutput($("paymentInvoiceTotal"), $("orderTotal").textContent);
         calculatePayments();
       }
       $("orderLoadStatus").textContent = purchase
@@ -1052,7 +1061,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
       invoiceTotal = pending.total;
       referencesReady = false;
       renderPaymentMethods();
-      $("paymentInvoiceTotal").textContent = invoiceTotal == null ? "—" : money(invoiceTotal);
+      setOutput($("paymentInvoiceTotal"), invoiceTotal == null ? "—" : money(invoiceTotal));
       $("orderPaymentModalTitle").textContent = "پرداخت فاکتور";
       error(payment);
       $("paymentStatus").textContent = "نتیجه ثبت قبلی مشخص نیست. برای ارسال دوباره همان اطلاعات، «تلاش مجدد» را انتخاب کنید.";
