@@ -3,6 +3,7 @@ import { startPage } from "../components/page-ready.js";
 import { transactionActions } from "../finance/transaction-actions.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { protectPage } from "../guards/auth-guard.js";
+import { Chart, dateLabel } from "../dashboard/chart.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { bankLogo, formatCardNumber } from "../finance/bank-accounts.js";
 import {
@@ -26,6 +27,7 @@ const dateFilters = new Map([
 const bankId = new URLSearchParams(window.location.search).get("bank");
 const validBank = /^[1-9]\d*$/.test(bankId || "");
 const number = (value) => new Intl.NumberFormat("fa-IR").format(value);
+let activityChart, displayedPeriod;
 let period = "month",
   chartVersion = 0,
   listVersion = 0,
@@ -42,106 +44,8 @@ let cursor = null,
   searchTimer,
   loading = false;
 
-function svgNode(tag, attributes = {}, text = "") {
-  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
-  for (const [key, value] of Object.entries(attributes))
-    el.setAttribute(key, value);
-  el.textContent = text;
-  return el;
-}
-
-function renderChart(data) {
-  const svg = svgNode("svg", {
-    viewBox: "0 0 1000 290",
-    class: "finance-chart ledger-chart-enter",
-    role: "img",
-    "aria-label": `درآمد و هزینه حساب از ${fullDate(data.start_date)} تا ${fullDate(data.end_date)}`,
-  });
-  const max = Math.max(
-    1,
-    ...data.chart.flatMap((point) => [point.income, point.expense]),
-  );
-  const x = (index) => 130 + (index / Math.max(1, data.chart.length - 1)) * 830;
-  const y = (value) => 230 - (value / max) * 200;
-  for (let i = 0; i <= 4; i++) {
-    const value = (max * i) / 4;
-    svg.append(
-      svgNode("line", {
-        x1: 130,
-        x2: 960,
-        y1: y(value),
-        y2: y(value),
-        stroke: "#B6C0C6",
-        "stroke-opacity": 0.3,
-      }),
-      svgNode(
-        "text",
-        {
-          x: 115,
-          y: y(value) + 4,
-          "text-anchor": "end",
-          fill: "#64748b",
-          "font-size": 11,
-        },
-        number(Math.round(value)),
-      ),
-    );
-  }
-  for (const [key, color, label] of [
-    ["income", "#10b981", "درآمد"],
-    ["expense", "#dc2626", "هزینه"],
-  ]) {
-    const points = data.chart
-      .map((point, index) => `${x(index)},${y(point[key])}`)
-      .join(" ");
-    const line = svgNode("polyline", {
-      points,
-      fill: "none",
-      stroke: color,
-      "stroke-width": 2.5,
-      class: "finance-line",
-      pathLength: 1,
-    });
-    line.append(svgNode("title", {}, label));
-    svg.append(line);
-    // A single day needs visible marks rather than a zero-length polyline.
-    if (data.chart.length === 1)
-      svg.append(
-        svgNode("circle", {
-          cx: x(0),
-          cy: y(data.chart[0][key]),
-          r: 5,
-          class: "ledger-point-enter",
-          fill: color,
-        }),
-      );
-  }
-  const labels = new Set(
-    Array.from({ length: Math.min(6, data.chart.length) }, (_, i) =>
-      Math.round(
-        (i * (data.chart.length - 1)) /
-          Math.max(1, Math.min(6, data.chart.length) - 1),
-      ),
-    ),
-  );
-  for (const index of labels)
-    svg.append(
-      svgNode(
-        "text",
-        {
-          x: x(index),
-          y: 265,
-          "text-anchor": "middle",
-          fill: "#64748b",
-          "font-size": 11,
-        },
-        fullDate(data.chart[index].date),
-      ),
-    );
-  $("bankChart").replaceChildren(svg);
-}
-
 async function loadChart() {
+  const requestedPeriod = period;
   const version = ++chartVersion;
   chartController?.abort();
   chartController = new AbortController();
@@ -155,7 +59,7 @@ async function loadChart() {
         "شناسه حساب معتبر نیست. از صفحه بانک‌ها یک حساب را انتخاب کنید.",
       );
     const data = await financeRequest(
-      `/banks/${bankId}/activity?period=${period}`,
+      `/banks/${bankId}/activity?period=${requestedPeriod}`,
       { signal: chartController.signal },
     );
     if (version !== chartVersion) return;
@@ -199,10 +103,34 @@ async function loadChart() {
         "font-bold text-alizarin-crimson",
         `هزینه: ${money(data.summary.expense)}`,
       ),
+      node(
+        "p",
+        "font-bold text-[#94620b]",
+        `مانده بازه: ${money(data.summary.balance)}`,
+      ),
     );
     if (data.bank.opening_balance_locked)
       $("chartSummary").append(node("p", "font-bold", `افتتاحیه: ${money(data.bank.opening_balance)}`));
-    renderChart(data);
+    activityChart ??= new Chart($("bankChart"), {
+      series: [
+        { key: "income", label: "درآمد", color: "#157347", point: "circle" },
+        { key: "expense", label: "هزینه", color: "#bc2849", point: "square" },
+        { key: "balance", label: "مانده", color: "#94620b", point: "diamond" },
+      ],
+      bars: true,
+      barPoints: true,
+      money: true,
+      height: 250,
+    });
+    activityChart.update(
+      data.chart.map((point) => ({
+        ...point,
+        label: fullDate(point.date),
+        shortLabel: dateLabel(point.date),
+      })),
+      displayedPeriod !== requestedPeriod,
+    );
+    displayedPeriod = requestedPeriod;
     renderedChart = signature;
   } catch (error) {
     if (version !== chartVersion) return;

@@ -31,6 +31,24 @@ const svgNode = (tag, attrs = {}) => {
     node.setAttribute(key, value);
   return node;
 };
+function barPoint(shape, x, y, radius, attrs) {
+  if (shape === "diamond") {
+    return svgNode("path", {
+      ...attrs,
+      d: `M ${x} ${y - radius} L ${x + radius} ${y} ${x} ${y + radius} ${x - radius} ${y} Z`,
+    });
+  }
+  if (shape === "square") {
+    return svgNode("rect", {
+      ...attrs,
+      x: x - radius,
+      y: y - radius,
+      width: radius * 2,
+      height: radius * 2,
+    });
+  }
+  return svgNode("circle", { ...attrs, cx: x, cy: y, r: radius });
+}
 let chartSequence = 0;
 const pendingDraws = new Set();
 let drawFrame;
@@ -54,12 +72,21 @@ function scheduleDraw(chart) {
 export class Chart {
   constructor(
     host,
-    { series, bars = false, donut = false, money = false, height = 200, palette },
+    {
+      series,
+      bars = false,
+      barPoints = false,
+      donut = false,
+      money = false,
+      height = 200,
+      palette,
+    },
   ) {
     Object.assign(this, {
       host,
       series,
       bars,
+      barPoints: bars && barPoints,
       donut,
       money,
       height,
@@ -71,6 +98,7 @@ export class Chart {
     this.palette = palette || dashboardPalette(host);
     host.dataset.chart = "true";
     host.dataset.chartState = "pending";
+    if (this.barPoints) host.dataset.barPoints = "";
     this.plot = element("div", "dash-plot");
     this.svg = svgNode("svg", {
       role: "img",
@@ -82,7 +110,9 @@ export class Chart {
       "aria-label",
       donut
         ? "نمودار سهم هزینه؛ کلیدهای جهت برای مشاهده هر بخش، Escape برای بازنشانی"
-        : "نمودار؛ کلیدهای جهت برای مشاهده، مثبت و منفی برای بزرگ‌نمایی، Escape برای بازنشانی",
+        : this.barPoints
+          ? "نمودار؛ جهت چپ و راست برای تغییر تاریخ، بالا و پایین برای تغییر نوع، مثبت و منفی برای بزرگ‌نمایی، Escape برای بازنشانی"
+          : "نمودار؛ کلیدهای جهت برای مشاهده، مثبت و منفی برای بزرگ‌نمایی، Escape برای بازنشانی",
     );
     this.tip = element("div", "dash-tooltip");
     this.tip.hidden = true;
@@ -94,6 +124,7 @@ export class Chart {
     series.forEach((s) => {
       const item = element("span", "", s.label);
       item.style.setProperty("--series-color", s.color);
+      if (this.barPoints && s.point) item.dataset.pointShape = s.point;
       this.legend.append(item);
     });
     const actions = element("div", "dash-chart-actions");
@@ -149,8 +180,7 @@ export class Chart {
           ((this.drag.x - event.clientX) / (rect.width - 65)) * this.drag.span,
         );
         this.setWindow(this.drag.lo + shift, this.drag.span);
-      } else if (!this.pinned)
-        this.inspect(this.indexAt(event.clientX, event.clientY));
+      } else if (!this.pinned) this.inspectPointer(event);
     });
     this.plot.addEventListener("pointerdown", (event) => {
       if (event.target !== this.svg && !this.svg.contains(event.target)) return;
@@ -170,7 +200,7 @@ export class Chart {
     this.plot.addEventListener("pointerup", (event) => {
       if (!this.drag?.moved) {
         this.pinned = !this.pinned;
-        this.inspect(this.indexAt(event.clientX, event.clientY));
+        this.inspectPointer(event);
       }
       this.drag = undefined;
     });
@@ -191,6 +221,14 @@ export class Chart {
       { passive: false },
     );
     this.plot.addEventListener("keydown", (event) => {
+      if (this.barPoints && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+        event.preventDefault();
+        const direction = event.key === "ArrowDown" ? 1 : -1;
+        const count = this.series.length;
+        const seriesIndex = ((this.selectedSeries ?? 0) + direction + count) % count;
+        this.inspect(this.selected ?? this.lo, true, seriesIndex);
+        return;
+      }
       if (
         [
           "ArrowLeft",
@@ -262,6 +300,7 @@ export class Chart {
       this.lo = 0;
       this.hi = Math.max(0, rows.length - 1);
       this.pinned = false;
+      this.selectedSeries = undefined;
       this.selected = rows.length
         ? rows.reduce(
             (selected, row, index) =>
@@ -342,13 +381,16 @@ export class Chart {
         (Math.PI * 2);
       return this.sectors.findIndex((sector) => angle <= sector.end);
     }
+    return this.indexAtX(clientX - rect.left, rect.width);
+  }
+  indexAtX(x, width = this.width) {
     const { left, right } = this.geometry || {
       left: 52,
-      right: rect.width - 12,
+      right: width - 12,
     };
     const fraction = Math.max(
       0,
-      Math.min(1, (clientX - rect.left - left) / Math.max(1, right - left)),
+      Math.min(1, (x - left) / Math.max(1, right - left)),
     );
     const span = this.hi - this.lo + 1;
     return Math.min(
@@ -359,12 +401,58 @@ export class Chart {
           : Math.round(fraction * (span - 1))),
     );
   }
+  inspectPointer(event) {
+    if (!this.barPoints) {
+      this.inspect(this.indexAt(event.clientX, event.clientY));
+      return;
+    }
+    // Touch hit testing may retarget a narrow column to its neighbor.
+    const touch = event.pointerType === "touch";
+    const bar = touch ? null : event.target.closest(".dash-bar");
+    if (bar) {
+      this.inspect(Number(bar.dataset.index), false, Number(bar.dataset.series));
+      return;
+    }
+    if (this.dirty || this.width === undefined) this.draw();
+    if (!this.rows.length) return;
+    const matrix = this.svg.getScreenCTM();
+    if (!matrix) return;
+    const { x, y } = new DOMPoint(event.clientX, event.clientY)
+      .matrixTransform(matrix.inverse());
+    const index = this.indexAtX(x);
+    const groupStart = this.x(index) - this.series.length * this.barWidth / 2;
+    const offset = (x - groupStart) / this.barWidth;
+    let seriesIndex = Math.max(0, Math.min(this.series.length - 1, Math.floor(offset)));
+    if (touch) {
+      let nearest = 14 ** 2;
+      this.series.forEach((series, i) => {
+        const px = groupStart + (i + 0.5) * this.barWidth;
+        const py = this.barY(this.rows[index][series.key]);
+        const distance = (px - x) ** 2 + (py - y) ** 2;
+        if (distance < nearest) {
+          nearest = distance;
+          seriesIndex = i;
+        }
+      });
+    }
+    this.inspect(index, false, seriesIndex);
+  }
   hideTip() {
     this.tip.hidden = true;
     this.crosshair?.setAttribute("visibility", "hidden");
     this.highlight();
   }
-  highlight(index = this.selected) {
+  highlight(index = this.selected, seriesIndex) {
+    if (this.barPoints) {
+      this.activePoint?.removeAttribute("data-active");
+      this.activePoint = null;
+      if (seriesIndex === undefined) return;
+      this.activePoint = this.svg.querySelector(
+        `.dash-bar-point[data-index="${index}"][data-series="${seriesIndex}"]`,
+      );
+      this.activePoint?.setAttribute("data-active", "");
+      return;
+    }
     this.svg.querySelectorAll(".dash-bar").forEach((bar) => {
       bar.setAttribute(
         "fill",
@@ -372,16 +460,29 @@ export class Chart {
       );
     });
   }
-  inspect(index, announce = false) {
+  inspect(index, announce = false, seriesIndex = this.selectedSeries ?? 0) {
     const row = this.rows[index];
     if (!row || index < this.lo || index > this.hi) return;
     if (this.dirty || this.width === undefined) this.draw();
+    if (
+      this.barPoints && !announce && !this.tip.hidden && this.selected === index
+      && this.selectedSeries === seriesIndex && this.tipPinned === this.pinned
+    ) return;
     this.selected = index;
+    this.selectedSeries = seriesIndex;
+    this.tipPinned = this.pinned;
     this.tip.replaceChildren(element("strong", "", row.label));
     const values = this.series.map(
       (s) => `${s.label}: ${exact(row[s.key])}${this.money ? " تومان" : ""}`,
     );
-    values.forEach((value) => this.tip.append(element("span", "", value)));
+    values.forEach((value, i) => {
+      const line = element("span", "", value);
+      if (this.barPoints) {
+        line.style.setProperty("--series-color", this.series[i].color);
+        if (i === seriesIndex) line.dataset.active = "";
+      }
+      this.tip.append(line);
+    });
     if (row.detail) this.tip.append(element("small", "", row.detail));
     this.tip.append(
       element(
@@ -400,7 +501,7 @@ export class Chart {
       this.crosshair.setAttribute("x2", this.x(index));
       this.crosshair.setAttribute("visibility", "visible");
     }
-    this.highlight(index);
+    this.highlight(index, seriesIndex);
     if (this.donut && this.total) {
       this.donutValue.textContent = `${number.format((Number(row[this.series[0].key]) / this.total) * 100)}٪`;
       this.donutLabel.textContent =
@@ -459,13 +560,19 @@ export class Chart {
       return;
     }
     const defs = svgNode("defs");
-    for (const [id, stops] of [
-      ["selected-0", [this.palette.strong, this.palette.primary]],
-      ["selected-1", [this.palette.primary, this.palette.secondary]],
-      ["bar-0", [this.palette.secondary, this.palette.light]],
-      ["bar-1", [this.palette.soft, this.palette.light]],
-      ["area", [this.series[0].color, "#ffffff"]],
-    ]) {
+    const gradients = this.barPoints
+      ? this.series.map((s, index) => [
+          `bar-${index}`,
+          [s.color, `color-mix(in srgb, ${s.color} 40%, white)`],
+        ])
+      : [
+          ["selected-0", [this.palette.strong, this.palette.primary]],
+          ["selected-1", [this.palette.primary, this.palette.secondary]],
+          ["bar-0", [this.palette.secondary, this.palette.light]],
+          ["bar-1", [this.palette.soft, this.palette.light]],
+          ["area", [this.series[0].color, "#ffffff"]],
+        ];
+    for (const [id, stops] of gradients) {
       const gradient = svgNode("linearGradient", {
         id: `${this.uid}-${id}`,
         x1: "0",
@@ -520,6 +627,7 @@ export class Chart {
     this.geometry = { left, right };
     const y = (v) =>
       bottom - ((Number(v) - min) / (max - min)) * (bottom - top);
+    this.barY = y;
     this.x = (index) =>
       this.bars
         ? left + ((index - this.lo + 0.5) / rows.length) * (right - left)
@@ -547,28 +655,49 @@ export class Chart {
       label.textContent = axisLabels[i];
       this.svg.append(label);
     }
+    if (this.barPoints) {
+      this.svg.append(svgNode("line", {
+        x1: left, x2: right, y1: y(0), y2: y(0), class: "dash-zero-line",
+      }));
+    }
+    const slot = (right - left) / rows.length;
+    const groupedWidth = Math.min(26, (slot * (this.barPoints ? 0.76 : 0.5)) / this.series.length);
+    const barW = this.barPoints ? groupedWidth : Math.max(1, groupedWidth);
+    this.barWidth = barW;
+    const pointsLayer = this.barPoints ? svgNode("g", { class: "dash-bar-points" }) : null;
     this.series.forEach((s, si) => {
       if (this.bars)
         rows.forEach((row, i) => {
-          const slot = (right - left) / rows.length,
-            barW = Math.max(1, Math.min(26, (slot * 0.5) / this.series.length));
           const value = Number(row[s.key]);
-          const x = this.x(i + this.lo) + (si - this.series.length / 2) * barW;
+          const index = i + this.lo;
+          const x = this.x(index) + (si - this.series.length / 2) * barW;
           const barY = Math.min(y(0), y(value));
           const barHeight = Math.max(
             value === 0 ? 0 : 1,
             Math.abs(y(value) - y(0)),
           );
           const radius = Math.min(barW / 2, 8, barHeight);
+          const seriesIndex = this.barPoints ? si : si % 2;
+          const fill = !this.barPoints && (this.selected ?? this.hi) === index ? "selected" : "bar";
           this.svg.append(
             svgNode("path", {
               d: `M ${x} ${barY + barHeight} V ${barY + radius} Q ${x} ${barY} ${x + radius} ${barY} H ${x + barW - radius} Q ${x + barW} ${barY} ${x + barW} ${barY + radius} V ${barY + barHeight} Z`,
-              fill: `url(#${this.uid}-${(this.selected ?? this.hi) === i + this.lo ? `selected-${si % 2}` : `bar-${si % 2}`})`,
+              fill: `url(#${this.uid}-${fill}-${seriesIndex})`,
               class: "dash-bar",
-              "data-index": i + this.lo,
-              "data-series": si % 2,
+              "data-index": index,
+              "data-series": seriesIndex,
             }),
           );
+          if (pointsLayer) {
+            const pointRadius = Math.max(0.45, Math.min(4, barW * 0.43));
+            pointsLayer.append(barPoint(s.point, x + barW / 2, y(value), pointRadius, {
+              class: "dash-bar-point",
+              fill: s.color,
+              "stroke-width": Math.min(1.25, pointRadius * 0.35),
+              "data-index": index,
+              "data-series": si,
+            }));
+          }
         });
       else {
         const points = rows
@@ -603,6 +732,7 @@ export class Chart {
           );
       }
     });
+    if (pointsLayer) this.svg.append(pointsLayer);
     [
       ...new Set(
         w < 330
@@ -634,6 +764,7 @@ export class Chart {
       y2: bottom,
       stroke: this.palette.primary,
       "stroke-dasharray": "3 3",
+      "pointer-events": "none",
       visibility: "hidden",
     });
     this.svg.append(this.crosshair);

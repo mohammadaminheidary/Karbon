@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Karbon | تراکنش‌های حساب</title>
     <link rel="stylesheet" href="../src/output.css" />
+    <link rel="stylesheet" href="../src/dashboard-chart.css" />
     <link rel="stylesheet" href="../src/finance.css" />
     <script type="module" data-page-entry blocking="render" src="../src/js/page/bank-transactions.js"></script>
   </head>
@@ -319,11 +320,11 @@
         </header>
         <section
           class="card-tilt mt-7 rounded-2xl border border-french-gray/30 bg-white p-5 sm:p-6"
-          aria-label="نمودار درآمد و هزینه"
+          aria-labelledby="bankTrendTitle"
         >
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 class="text-lg font-black">روند درآمد و هزینه</h2>
+              <h2 id="bankTrendTitle" class="text-lg font-black">روند درآمد و هزینه</h2>
               <p id="chartRange" class="mt-2 text-xs text-mirage/45"></p>
             </div>
             <div
@@ -402,7 +403,7 @@
             id="chartSummary"
             class="mt-5 flex flex-wrap gap-6 text-sm"
           ></div>
-          <div id="bankChart" class="mt-4 overflow-x-auto"></div>
+          <div id="bankChart" class="mt-4" aria-label="درآمد، هزینه و مانده روزانه حساب"></div>
         </section>
         <section
           class="card-tilt mt-7 rounded-2xl border border-french-gray/30 bg-white p-5 sm:p-6"

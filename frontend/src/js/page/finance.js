@@ -4,6 +4,7 @@ import { transactionActions } from "../finance/transaction-actions.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { notify } from "../components/notifications.js";
 import { bankLogo } from "../finance/bank-accounts.js";
+import { DailyFinanceChart } from "../finance/daily-finance-chart.js";
 import { CurtainDialog } from "../components/curtain-dialog.js";
 import { protectPage } from "../guards/auth-guard.js";
 import { CustomerSelect } from "../customers/customer-select.js";
@@ -32,6 +33,7 @@ import {
 import { fiscalLabel, getFiscalDate } from "../fiscal-years/fiscal-api.js";
 
 const $ = (id) => document.getElementById(id);
+const chart = new DailyFinanceChart($("financeChart"));
 const transactionDate = mountDateInput($("transactionDate"));
 let fiscalPeriod;
 const periodDay = (day) => !fiscalPeriod?.managed ? day
@@ -70,7 +72,7 @@ function clearDay() {
   ["totalIncome", "totalExpense", "totalBalance", "transactionCount"].forEach(
     (id) => ($(id).textContent = "—"),
   );
-  $("financeChart").replaceChildren();
+  chart.clear();
   $("financeChartEmpty").classList.add("hidden");
   $("transactionRows").replaceChildren();
   $("transactionsTable").classList.add("hidden");
@@ -103,7 +105,7 @@ async function selectDay(day) {
     $("totalIncome").textContent = money(data.summary.income);
     $("totalExpense").textContent = money(data.summary.expense);
     $("totalBalance").textContent = money(data.summary.balance);
-    renderChart(data.chart);
+    chart.update(data);
     renderTransactions(data.transactions);
     $("financeChartEmpty").classList.toggle(
       "hidden",
@@ -302,120 +304,6 @@ function renderTransactions(items) {
       return row;
     }),
   );
-}
-
-function svgNode(tag, attrs = {}, text = "") {
-  const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
-  for (const [key, value] of Object.entries(attrs))
-    element.setAttribute(key, value);
-  element.textContent = text;
-  return element;
-}
-
-function renderChart(points) {
-  const svg = svgNode("svg", {
-    viewBox: "0 0 1000 280",
-    class: "finance-chart",
-    role: "img",
-    "aria-labelledby": "financeChartTitle financeChartDescription",
-    direction: "ltr",
-  });
-  svg.append(
-    svgNode(
-      "title",
-      { id: "financeChartTitle" },
-      `روند مالی ${fullDate(selectedDay)}`,
-    ),
-    svgNode(
-      "desc",
-      { id: "financeChartDescription" },
-      "درآمد، هزینه و مانده تجمعی بر اساس زمان تراکنش‌ها، از ساعت صفر تا پایان روز. جزئیات در جدول تراکنش‌ها آمده است.",
-    ),
-  );
-  const values = points.flatMap((point) => [
-    point.income,
-    point.expense,
-    point.balance,
-  ]);
-  const min = values.reduce((lowest, value) => Math.min(lowest, value), 0),
-    max = values.reduce((highest, value) => Math.max(highest, value), 4);
-  const y = (value) => 232 - ((value - min) / (max - min)) * 204;
-  const x = (time) => {
-    const [hour, minute, second] = time.split(":").map(Number);
-    return 125 + ((hour * 3600 + minute * 60 + second) / 86400) * 840;
-  };
-  for (let i = 0; i <= 4; i++) {
-    const value = min + ((max - min) * i) / 4;
-    svg.append(
-      svgNode("line", {
-        x1: 125,
-        x2: 965,
-        y1: y(value),
-        y2: y(value),
-        stroke: "#B6C0C6",
-        "stroke-opacity": ".3",
-      }),
-      svgNode(
-        "text",
-        {
-          x: 113,
-          y: y(value) + 4,
-          "text-anchor": "end",
-          fill: "#64748b",
-          "font-size": 11,
-        },
-        new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 0 }).format(
-          value,
-        ),
-      ),
-    );
-  }
-  for (let hour = 0; hour <= 24; hour += 3)
-    svg.append(
-      svgNode(
-        "text",
-        {
-          x: 125 + (hour / 24) * 840,
-          y: 262,
-          "text-anchor": "middle",
-          fill: "#64748b",
-          "font-size": 12,
-        },
-        `${String(hour).padStart(2, "0")}:00`,
-      ),
-    );
-  for (const [key, color] of [
-    ["income", "#16A34A"],
-    ["expense", "#DC2626"],
-    ["balance", "#F59E0B"],
-  ]) {
-    let path = `M ${x(points[0].time)} ${y(points[0][key])}`;
-    for (const point of points.slice(1))
-      path += ` H ${x(point.time)} V ${y(point[key])}`;
-    svg.append(
-      svgNode("path", {
-        d: path,
-        stroke: color,
-        "stroke-width": 2.5,
-        fill: "none",
-        pathLength: 1,
-        class: "finance-line",
-      }),
-    );
-  }
-  for (const point of points.slice(1, -1)) {
-    const circle = svgNode("circle", {
-      cx: x(point.time),
-      cy: y(point.balance),
-      r: 3.5,
-      fill: "#F59E0B",
-    });
-    circle.append(
-      svgNode("title", {}, `${point.time} · مانده ${money(point.balance)}`),
-    );
-    svg.append(circle);
-  }
-  $("financeChart").replaceChildren(svg);
 }
 
 function setFormBusy() {
