@@ -72,10 +72,11 @@ def next_number(db: Session = Depends(get_database)):
 
 
 @router.get("/orders")
-def orders(status: Literal["active", "completed"] = "active", skip: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100), db: Session = Depends(get_database)):
+def orders(status: Literal["active", "completed"] = "active", skip: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100),
+           search: str = Query("", max_length=200), db: Session = Depends(get_database)):
     with finance_errors():
         read_snapshot(db)
-        return service.list_orders(db, status, skip, limit)
+        return service.list_orders(db, status, skip, limit, search=search)
 
 
 @router.post("/orders", status_code=201)

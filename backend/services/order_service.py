@@ -404,13 +404,27 @@ def load_order_relations(db, orders):
     return {order.id: (customers[order.customer_id], items.get(order.id, []), payments.get(order.id, [])) for order in orders}
 
 
-def list_orders(db, status, skip, limit):
+def filter_order_search(query, search, *extra_fields):
+    fields = (Customer.first_name + " " + Customer.last_name,
+              Order.invoice_code, Order.order_number, *extra_fields)
+    return query.filter(or_(*(field.contains(search, autoescape=True) for field in fields)))
+
+
+def list_orders(db, status, skip, limit, *, search=""):
     query = db.query(Order).filter(Order.deleted_at.is_(None), in_active_period(Order.invoice_date))
-    orders = query.filter(Order.status == status).order_by(Order.id.desc()).offset(skip).limit(limit).all()
-    loaded = load_order_relations(db, orders)
     counts = dict(query.with_entities(Order.status, func.count(Order.id)).group_by(Order.status).all())
+    matches = query.filter(Order.status == status)
+    search = normalize_text(search)
+    if search:
+        historical_name = func.coalesce(Order.edit_snapshot["customer"]["name"].as_string(),
+                                        Order.invoice_snapshot["customer"]["name"].as_string())
+        matches = filter_order_search(matches.join(Customer, Customer.id == Order.customer_id),
+                                      search, historical_name)
+    total = matches.with_entities(func.count(Order.id)).scalar() if search else counts.get(status, 0)
+    orders = matches.order_by(Order.id.desc()).offset(skip).limit(limit).all() if skip < total else []
+    loaded = load_order_relations(db, orders)
     return {"total_orders": sum(counts.values()), "active_orders": counts.get("active", 0),
-            "total": counts.get(status, 0),
+            "total": total,
             "items": [serialize(db, order, loaded=loaded[order.id]) for order in orders]}
 
 
@@ -419,13 +433,7 @@ def list_invoices(db, search, skip, limit):
         Order.deleted_at.is_(None), in_active_period(Order.invoice_date))
     search = normalize_text(search)
     if search:
-        pattern = "%" + search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        query = query.filter(or_(
-            (Customer.first_name + " " + Customer.last_name).like(pattern, escape="\\"),
-            cast(Customer.customer_code, String).like(pattern, escape="\\"),
-            Order.invoice_code.like(pattern, escape="\\"),
-            Order.order_number.like(pattern, escape="\\"),
-        ))
+        query = filter_order_search(query, search, cast(Customer.customer_code, String))
     total = query.count()
     orders = query.order_by(Order.id.desc()).offset(skip).limit(limit).all()
     loaded = load_order_relations(db, orders)

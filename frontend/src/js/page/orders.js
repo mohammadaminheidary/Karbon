@@ -4,11 +4,13 @@ import { protectPage } from "../guards/auth-guard.js";
 import { initializeOrderDialogs } from "../orders/order-dialogs.js";
 import { financeRequest } from "../finance/finance-api.js";
 import { node, money } from "../finance/finance-utils.js";
-import { formatNumber } from "../customers/customer-utils.js";
+import { formatNumber, normalizeText } from "../customers/customer-utils.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { showOrderDetails } from "../orders/order-details.js";
 
 const createOrderButton = document.querySelector(".orders-create");
+const searchInput = document.getElementById("orderSearchInput");
+const clearSearch = document.getElementById("clearOrderSearchButton");
 let openOrderForm;
 
 function initializeTabs() {
@@ -49,6 +51,9 @@ function initializeTabs() {
 let listVersion = 0;
 const panelRequests = new WeakMap();
 let currentStatus = "active";
+let currentSearch = "";
+let search = "";
+let searchTimer, listController;
 let records = [];
 let recordTotal = 0;
 const changingOrderStatuses = new Set();
@@ -67,40 +72,49 @@ function finishOrderStatusChange(id) {
 }
 
 async function loadOrders(more = false) {
+  clearTimeout(searchTimer);
   const status =
     document
       .getElementById("completedOrdersTab")
       .getAttribute("aria-selected") === "true"
       ? "completed"
       : "active";
-  const statusChanged = status !== currentStatus;
-  if (statusChanged) more = false;
-  currentStatus = status;
   const panel = document.getElementById(
     status === "active" ? "activeOrdersPanel" : "completedOrdersPanel",
   );
+  const term = search;
+  const criteriaChanged = status !== currentStatus || term !== currentSearch;
+  if (more && (criteriaChanged || panelRequests.has(panel))) return;
+  currentStatus = status;
+  currentSearch = term;
+  if (criteriaChanged) {
+    records = [];
+    recordTotal = 0;
+  }
+  listController?.abort();
+  const controller = (listController = new AbortController());
   const version = ++listVersion;
   panelRequests.set(panel, version);
   panel.setAttribute("aria-busy", "true");
   panel.querySelectorAll("[data-orders-load-error]").forEach((node) => node.remove());
   const loading = node("p", "orders-list-status", "در حال دریافت سفارش‌ها…");
-  if (statusChanged || !panel.children.length) {
+  if (criteriaChanged || !panel.children.length) {
     panel.replaceChildren(loading);
   } else if (more) panel.append(loading);
   try {
     const nextRecords = more ? [...records] : [];
-    const visibleCount = more || statusChanged ? 20 : Math.max(20, records.length);
+    const visibleCount = more ? 20 : Math.max(20, records.length);
     let data;
     do {
-      data = await financeRequest(
-        `/orders?${new URLSearchParams({ status, skip: nextRecords.length, limit: 20 })}`,
-      );
+      const params = new URLSearchParams({ status, skip: nextRecords.length, limit: 20 });
+      if (term) params.set("search", term);
+      data = await financeRequest(`/orders?${params}`, { signal: controller.signal });
       if (version !== listVersion) return;
       nextRecords.push(...data.items);
       if (more || !data.items.length) break;
     } while (nextRecords.length < Math.min(visibleCount, data.total));
     const unchanged =
-      !statusChanged && recordTotal === data.total &&
+      !criteriaChanged && recordTotal === data.total &&
       JSON.stringify(records) === JSON.stringify(nextRecords);
     records = nextRecords;
     recordTotal = data.total;
@@ -243,7 +257,7 @@ async function loadOrders(more = false) {
       }),
     );
     if (!records.length)
-      panel.append(node("p", "orders-list-status", "سفارشی ثبت نشده است."));
+      panel.append(node("p", "orders-list-status", term ? "سفارشی مطابق جستجو پیدا نشد." : "سفارشی ثبت نشده است."));
     if (records.length < data.total) {
       const moreButton = node("button", "orders-secondary", "نمایش بیشتر");
       moreButton.type = "button";
@@ -251,7 +265,7 @@ async function loadOrders(more = false) {
       panel.append(moreButton);
     }
   } catch (error) {
-    if (version !== listVersion) return;
+    if (version !== listVersion || controller.signal.aborted) return;
     loading.remove();
     const failure = node("p", "orders-error", error.message);
     failure.dataset.ordersLoadError = "";
@@ -262,6 +276,7 @@ async function loadOrders(more = false) {
     retry.addEventListener("click", () => loadOrders());
     panel.append(retry);
   } finally {
+    loading.remove();
     if (panelRequests.get(panel) === version) {
       panel.setAttribute("aria-busy", "false");
       panelRequests.delete(panel);
@@ -269,9 +284,31 @@ async function loadOrders(more = false) {
   }
 }
 
+function updateSearch(immediate = false) {
+  const term = normalizeText(searchInput.value);
+  clearSearch.classList.toggle("hidden", !searchInput.value);
+  clearSearch.classList.toggle("flex", Boolean(searchInput.value));
+  if (term === search) return;
+  search = term;
+  ++listVersion;
+  listController?.abort();
+  clearTimeout(searchTimer);
+  if (immediate) void loadOrders();
+  else searchTimer = setTimeout(loadOrders, 160);
+}
+
 async function initializeOrdersPage() {
   if (!(await protectPage())) return;
   initializeTabs();
+  searchInput.addEventListener("input", (event) => {
+    if (!event.isComposing) updateSearch();
+  });
+  searchInput.addEventListener("compositionend", () => updateSearch());
+  clearSearch.addEventListener("click", () => {
+    searchInput.value = "";
+    searchInput.focus();
+    updateSearch(true);
+  });
   openOrderForm = initializeOrderDialogs(() => loadOrders());
   createOrderButton.disabled = false;
   createOrderButton.addEventListener("click", () => openOrderForm());

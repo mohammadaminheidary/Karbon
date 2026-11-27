@@ -237,6 +237,33 @@ class OrdersIntegrationTests(unittest.TestCase):
         self.assertEqual((page["total"],len(page["items"])),(2,1))
         self.assertEqual(self.request("GET","/orders?status=invalid")[0],422)
 
+    def test_order_search_filters_the_full_status_list_and_preserves_summary_counts(self):
+        first = self.post("/orders", self.payload(order_number="پیگیری-۱۲۳", payments=[]))
+        second = self.post("/orders", self.payload(order_number="ORDER_%", payments=[]))
+        other_customer = self.post("/customers", {"first_name": "منصور", "last_name": "ناصری"})
+        latest = self.post("/orders", self.payload(customer_id=other_customer["id"], payments=[]))
+        self.assertEqual(self.request("POST", f'/orders/{second["id"]}/complete')[0], 200)
+        page = self.request("GET", "/orders?limit=1")[1]
+        self.assertEqual([row["id"] for row in page["items"]], [latest["id"]])
+        for search in ("علي", "سفارشي", "علي  سفارشی", "پیگیری-١٢٣", first["invoice_code"]):
+            with self.subTest(search=search):
+                status, result = self.request("GET", f"/orders?search={quote(search)}&limit=1")
+                self.assertEqual(status, 200)
+                self.assertEqual((result["total_orders"], result["active_orders"], result["total"]), (3, 2, 1))
+                self.assertEqual([row["id"] for row in result["items"]], [first["id"]])
+        result = self.request("GET", "/orders?status=completed&search=order")[1]
+        self.assertEqual([row["id"] for row in result["items"]], [second["id"]])
+        result = self.request("GET", f"/orders?status=completed&search={quote('علی')}&skip=1")[1]
+        self.assertEqual((result["total"], result["items"]), (1, []))
+        self.assertEqual(self.request("GET", "/orders?search=%25")[1]["total"], 0)
+
+        # Historical cards retain the invoiced name after a customer edit.
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE customers SET first_name = ? WHERE id = ?", ("رضا", self.customer["id"]))
+        for search in ("علی", "رضا"):
+            rows = self.request("GET", f"/orders?search={quote(search)}")[1]["items"]
+            self.assertEqual([row["id"] for row in rows], [first["id"]])
+
     def test_product_codes_editing_and_stale_inventory_conflict(self):
         self.assertRegex(self.product["product_code"], r"^P-[0-9]{6,}$")
         body = {"name":"نام جدید", "unit":"بسته", "price":2500, "stock":20, "active":True, "revision":self.product["revision"]}
