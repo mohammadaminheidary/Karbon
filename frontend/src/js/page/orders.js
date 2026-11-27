@@ -289,6 +289,8 @@ async function loadOrders(more = false) {
     );
     if (!records.length)
       panel.append(node("p", "orders-list-status", term ? "سفارشی مطابق جستجو پیدا نشد." : "سفارشی ثبت نشده است."));
+    else
+      panel.append(node("p", "orders-card-hint orders-hint", "برای مشاهدهٔ جزئیات، روی کارت سفارش کلیک کنید."));
     if (records.length < data.total) {
       const moreButton = node("button", "orders-secondary", "نمایش بیشتر");
       moreButton.type = "button";

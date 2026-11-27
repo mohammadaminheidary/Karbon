@@ -84,12 +84,12 @@ try {
   await page.locator("#fiscalRecords").getByRole("button", { name: "مشاهده", exact: true }).click();
   await text("#orderDetailsContent", "کالای آزمایشی کاربن");
   await text("#orderDetailsContent", fmt.format(3_000_000));
-  await page.locator("#orderDetailsModal footer [data-dialog-close]").click();
+  await page.locator("#orderDetailsModal header [data-dialog-close]").click();
   await page.locator("#fiscalRecordKind").selectOption("invoices");
   await text("#fiscalRecords", "BROWSER-ORDER");
   await page.locator("#fiscalRecords").getByRole("button", { name: "مشاهده", exact: true }).click();
   await text("#orderDetailsContent", fmt.format(3_000_000));
-  await page.locator("#orderDetailsModal footer [data-dialog-close]").click();
+  await page.locator("#orderDetailsModal header [data-dialog-close]").click();
   await page.locator("#fiscalSearch").clear();
   await page.locator("#fiscalRecordKind").selectOption("customers");
   await text("#fiscalRecords", "مانده مرورگر");

@@ -801,6 +801,10 @@
   font-size: 0.8125rem;
   color: rgb(15 23 42 / 50%);
 }
+.orders-card-hint {
+  margin-block: 12px;
+  text-align: center;
+}
 .orders-record {
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;

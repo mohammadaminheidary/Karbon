@@ -326,6 +326,13 @@ try {
       .locator(`[data-order-id="${saved.id}"] .orders-record-totals dd`)
       .allTextContents();
     assert.deepEqual(cardTotals, [575000, finalDiscount, finalTotal, finalTotal, 0].map(money));
+    const card = page.locator(`[data-order-id="${saved.id}"]`);
+    await card.locator(".orders-card-open").click();
+    await page.locator("#exportOrderDetails:enabled").waitFor();
+    assert.equal(await page.locator("#orderDetailsModal footer [data-dialog-close]").count(), 0);
+    await page.locator("#orderDetailsModal header [data-dialog-close]").click();
+    assert.equal(await card.evaluate((entry) => entry.parentElement.querySelector(".orders-card-hint").textContent),
+      "برای مشاهدهٔ جزئیات، روی کارت سفارش کلیک کنید.");
     console.log(
       `PASS ${width}px: dedicated total column, Persian formatting, quantity/price changes, multiple rows, discounts/zero/invalid inputs, row removal, payment and persisted invoice totals`,
     );
