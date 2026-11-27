@@ -520,50 +520,69 @@
                   </svg><span>تنظیمات فاکتور</span>
                 </button>
               </div>
-              <div class="settings-nav-group">
-                <p class="settings-nav-label">کالا و انبار</p>
-                <button
-                  type="button"
-                  id="settings-tab-products"
-                  aria-controls="settings-panel-products"
-                  data-settings-target="products"
-                  class="settings-nav-button"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.7"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
+              <details class="settings-nav-group settings-nav-disclosure" open>
+                <summary class="settings-nav-button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m12 3 9 5v9l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v9" /></svg>
+                  <span>کالا</span>
+                </summary>
+                <div class="settings-nav-children">
+                  <button
+                    type="button"
+                    id="settings-tab-products"
+                    aria-controls="settings-panel-products"
+                    data-settings-target="products"
+                    class="settings-nav-button"
                   >
-                    <path
-                      d="m12 3 9 5v9l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v9M7 5.8l9 5"
-                    /></svg
-                  ><span>کالاها</span></button
-                ><button
-                  type="button"
-                  id="settings-tab-inventory"
-                  aria-controls="settings-panel-inventory"
-                  data-settings-target="inventory"
-                  class="settings-nav-button"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.7"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="m12 3 9 5v9l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v9M7 5.8l9 5"
+                      /></svg
+                    ><span>کالاها</span></button
+                  ><button
+                    type="button"
+                    id="settings-tab-inventory"
+                    aria-controls="settings-panel-inventory"
+                    data-settings-target="inventory"
+                    class="settings-nav-button"
                   >
-                    <path d="m3 8 9-5 9 5v13H3V8ZM7 21V11h10v10M7 15h10M7 18h10" /></svg
-                  ><span>دسته‌بندی کالا</span>
-                </button>
-                <button type="button" id="settings-tab-units" aria-controls="settings-panel-units" data-settings-target="units" class="settings-nav-button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 13-13 5 5L8 21l-5-5ZM12 7l3 3M8 11l3 3M4 15l3 3" /></svg><span>واحد</span></button>
-                <button type="button" id="settings-tab-brands" aria-controls="settings-panel-brands" data-settings-target="brands" class="settings-nav-button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13 13 20a2 2 0 0 1-3 0l-7-7V3h10l7 7a2 2 0 0 1 0 3Z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span>برندها</span></button>
-              </div>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M3 5h18M3 12h18M3 19h18M7 5v14" /></svg
+                    ><span>دسته‌بندی کالا</span>
+                  </button>
+                  <button type="button" id="settings-tab-units" aria-controls="settings-panel-units" data-settings-target="units" class="settings-nav-button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 16 13-13 5 5L8 21l-5-5ZM12 7l3 3M8 11l3 3M4 15l3 3" /></svg><span>واحد</span></button>
+                  <button type="button" id="settings-tab-brands" aria-controls="settings-panel-brands" data-settings-target="brands" class="settings-nav-button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13 13 20a2 2 0 0 1-3 0l-7-7V3h10l7 7a2 2 0 0 1 0 3Z"/><circle cx="7.5" cy="7.5" r="1"/></svg><span>برندها</span></button>
+                </div>
+              </details>
+              <details class="settings-nav-group settings-nav-disclosure" open>
+                <summary class="settings-nav-button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m3 8 9-5 9 5v13H3V8ZM7 21V11h10v10M7 15h10M7 18h10" /></svg>
+                  <span>انبار</span>
+                </summary>
+                <div class="settings-nav-children">
+                  <button type="button" id="settings-tab-warehouse-categories" aria-controls="settings-panel-inventory" data-settings-target="warehouse-categories" class="settings-nav-button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 5h18M3 12h18M3 19h18M7 5v14" /></svg><span>دسته‌بندی انبار کالا</span>
+                  </button>
+                  <button type="button" id="settings-tab-warehouse-products" aria-controls="settings-panel-products" data-settings-target="warehouse-products" class="settings-nav-button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m12 3 9 5v9l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v9" /></svg><span>کالا (انبار)</span>
+                  </button>
+                </div>
+              </details>
               <div class="settings-nav-group">
                 <p class="settings-nav-label">برنامه</p>
                 <button type="button" id="settings-tab-data-import" aria-controls="settings-panel-data-import" data-settings-target="data-import" class="settings-nav-button">
@@ -820,7 +839,7 @@
                 </div>
               </div>
               <div class="settings-overview-group">
-                <h3>کالا و انبار</h3>
+                <h3>کالا</h3>
                 <div class="settings-card-grid">
                   <button
                     type="button"
@@ -868,7 +887,7 @@
                           /></svg></span
                       ><span class="settings-category-copy"
                         ><strong>دسته‌بندی کالا</strong
-                        ><span>مدیریت دسته‌های اصلی و زیردسته‌های انبار</span></span
+                        ><span>مدیریت دسته‌های اصلی و زیردسته‌های کالا</span></span
                       ><span class="settings-card-arrow" aria-hidden="true">‹</span>
                     </span>
                   </button>
@@ -877,6 +896,25 @@
                     <span class="settings-card-face card-tilt-surface">
                       <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13 13 20a2 2 0 0 1-3 0l-7-7V3h10l7 7a2 2 0 0 1 0 3Z"/><circle cx="7.5" cy="7.5" r="1"/></svg></span>
                       <span class="settings-category-copy"><strong>برندها</strong><span>مدیریت برندهای کالا</span></span>
+                      <span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div class="settings-overview-group">
+                <h3>انبار</h3>
+                <div class="settings-card-grid">
+                  <button type="button" data-open-settings-section="warehouse-categories" class="settings-category-card card-tilt">
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 5h18M3 12h18M3 19h18M7 5v14" /></svg></span>
+                      <span class="settings-category-copy"><strong>دسته‌بندی انبار کالا</strong><span>مدیریت دسته‌بندی‌های قابل انتخاب در خرید</span></span>
+                      <span class="settings-card-arrow" aria-hidden="true">‹</span>
+                    </span>
+                  </button>
+                  <button type="button" data-open-settings-section="warehouse-products" class="settings-category-card card-tilt">
+                    <span class="settings-card-face card-tilt-surface">
+                      <span class="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m12 3 9 5v9l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v9" /></svg></span>
+                      <span class="settings-category-copy"><strong>کالا (انبار)</strong><span>مشاهده و تغییر دسته‌بندی انبار کالاها</span></span>
                       <span class="settings-card-arrow" aria-hidden="true">‹</span>
                     </span>
                   </button>
@@ -974,8 +1012,7 @@
             </section>
 
             <section id="settings-panel-inventory" aria-labelledby="settings-tab-inventory" data-settings-panel="inventory" class="finance-surface hidden min-w-0 w-full max-w-full">
-              <div class="mb-3 flex flex-wrap items-center justify-between gap-4"><h2 class="text-xl font-black">دسته‌بندی کالا و انبار</h2><button id="refreshInventoryOptions" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button></div>
-              <p class="text-sm text-mirage/70">برای دسته‌بندی کالا یا ثبت خرید، یک دستهٔ اصلی یا زیردستهٔ فعال را انتخاب کنید.</p>
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-4"><h2 id="inventoryCategoriesHeading" class="text-xl font-black">دسته‌بندی کالا</h2><button id="refreshInventoryOptions" type="button" class="finance-button border border-french-gray/40">بروزرسانی</button></div>
               <p id="inventoryOptionsStatus" role="status" class="mt-4 text-sm text-mirage/60"></p>
               <div id="inventoryOptionsLists" class="inventory-categories-layout">
                 <article class="card-tilt inventory-options-card">
@@ -1006,6 +1043,10 @@
                 </article>
                 <article class="card-tilt inventory-options-card">
                   <h3>دسته‌ها و زیردسته‌ها</h3>
+                  <div id="inventory-category-search-field" class="mb-4" hidden>
+                    <label for="inventory-categories-search">جست‌وجوی دسته‌بندی‌ها</label>
+                    <input id="inventory-categories-search" class="finance-field" type="search" autocomplete="off" aria-controls="inventory-categories-list" />
+                  </div>
                   <ul id="inventory-categories-list" class="inventory-category-tree"></ul>
                 </article>
               </div>
@@ -1124,7 +1165,7 @@
               class="finance-surface hidden min-w-0 w-full max-w-full"
             >
               <div class="mb-5 flex items-center justify-between gap-4">
-                <h2 class="text-xl font-black">مدیریت کالاها</h2>
+                <h2 id="settingsProductsHeading" class="text-xl font-black">مدیریت کالاها</h2>
                 <button
                   type="button"
                   id="refreshProducts"
@@ -1138,6 +1179,14 @@
                 class="my-4 text-sm text-mirage/60"
                 role="status"
               ></p>
+              <div id="warehouseProductSelection" class="mt-4 flex flex-wrap items-center gap-3" hidden>
+                <label class="flex items-center gap-2 text-sm">
+                  <input id="selectAllWarehouseProducts" type="checkbox" disabled />
+                  انتخاب همهٔ کالاهای قابل حذف
+                </label>
+                <span id="warehouseProductSelectionCount" role="status" class="text-sm text-mirage/70"></span>
+                <button id="removeSelectedWarehouseProducts" class="finance-button bg-alizarin-crimson/10 text-alizarin-crimson" type="button" disabled>حذف انتخاب‌شده‌ها</button>
+              </div>
               <div id="settingsProductsList" class="mt-5 grid gap-3"></div>
             </section>
 

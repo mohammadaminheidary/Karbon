@@ -17,6 +17,7 @@ import time
 import unittest
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from uuid import uuid4
 
 from cryptography.fernet import Fernet
 import pyzipper
@@ -43,6 +44,7 @@ from database import SessionLocal
 from models.attendance import Attendance
 from models.customer import Customer
 from models.finance import BankAccount, FinancialTransaction
+from models.inventory import InventoryOption
 from models.member import Member
 from models.member_face import MemberFace, MemberFacePhoto
 from models.order import Order, OrderItem, Product
@@ -65,9 +67,12 @@ with SessionLocal() as db:
         db.add_all([User(username="admin", password_hash=password), User(username="staff", password_hash=password)])
         db.add(Task(title="source task" if source else "target task", date=today))
         if source:
+            warehouse = InventoryOption(kind="warehouse-categories", name="Backup warehouse")
+            db.add(warehouse)
+            db.flush()
             db.add_all([
                 Customer(id=2, first_name="backup customer", last_name="test", customer_code=1001),
-                Product(id=1, name="stock item", unit="عدد", price=123, stock=19),
+                Product(id=1, name="stock item", unit="عدد", price=123, stock=19, warehouse_category_id=warehouse.id),
                 Member(id=1, first_name="backup member", last_name="test"),
                 BankAccount(id=1, name="test account", account_number="backup-account"),
             ])
@@ -257,6 +262,14 @@ class BackupIntegrationTests(unittest.TestCase):
 
     def test_create_download_validate_rollback_and_restore(self):
         source_token, target_token = self.login(self.source), self.login(self.target)
+        _, catalog, _ = self.call(self.source, "/api/inventory/products", token=source_token)
+        status, purchase, _ = self.call(self.source, "/api/purchases", "POST", {
+            "request_id": str(uuid4()), "purchase_date": "1405/08/09", "description": "Backup purchase",
+            "product_id": 1, "category_id": catalog[0]["warehouse_category_id"], "quantity": 4, "purchase_price": 300,
+            "payments": [{"request_id": str(uuid4()), "method": "transfer", "bank_id": 1,
+                          "amount": 500, "transaction_date": "1405/08/09"}],
+        }, source_token)
+        self.assertEqual(status, 201, purchase)
         source_reminder = {"reminder_enabled": False, "reminder_hours": 48}
         self.assertEqual(self.call(self.source, API + "/reminder", "PUT", source_reminder, source_token)[0], 200)
         browser_preferences = {"appearance": {"theme": "green", "fontSize": 115}, "dashboard_layout": None}
@@ -389,8 +402,10 @@ class BackupIntegrationTests(unittest.TestCase):
                 ("SELECT COUNT(*) FROM customers WHERE customer_code = 1000", 1),
                 ("SELECT first_name FROM customers WHERE customer_code = 1001", "backup customer"),
                 ("SELECT stock FROM products", 19),
+                ("SELECT name FROM inventory_options WHERE id = (SELECT warehouse_category_id FROM products)", "Backup warehouse"),
                 ("SELECT subtotal FROM orders", 123),
-                ("SELECT amount FROM financial_transactions", 123),
+                ("SELECT amount FROM financial_transactions WHERE kind='income'", 123),
+                ("SELECT amount FROM financial_transactions JOIN purchase_payments ON transaction_id=financial_transactions.id", 500),
                 ("SELECT status FROM attendance", "present"),
                 ("SELECT COUNT(*) FROM users", 2),
                 ("SELECT COUNT(*) FROM member_face_photos", 1),
@@ -398,6 +413,12 @@ class BackupIntegrationTests(unittest.TestCase):
                 self.assertEqual(db.execute(sql).fetchone(), (expected,))
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
         new_token = self.login(self.peer)
+        self.assertEqual(self.call(self.peer, f'/api/purchases/{purchase["id"]}', token=new_token)[1], purchase)
+        bank = next(row for row in self.call(self.peer, "/api/banks", token=new_token)[1] if row["id"] == 1)
+        self.assertEqual(bank["balance"], -377)
+        self.assertEqual(self.call(self.peer, "/api/purchases/obligations", token=new_token)[1]["amount"], 700)
+        self.assertEqual(self.call(self.peer, "/api/inventory/products", token=new_token)[1][0]["stock"], 4)
+        self.assertEqual(self.call(self.peer, "/api/inventory/movements?product_id=1", token=new_token)[1]["items"][0]["delta"], 4)
         restored_status = self.call(self.peer, API + "/status", token=new_token)[1]
         self.assertEqual(restored_status["last_backup_at"], manifest["created_at"])
         self.assertEqual({key: restored_status[key] for key in source_reminder}, source_reminder)

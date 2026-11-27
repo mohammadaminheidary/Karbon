@@ -40,6 +40,9 @@ class PurchaseMigrationTests(unittest.TestCase):
                 self.assertEqual(db.execute("SELECT id,name,active,parent_id FROM inventory_options WHERE id IN (7,8)").fetchall(),
                                  [(7, "UPVC", 1, None), (8, "عدد", 1, None)])
                 self.assertEqual(db.execute("SELECT category_id,stock FROM products").fetchone(), (7, 12))
+                self.assertEqual(db.execute("""SELECT warehouse.kind, warehouse.name FROM products
+                    JOIN inventory_options warehouse ON warehouse.id=products.warehouse_category_id""").fetchall(),
+                                 [("warehouse-categories", "UPVC")])
                 db.execute("INSERT INTO inventory_options (kind,name,active,parent_id) VALUES ('categories','Door',1,7)")
             restart()
             with closing(sqlite3.connect(database)) as db:
@@ -71,25 +74,51 @@ with SessionLocal() as db:
     db.commit()
 ''')
             with closing(sqlite3.connect(database)) as db, db:
+                db.executescript("""
+                    DROP TRIGGER inventory_change_no_update;
+                    UPDATE fiscal_inventory_changes SET scope='sales', reference=substr(reference, 11) WHERE scope='warehouse';
+                    UPDATE fiscal_inventory_history SET warehouse_available_from=NULL;
+                    UPDATE products SET stock=13, revision=2;
+                """)
                 before = db.execute("SELECT * FROM purchases").fetchall()
                 db.execute("DROP TABLE purchase_items")
-                db.execute("DELETE FROM inventory_purchase_migrations WHERE version=2")
+                db.execute("DROP TABLE purchase_payments")
+                db.execute("DELETE FROM inventory_purchase_migrations WHERE version IN (2,4)")
             run("import app")
             with closing(sqlite3.connect(database)) as db:
                 self.assertEqual(db.execute("SELECT * FROM purchases").fetchall(), before)
-                self.assertEqual(db.execute("SELECT stock,revision FROM products").fetchone(), (13, 2))
+                self.assertEqual(db.execute("SELECT stock,revision FROM products WHERE catalog='sales'").fetchone(), (13, 2))
+                self.assertEqual(db.execute("SELECT SUM(delta) FROM fiscal_inventory_changes WHERE scope='warehouse'").fetchone(), (13,))
+                self.assertEqual(db.execute("""SELECT p.legacy_product_id, m.delta FROM products p
+                    JOIN fiscal_inventory_changes m ON m.product_id=p.id
+                    WHERE p.catalog='warehouse' AND m.reference='warehouse:purchase:1:1:apply'""").fetchall(), [(1, 3)])
                 self.assertEqual(db.execute("SELECT position,quantity,purchase_price FROM purchase_items").fetchall(), [(1, 3, 700)])
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM purchase_payments").fetchone(), (0,))
             run('''
 import app
 from database import SessionLocal
 from models.order import Product
 from schemas.inventory_schema import PurchaseWrite
-from services.inventory_service import save_purchase
+from services.inventory_service import get_purchase, save_purchase
+from services.inventory_stock import warehouse_balances
+from services.order_service import delete_product
+from models.user import User
+from schemas.finance_schema import FinanceDelete
+from security.password import hash_password
 with SessionLocal() as db:
-    product = db.query(Product).one()
+    product = db.query(Product).filter_by(catalog="sales").one()
+    stored = db.query(Product).filter_by(catalog="warehouse", legacy_product_id=product.id).one()
     result = save_purchase(db, PurchaseWrite(request_id="00000000-0000-4000-8000-000000000001", purchase_date="۱۴۰۵/۰۸/۰۹", product_id=product.id, category_id=product.category_id, quantity=3, purchase_price=700))
     assert result["row_count"] == 1 and result["total"] == 2100
-    assert db.query(Product).one().stock == 13
+    assert result["paid"] == 0 and result["remaining"] == 2100 and result["payment_status"] == "unpaid"
+    assert product.stock == 13
+    assert get_purchase(db, result["id"])["rows"][0]["product_id"] == product.id
+    assert get_purchase(db, result["id"], for_edit=True)["rows"][0]["product_id"] == stored.id
+    assert dict(db.execute(warehouse_balances()).all()) == {stored.id: 13}
+    delete_product(db, product.id, FinanceDelete(password="test-password", confirmed=True),
+                   User(password_hash=hash_password("test-password")))
+    assert get_purchase(db, result["id"]) == result
+    assert dict(db.execute(warehouse_balances()).all()) == {stored.id: 13}
 ''')
             with closing(sqlite3.connect(database)) as db:
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM purchase_items").fetchone()[0], 1)

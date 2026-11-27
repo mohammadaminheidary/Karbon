@@ -5,7 +5,10 @@ from models.factory_reset import upgrade_factory_reset_challenges
 from services.invoice_settings_service import initialize_invoice_storage
 from services.finance_service import initialize_bank_storage
 from services.order_service import initialize_order_storage
-from services.inventory_service import initialize_brand_storage, initialize_category_storage, initialize_unit_storage, initialize_purchase_storage
+from services.inventory_service import (
+    initialize_brand_storage, initialize_category_storage, initialize_unit_storage, initialize_purchase_storage,
+    initialize_warehouse_constraints,
+)
 from services.document_service import initialize_document_storage
 from services.customer_ids import initialize_customer_ids
 from services.default_customer import initialize_default_customer
@@ -30,5 +33,6 @@ def initialize_database(engine, *, zone=None):
     initialize_purchase_storage(engine)
     initialize_invoice_storage(engine)
     initialize_order_storage(engine)
+    initialize_warehouse_constraints(engine)
     initialize_unit_storage(engine)
     initialize_fiscal_storage(engine, zone=zone)

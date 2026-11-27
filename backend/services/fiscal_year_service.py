@@ -113,10 +113,12 @@ def successor_activity(db, year):
 def has_successor_activity(db, period):
     # Opening rows and shared settings are separate from posted operations.
     # Voided rows still show that the successor was used.
-    return db.scalar(select(or_(*(
+    sales_stock = select(InventoryChange.id).where(InventoryChange.scope == "sales",
+        InventoryChange.business_date.between(period.start_date, period.end_date)).exists()
+    return db.scalar(select(or_(sales_stock, *(
         select(column).where(column.between(period.start_date, period.end_date)).exists()
         for column in (Order.invoice_date, Tx.transaction_date, Purchase.purchase_date,
-                       Document.date, ProductionRun.production_date, InventoryChange.business_date)
+                       Document.date, ProductionRun.production_date)
     ))))
 
 
@@ -201,7 +203,7 @@ def transition_lock(db):
         db.rollback()
 
 
-def close(db, year, digest, passphrase):
+def close(db, year, digest, passphrase, *, browser_preferences=None):
     with transition_lock(db):
         period = db.get(FiscalYear, year)
         if period is not None and period.closed_at is not None:
@@ -216,7 +218,7 @@ def close(db, year, digest, passphrase):
         db.rollback()
         backup_service.usable_passphrase(passphrase)
         try:
-            backup = backup_service.create_archive(passphrase)
+            backup = backup_service.create_archive(passphrase, browser_preferences=browser_preferences)
         except Exception as error:
             logger.warning("Fiscal-year safety backup failed", exc_info=True)
             raise FinanceError("تهیه پشتیبان ایمنی انجام نشد. سال مالی همچنان باز است.", 409) from error

@@ -1,6 +1,7 @@
 // Disposable fixture: serve_customers_fixture.py --backend-port 8027
 // --frontend-port 5527 --customers 25 --orders --finance.
 import assert from "node:assert/strict";
+import { selectOrderProduct } from "./order_product_picker.mjs";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(
@@ -15,6 +16,7 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage();
 const orders = [],
+  searchProducts = [],
   errors = [];
 page.on("pageerror", (error) => errors.push(error.message));
 let token;
@@ -58,6 +60,10 @@ try {
   const products = await api("GET", "/products");
   const tracked = products.find((p) => p.stock !== null),
     service = products.find((p) => p.stock === null);
+  const shop = await api("POST", "/products", { name: "دُکان", unit: "عدد", price: 100 });
+  searchProducts.push(shop.id);
+  const notebook = await api("POST", "/products", { name: "دفتر", unit: "عدد", price: 100 });
+  searchProducts.push(notebook.id);
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${base}/page/orders-page.html`);
@@ -86,20 +92,58 @@ try {
         .getAttribute("colspan"),
       "7",
     );
+    const tableTop = () => page.locator(".orders-table-scroll").first()
+      .evaluate((table) => table.getBoundingClientRect().top);
+    const beforeOpen = await tableTop();
     await page.locator("#orderCustomerSearch").click();
+    await page.locator(".orders-customer-option").first().waitFor();
+    assert.equal(await tableTop(), beforeOpen, "opening and loading customers preserves table position");
     await page.locator(".orders-customer-option").first().click();
     await page.locator("#orderCustomerDetails").waitFor({ state: "visible" });
-    await row(0).locator(".item-product").selectOption(String(tracked.id));
+    const productInput = row(0).locator(".item-product");
+    await productInput.fill("د");
+    assert.deepEqual((await page.locator("[data-product-option]:visible")
+      .evaluateAll((options) => options.map((option) => Number(option.dataset.productOption)))).sort(),
+    [shop.id, notebook.id].sort());
+    await productInput.fill("دك");
+    assert.equal(await page.locator("[data-product-option]:visible").count(), 1);
+    assert.ok(await page.locator(`[data-product-option="${shop.id}"]`).isVisible());
+    await productInput.fill("رّاح");
+    assert.equal(await page.locator("[data-product-option]:visible").count(), 0);
+    await productInput.fill("ط");
+    assert.ok(await page.locator(`[data-product-option="${service.id}"]`).isVisible());
+    await productInput.fill("طرا");
+    await productInput.press("ArrowDown");
+    await productInput.press("Enter");
+    assert.equal(await productInput.getAttribute("data-product-id"), String(service.id));
+    await productInput.hover();
+    await page.mouse.wheel(0, 120);
+    assert.equal(await productInput.getAttribute("data-product-id"), String(service.id));
+    assert.equal(await row(0).locator(".item-quantity").inputValue(), "1");
+    await selectOrderProduct(productInput, tracked);
     await row(0).locator(".item-quantity").fill("3");
     await check([300000], 300000);
     await page.locator(".orders-add-row").last().click();
-    await row(1).locator(".item-product").selectOption(String(service.id));
+    await selectOrderProduct(row(1).locator(".item-product"), service);
     await row(1).locator(".item-quantity").fill("2");
     await check([300000, 100000], 400000);
     await row(0).locator(".item-price").fill("۱۲۵٬۰۰۰");
     await check([375000, 100000], 475000);
     await row(1).locator(".item-quantity").fill("۴");
     await check([375000, 200000], 575000);
+    assert.equal(await page.locator("#orderQuantityTotal").textContent(), "۷");
+    assert.equal(await page.locator("#orderUnitPriceTotal").textContent(), money(175000));
+    await page.locator("#orderDiscountKind").selectOption("percent");
+    for (const [value, discount] of [["۱۲٫۵", 71875], ["۱۰۰", 575000], ["۰٫۰۱", 58]]) {
+      await page.locator("#orderDiscountPercent").fill(value);
+      assert.equal(await page.locator("#orderDiscountAmount").textContent(), money(discount));
+      await check([375000, 200000], 575000, discount);
+    }
+    for (const value of ["-1", "۱۰۰٫۰۱", "abc"]) {
+      await page.locator("#orderDiscountPercent").fill(value);
+      assert.equal(await page.locator("#orderTotal").textContent(), "—");
+    }
+    await page.locator("#orderDiscountKind").selectOption("fixed");
     // Read-only totals have their own cell and Persian digits/group separators.
     assert.equal(
       await row(0)
@@ -145,7 +189,7 @@ try {
     await check([375000, 200000], 575000, 75000);
     // Adding and removing rows cannot count a displayed total twice.
     await page.locator(".orders-add-row").last().click();
-    await row(2).locator(".item-product").selectOption(String(service.id));
+    await selectOrderProduct(row(2).locator(".item-product"), service);
     await row(2).locator(".item-quantity").fill("5");
     await row(2).locator(".item-price").fill("25000");
     await check([375000, 200000, 125000], 700000, 75000);
@@ -159,18 +203,40 @@ try {
       true,
       "table scroll stays within the existing responsive wrapper",
     );
+    const finalDiscount = width === 1440 ? 71875 : 75000;
+    const finalTotal = 575000 - finalDiscount;
+    if (width === 1440) {
+      await page.locator("#orderDiscountKind").selectOption("percent");
+      await page.locator("#orderDiscountPercent").fill("۱۲٫۵");
+    }
     await page.locator("#orderPay").click();
     await page.locator("#orderPaymentModal").waitFor({ state: "visible" });
     assert.equal(
       await page.locator("#paymentInvoiceTotal").textContent(),
-      money(500000),
+      money(finalTotal),
     );
-    await page.locator("#pay-pos").uncheck();
     await page.locator("#pay-cash").check();
-    await page.locator("#pay-cash-amount").fill("500000");
+    await page.locator("#pay-transfer").check();
+    await page.locator("#pay-pos-amount").fill("250000");
+    await page.locator("#pay-transfer-amount").fill("100000");
+    const cash = page.locator("#pay-cash-amount");
+    await cash.fill("12000");
+    const paymentScroll = () => page.locator("#orderPaymentModal .orders-dialog-body")
+      .evaluate((body) => body.scrollTop);
+    const beforeSpace = await paymentScroll();
+    await cash.press("Space");
+    assert.equal(await paymentScroll(), beforeSpace);
+    assert.equal(await cash.inputValue(), (finalTotal - 350000).toLocaleString("en-US"));
+    await page.locator("#pay-pos-amount").fill("600000");
+    await cash.press("Space");
+    assert.equal(await cash.inputValue(), "0");
+    await page.locator("#pay-pos").uncheck();
+    await page.locator("#pay-transfer").uncheck();
+    await cash.press("Space");
+    assert.equal(await cash.inputValue(), finalTotal.toLocaleString("en-US"));
     assert.equal(
       await page.locator("#paymentPaid").textContent(),
-      money(500000),
+      money(finalTotal),
     );
     assert.equal(
       await page.locator("#paymentRemaining").textContent(),
@@ -191,7 +257,7 @@ try {
       { product_id: tracked.id, quantity: 3, unit_price: 125000 },
       { product_id: service.id, quantity: 4, unit_price: 50000 },
     ]);
-    assert.equal(payload.discount, 75000);
+    assert.equal(payload.discount, finalDiscount);
     for (const data of [
       saved,
       await api("GET", `/orders/${saved.id}`),
@@ -203,7 +269,7 @@ try {
       );
       assert.deepEqual(
         [data.subtotal, data.discount, data.total, data.paid, data.remaining],
-        [575000, 75000, 500000, 500000, 0],
+        [575000, finalDiscount, finalTotal, finalTotal, 0],
       );
     }
     await page.reload();
@@ -211,7 +277,7 @@ try {
     const cardTotals = await page
       .locator(`[data-order-id="${saved.id}"] .orders-record-totals dd`)
       .allTextContents();
-    assert.deepEqual(cardTotals, [575000, 75000, 500000, 500000, 0].map(money));
+    assert.deepEqual(cardTotals, [575000, finalDiscount, finalTotal, finalTotal, 0].map(money));
     console.log(
       `PASS ${width}px: dedicated total column, Persian formatting, quantity/price changes, multiple rows, discounts/zero/invalid inputs, row removal, payment and persisted invoice totals`,
     );
@@ -224,6 +290,8 @@ try {
         password: "test-password",
         confirmed: true,
       });
+    for (const id of searchProducts)
+      await api("DELETE", `/products/${id}`, { password: "test-password", confirmed: true });
   } finally {
     await browser.close();
   }

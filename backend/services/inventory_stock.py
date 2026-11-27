@@ -61,6 +61,30 @@ def quantities_for(db, reference):
                            .where(InventoryChange.reference == reference)).all())
 
 
+def warehouse_balances():
+    return (select(InventoryChange.product_id, func.sum(InventoryChange.delta).label("quantity"))
+            .where(InventoryChange.scope == "warehouse").group_by(InventoryChange.product_id))
+
+
+def post_warehouse_stock(db, products, *postings):
+    """Append receipt entries. The warehouse balance is the sum of its journal."""
+    balances = dict(db.execute(warehouse_balances().where(InventoryChange.product_id.in_(products))).all())
+    entries = []
+    for posting in postings:
+        for product_id, delta in posting.quantities.items():
+            product = products[product_id]
+            balances[product_id] = balances.get(product_id, 0) + delta
+            entries.append(InventoryChange(
+                scope="warehouse", reference="warehouse:" + posting.reference,
+                product_id=product_id, business_date=posting.day, delta=delta,
+                name=product.name, product_code=product.product_code, unit=product.unit,
+            ))
+    for product_id, balance in balances.items():
+        validate_balance(products[product_id], balance)
+    db.add_all(entries)
+    db.flush()
+
+
 def line_quantities(rows):
     quantities = Counter()
     for row in rows:
@@ -73,13 +97,14 @@ def opposite(quantities):
 
 
 def inventory_movements(db, product_id, skip, limit):
-    query = select(InventoryChange)
+    query = select(InventoryChange).where(InventoryChange.scope == "warehouse")
     if product_id is not None:
         query = query.where(InventoryChange.product_id == product_id)
     history = db.get(InventoryHistory, 1)
     rows = db.scalars(query.order_by(InventoryChange.id.desc()).offset(skip).limit(limit + 1)).all()
-    return {"available_from": history.available_from, "has_more": len(rows) > limit,
-            "items": [{column.name: getattr(row, column.name) for column in InventoryChange.__table__.columns}
+    return {"available_from": history.warehouse_available_from, "has_more": len(rows) > limit,
+            "items": [{**{column.name: getattr(row, column.name) for column in InventoryChange.__table__.columns},
+                       "reference": row.reference.removeprefix("warehouse:")}
                       for row in rows[:limit]]}
 
 
@@ -92,6 +117,6 @@ def movement_summary(db, day):
         func.count(distinct(case((delta > 0, product)))),
         func.count(distinct(case((delta < 0, product)))),
     ).where(
-        InventoryChange.business_date == day, InventoryChange.tracked.is_(None))
+        InventoryChange.scope == "warehouse", InventoryChange.business_date == day, InventoryChange.tracked.is_(None))
     ).one()
     return {"incoming": incoming, "outgoing": outgoing}

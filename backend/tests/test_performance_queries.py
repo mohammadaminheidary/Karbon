@@ -111,7 +111,7 @@ with SessionLocal() as db:
         else:
             assert reads[0] == sale_reads, (sale_reads, reads[0])
     reads[0] = 0
-    assert movement_summary(db, date(2026, 9, 24)) == {"incoming": 40, "outgoing": 40}
+    assert movement_summary(db, date(2026, 9, 24)) == {"incoming": 40, "outgoing": 0}
     assert reads[0] == 1, reads
 '''], cwd=ROOT / "backend", env=dict(os.environ, KARBON_DATABASE_PATH=str(Path(directory)/"test.db"), KARBON_JWT_SECRET="query-budget-test-only", PYTHONDONTWRITEBYTECODE="1"), capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)

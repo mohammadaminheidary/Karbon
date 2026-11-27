@@ -34,7 +34,8 @@
             id="buyItemsButton"
             type="button"
             class="orders-create warehouse-buy"
-            aria-controls="purchaseEntryPage"
+            aria-haspopup="dialog"
+            aria-controls="createOrderModal"
             aria-expanded="false"
           >
             خرید کالا
@@ -471,6 +472,7 @@
             <div>
               <h2 id="warehouse-items-title">موجودی کالاها</h2>
             </div>
+            <a class="orders-secondary" href="/page/settings-page.html#purchase-invoices">فاکتورهای خرید</a>
           </div>
           <div class="warehouse-toolbar" aria-label="ابزارهای نمایشی فهرست">
             <label class="warehouse-search"
@@ -492,7 +494,7 @@
                 id="warehouseSearch"
             /></label>
             <label class="warehouse-filter"
-              ><span class="sr-only">دسته‌بندی کالا</span
+              ><span class="sr-only">دسته‌بندی انبار</span
               ><select id="warehouseCategoryFilter">
                 <option value="">همه دسته‌بندی‌ها</option>
               </select></label
@@ -539,94 +541,6 @@
           </div>
         </section>
       </div>
-      <section
-        id="purchaseEntryPage"
-        class="purchase-page bottom-curtain navbar-registration-panel navbar-transition-panel"
-        aria-hidden="true"
-        inert
-        aria-labelledby="purchaseEntryTitle"
-        tabindex="-1"
-        hidden
-      >
-        <form id="purchaseEntryForm" novalidate>
-          <header class="purchase-heading">
-            <div>
-              <p class="warehouse-eyebrow">انبار</p>
-              <h2 id="purchaseEntryTitle">خرید کالا</h2>
-            </div>
-            <button type="button" id="closePurchaseEntry" class="purchase-back">
-              بازگشت به انبار ←
-            </button>
-          </header>
-          <div class="purchase-metadata">
-            <label for="purchaseDate"
-              >تاریخ<input
-                id="purchaseDate"
-                name="purchaseDate"
-                placeholder="1405/08/10"
-                maxlength="10"
-                inputmode="numeric"
-                aria-describedby="purchaseDateHint"
-                required
-                dir="ltr"
-            /><span id="purchaseDateHint">تاریخ شمسی؛ قابل ویرایش</span></label>
-            <label for="purchaseInvoiceNumber"
-              >شماره فاکتور خرید<input
-                maxlength="32"
-                id="purchaseInvoiceNumber"
-                readonly
-                aria-readonly="true"
-                dir="ltr"
-            /></label>
-          </div>
-          <details class="purchase-supplier">
-            <summary>تأمین‌کننده (اختیاری)</summary>
-            <div class="purchase-metadata">
-              <label>جستجو در طرف‌های حساب<input id="purchaseSupplierSearch" type="search" maxlength="200" autocomplete="off" /></label>
-              <label>تأمین‌کننده<select id="purchaseSupplier"><option value="">انتخاب نشده</option></select></label>
-            </div>
-            <p id="purchaseSupplierStatus" class="purchase-status" role="status"></p>
-          </details>
-          <div class="document-sheet purchase-sheet" tabindex="0" role="region" aria-label="ردیف‌های خرید">
-            <table class="document-entry-table purchase-entry-table">
-              <colgroup><col class="purchase-category-column" /><col class="purchase-product-column" /><col class="purchase-quantity-column" /><col class="purchase-unit-column" /><col class="purchase-price-column" /><col class="purchase-total-column" /><col class="purchase-remove-column" /></colgroup>
-              <thead><tr>
-                <th scope="col">دسته‌بندی</th>
-                <th scope="col">نام کالا</th>
-                <th scope="col">مقدار</th>
-                <th scope="col">واحد</th>
-                <th scope="col">قیمت خرید (تومان)</th>
-                <th scope="col">قیمت کل (تومان)</th>
-                <th scope="col"><span class="sr-only">حذف ردیف</span></th>
-              </tr></thead>
-              <tbody id="purchaseRows"></tbody>
-            </table>
-          </div>
-          <div class="purchase-row-actions">
-            <button type="button" id="addPurchaseRow" class="finance-button border border-persian-blue/25 text-persian-blue" disabled>+ افزودن ردیف</button>
-            <button type="button" id="reloadPurchaseOptions" class="purchase-back">بروزرسانی فهرست</button>
-          </div>
-          <p class="purchase-guidance">دسته‌بندی‌ها را در <a href="/page/settings-page.html#inventory">تنظیمات انبار</a> و کالاها و واحد آن‌ها را در <a href="/page/settings-page.html#products">تنظیمات کالاها</a> تعریف یا ویرایش کنید.</p>
-          <div class="document-form-totals purchase-summary" aria-live="polite" aria-atomic="true">
-            <p>جمع مقدار<strong id="purchaseQuantityTotal">۰</strong></p>
-            <p>تعداد ردیف‌ها<strong id="purchaseRowCount">۱</strong></p>
-            <p>جمع فاکتور<strong id="purchaseInvoiceTotal">۰ تومان</strong></p>
-          </div>
-          <p
-            id="purchaseOptionsStatus"
-            class="purchase-status"
-            role="status"
-          ></p>
-          <footer class="purchase-footer">
-            <p id="purchaseStockHint">پس از ثبت خرید، مقدار هر ردیف به موجودی کالای آن افزوده می‌شود.</p>
-            <button type="submit" id="savePurchaseEntry" class="purchase-back purchase-save" disabled>ثبت خرید</button>
-            <button type="button" id="viewPurchaseInvoice" class="purchase-back" hidden>نمایش فاکتور خرید</button>
-            <button type="button" id="newPurchaseEntry" class="purchase-back">
-              فرم جدید
-            </button>
-          </footer>
-        </form>
-      </section>
     </main>
   </body>
 </html>

@@ -13,6 +13,7 @@ from sqlalchemy import (MetaData, Table, select, func, or_, cast, String,
                         BigInteger, Date, DateTime, Time, Boolean, Integer, Numeric, JSON, type_coerce)
 from config import recovery_settings
 from database import read_snapshot
+from models.inventory import PurchasePayment
 from services.receivables import active_bounds, invoice_positions
 
 TABLES = {
@@ -130,6 +131,14 @@ def _catalog(engine, generation):
                 add("category_id.main_name", func.coalesce(parent.c.name, alias.c.name, type_=String()),
                     "دستهٔ اصلی")
         balance_source = None
+        if name == "financial_transactions":
+            payment = PurchasePayment.__table__.alias("related_purchase_payment")
+            purchase = metadata.tables["purchases"].alias("related_purchase")
+            source = source.outerjoin(payment, payment.c.transaction_id == table.c.id).outerjoin(
+                purchase, purchase.c.id == payment.c.purchase_id,
+            )
+            add("purchase.id", purchase.c.id, "شناسه فاکتور خرید", "purchases.id")
+            add("purchase.invoice_number", purchase.c.invoice_number, "شماره فاکتور خرید")
         if name == "orders":
             balances = invoice_positions(active_bounds()[1])
             balance_source = source.outerjoin(balances, balances.c.id == table.c.id)

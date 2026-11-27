@@ -1,5 +1,6 @@
 // Run against serve_customers_fixture.py with an isolated SQLite database.
 import assert from "node:assert/strict";
+import { advancePurchasePayment, choosePurchaseCategory, closePurchaseInvoice, purchaseRow, waitForPurchaseForm } from "./purchase-browser-helpers.mjs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -28,16 +29,18 @@ try {
     return response.json();
   }
   const suffix = String(Date.now());
-  const category = await api("/settings/inventory-options/categories", "POST", { name: `گردش ${suffix}` });
+  const category = await api("/settings/inventory-options/warehouse-categories", "POST", { name: `گردش ${suffix}` });
   const brand = await api("/settings/brands", "POST", { name: `برند ${suffix}` });
-  const raw = await api("/products", "POST", { name: `ماده ${suffix}`, category_id: category.id, unit: "عدد", stock: 10 });
-  const other = await api("/products", "POST", { name: raw.name, category_id: category.id, unit: "بسته", stock: 0,
+  const raw = await api("/inventory/products", "POST", { name: `ماده ${suffix}`, warehouse_category_id: category.id, unit: "عدد" });
+  const other = await api("/inventory/products", "POST", { name: raw.name, warehouse_category_id: category.id, unit: "بسته",
     requires_brand: true, brand_id: brand.id });
+  const salesProduct = await api("/products", "POST", { name: raw.name, unit: "عدد", stock: 10 });
   const day = (await api("/settings/fiscal-years/current")).business_jalali;
   const stock = async () => {
-    const products = await api("/products");
+    const products = await api("/inventory/products");
     return [raw, other].map((item) => products.find((product) => product.id === item.id).stock);
   };
+  const salesStock = async () => (await api("/products")).find((product) => product.id === salesProduct.id).stock;
   const ready = () => page.locator('html[data-page-state="ready"]').waitFor();
   const dialog = page.locator("#financeDeleteModal");
   const waitForWrite = (path, method) => page.waitForResponse((response) =>
@@ -45,7 +48,7 @@ try {
 
   const purchase = await api("/purchases", "POST", { request_id: crypto.randomUUID(), purchase_date: day,
     rows: [{ category_id: category.id, product_id: raw.id, unit: raw.unit, quantity: 5, purchase_price: 200 }] });
-  assert.deepEqual(await stock(), [15, 0]);
+  assert.deepEqual(await stock(), [5, 0]);
   await page.goto(`${base}/page/settings-page.html#invoices`);
   await ready();
   await page.locator("#settingsInvoicesKind").selectOption("purchase");
@@ -53,18 +56,20 @@ try {
   await card.getByRole("link", { name: "ویرایش خرید" }).click();
   await page.waitForURL(`**/warehouse-page.html#purchase-edit-${purchase.id}`);
   await ready();
-  await page.locator("#savePurchaseEntry:enabled").waitFor();
-  assert.equal(await page.locator("#purchaseItemName").inputValue(), String(raw.id));
-  assert.equal(await page.locator(`#purchaseItemName option[value="${other.id}"]`).textContent(), `${raw.name} · ${brand.name}`);
-  assert.equal(await page.locator("#purchaseUnit").inputValue(), raw.unit);
-  assert.equal(await page.locator("#purchaseInvoiceNumber").inputValue(), purchase.invoice_number);
-  await page.locator("#purchaseQuantity").fill("7");
+  await waitForPurchaseForm(page);
+  assert.equal(await purchaseRow(page).locator(".item-product").getAttribute("data-product-id"), String(raw.id));
+  assert.equal(await purchaseRow(page).locator(".item-unit").textContent(), raw.unit);
+  await choosePurchaseCategory(page, category.id);
+  assert.match(await page.locator(`[data-product-option="${other.id}"]`).textContent(), new RegExp(brand.name));
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator("#orderInvoiceCode").inputValue(), purchase.invoice_number);
+  await purchaseRow(page).locator(".item-quantity").fill("7");
+  await advancePurchasePayment(page);
   const edit = waitForWrite(`/purchases/${purchase.id}`, "PUT");
-  await page.locator("#savePurchaseEntry").click();
+  await page.locator("#finalizeOrder").click();
   assert.equal((await edit).status(), 200);
-  await page.locator("#viewPurchaseInvoice").waitFor();
-  assert.deepEqual(await stock(), [17, 0]);
-  await page.locator("#closePurchaseEntry").click();
+  await closePurchaseInvoice(page);
+  assert.deepEqual(await stock(), [7, 0]);
 
   await page.locator("#warehouseInventory tr").filter({ hasText: raw.product_code })
     .getByRole("button", { name: `گردش موجودی ${raw.name}` }).click();
@@ -87,24 +92,26 @@ try {
   await dialog.locator('button[type="submit"]').click();
   assert.equal((await cancelPurchase).status(), 200);
   await card.waitFor({ state: "detached" });
-  assert.deepEqual(await stock(), [10, 0]);
+  assert.deepEqual(await stock(), [0, 0]);
 
   const customer = await api("/customers", "POST", { first_name: "خریدار", last_name: suffix });
   const order = await api("/orders", "POST", { request_id: crypto.randomUUID(), customer_id: customer.id,
-    invoice_date: day, payment_date: day, items: [{ product_id: raw.id, quantity: 13, unit_price: 200 }] });
-  assert.deepEqual(await stock(), [-3, 0]);
+    invoice_date: day, payment_date: day, items: [{ product_id: salesProduct.id, quantity: 13, unit_price: 200 }] });
+  assert.deepEqual(await stock(), [0, 0]);
+  assert.equal(await salesStock(), -3);
   await page.goto(`${base}/page/warehouse-page.html`);
   await ready();
   await page.locator("#warehouseStatusFilter").selectOption("empty");
-  const negative = page.locator("#warehouseInventory tr").filter({ hasText: raw.product_code });
-  await negative.getByText("ناموجود", { exact: true }).waitFor();
-  assert.match(await negative.locator(".warehouse-quantity").textContent(), /[−-]۳/);
+  const empty = page.locator("#warehouseInventory tr").filter({ hasText: raw.product_code });
+  await empty.getByText("ناموجود", { exact: true }).waitFor();
+  assert.match(await empty.locator(".warehouse-quantity").textContent(), /^۰$/);
   await page.goto(`${base}/page/orders-page.html`);
   await ready();
   const completed = waitForWrite(`/orders/${order.id}/complete`, "POST");
   await page.locator(`[data-complete-order="${order.id}"]`).click();
   assert.equal((await completed).status(), 200);
-  assert.deepEqual(await stock(), [-3, 0]);
+  assert.deepEqual(await stock(), [0, 0]);
+  assert.equal(await salesStock(), -3);
   await page.locator("#completedOrdersTab").click();
   const saleCard = page.locator(`[data-order-id="${order.id}"]`);
   await saleCard.locator(".orders-card-open").click();
@@ -114,7 +121,8 @@ try {
   await dialog.locator('button[type="submit"]').click();
   assert.equal((await cancelOrder).status(), 200);
   await saleCard.waitFor({ state: "detached" });
-  assert.deepEqual(await stock(), [10, 0]);
+  assert.deepEqual(await stock(), [0, 0]);
+  assert.equal(await salesStock(), 10);
   assert.deepEqual(errors, []);
   console.log("PASS: purchase editing and cancellation, warehouse movement history, production placeholder, negative stock and sale cancellation");
 } finally {

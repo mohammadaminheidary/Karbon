@@ -264,7 +264,7 @@ function renderTransactions(items) {
         node(
           "p",
           "mt-1 text-xs text-mirage/45",
-          item.bank.is_cash ? "دریافت نقدی" : item.bank.account_number,
+          item.bank.is_cash ? (item.kind === "expense" ? "پرداخت نقدی" : "دریافت نقدی") : item.bank.account_number,
         ),
       );
       const paymentMethod = paymentMethodLabels[item.payment_method];
@@ -649,3 +649,7 @@ async function initialize() {
 }
 
 startPage(initialize);
+  $("financePurchaseObligations").addEventListener("click", async () => {
+    const { showPurchaseObligations } = await import("../warehouse/purchase-details.js");
+    await showPurchaseObligations();
+  });

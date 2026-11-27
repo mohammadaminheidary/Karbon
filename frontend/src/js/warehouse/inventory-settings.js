@@ -5,9 +5,11 @@ import {
   deleteInventoryCategory,
   getInventoryOptions,
   saveInventoryOption,
+  WAREHOUSE_CATEGORIES,
 } from "./inventory-options.js";
 import { onPageRefresh } from "../components/data-events.js";
 import { node } from "../finance/finance-utils.js";
+import { formatNumber } from "../customers/customer-utils.js";
 
 const $ = (id) => document.getElementById(id);
 let initialized = false;
@@ -15,6 +17,8 @@ let pending = false;
 let version = 0;
 let units = [];
 let categories = [];
+let categoryKind = "categories";
+let categoryReady = false;
 let editingCategory = null;
 let deletingCategory = null;
 
@@ -114,9 +118,11 @@ function openCategoryForm(item, parentId) {
 }
 
 function confirmCategoryDelete(item) {
-  deletingCategory = item.id;
-  $("inventory-category-delete-description").textContent =
-    `آیا می‌خواهید «${categoryLabel(item)}» را برای همیشه حذف کنید؟`;
+  deletingCategory = { id: item.id, kind: categoryKind, confirmUnassignment: item.product_count > 0 };
+  const question = `آیا می‌خواهید «${categoryLabel(item)}» را حذف کنید؟`;
+  $("inventory-category-delete-description").textContent = deletingCategory.confirmUnassignment
+    ? `${question} ${formatNumber(item.product_count)} کالا بدون دسته‌بندی انبار می‌مانند. کالاها، موجودی و سوابق خرید آن‌ها حفظ می‌شوند.`
+    : question;
   $("inventory-category-delete-error").textContent = "";
   $("inventory-category-delete").showModal();
 }
@@ -125,6 +131,9 @@ function categoryRow(item) {
   const row = node("div", "inventory-option-row");
   const identity = node("div", "grid min-w-0 gap-1");
   identity.append(node("span", "text-sm font-bold", item.name));
+  if (categoryKind === WAREHOUSE_CATEGORIES)
+    identity.append(node("span", "text-xs text-mirage/65",
+      item.product_count ? `${formatNumber(item.product_count)} کالا` : "بدون کالا"));
   if (!categoryIsSelectable(item)) {
     identity.append(
       node(
@@ -153,13 +162,18 @@ function categoryRow(item) {
 
 function renderCategories() {
   const list = $("inventory-categories-list");
-  const branches = categoryGroups(categories).map(({ main, children }) => {
+  const query = categoryKind === WAREHOUSE_CATEGORIES ? searchText($("inventory-categories-search").value) : "";
+  const matches = (item) => searchText(categoryLabel(item)).includes(query);
+  const branches = [];
+  for (const { main, children } of categoryGroups(categories)) {
+    const visibleChildren = children.filter(matches);
+    if (!matches(main) && !visibleChildren.length) continue;
     const branch = node("li", "inventory-category-branch");
     branch.dataset.categoryId = main.id;
     branch.append(categoryRow(main));
-    if (children.length) {
+    if (visibleChildren.length) {
       const sublist = node("ul", "inventory-category-children");
-      for (const child of children) {
+      for (const child of visibleChildren) {
         const leaf = node("li");
         leaf.dataset.categoryId = child.id;
         leaf.append(categoryRow(child));
@@ -167,12 +181,12 @@ function renderCategories() {
       }
       branch.append(sublist);
     }
-    return branch;
-  });
+    branches.push(branch);
+  }
   list.replaceChildren(...branches);
   if (!branches.length)
     list.append(
-      node("li", "text-sm text-mirage/60", "هنوز دسته‌بندی تعریف نشده است."),
+      node("li", "text-sm text-mirage/60", query ? "دسته‌بندی پیدا نشد." : "هنوز دسته‌بندی تعریف نشده است."),
     );
   if (
     editingCategory !== null &&
@@ -202,7 +216,8 @@ async function load() {
     const options = await getInventoryOptions();
     if (version !== current) return;
     units = options.units;
-    categories = options.categories;
+    categories = options[categoryKind];
+    categoryReady = true;
     renderCategories();
     for (const id of statuses) message(id, "");
     return true;
@@ -223,27 +238,29 @@ function syncControls() {
     $(id).disabled = pending;
   document
     .querySelectorAll(
-      "#inventory-categories-fields, #inventory-units-form fieldset, #inventory-categories-list button, #inventory-category-delete-form button",
+      "#inventory-units-form fieldset, #inventory-categories-list button, #inventory-category-delete-form button",
     )
     .forEach((control) => (control.disabled = pending));
+  $("inventory-categories-fields").disabled = pending || !categoryReady;
 }
 
-async function mutate(status, request, update, success = "") {
+async function mutate(status, request, update, success = "", isCurrent = () => true) {
   if (pending) return;
   pending = true;
   busy(true);
   syncControls();
   try {
-    update(await request());
+    const result = await request();
+    if (isCurrent()) update(result);
   } catch (error) {
-    message(status, error.message, true);
+    if (isCurrent()) message(status, error.message, true);
     busy(false);
     return false;
   } finally {
     pending = false;
     syncControls();
   }
-  if ((await load()) && success) message(status, success);
+  if ((await load()) && success && isCurrent()) message(status, success);
   return true;
 }
 
@@ -270,7 +287,23 @@ async function saveUnit(data, id) {
   }
 }
 
-export async function initializeInventorySettings() {
+export async function initializeInventorySettings(panel, section) {
+  if (section !== "units") {
+    const kind = section === WAREHOUSE_CATEGORIES ? WAREHOUSE_CATEGORIES : "categories";
+    if (categoryKind !== kind) {
+      $("inventory-category-delete").close();
+      categoryKind = kind;
+      categoryReady = false;
+      categories = [];
+      $("inventory-categories-list").replaceChildren();
+      $("inventory-categories-search").value = "";
+      setCategoryForm();
+      syncControls();
+    }
+    const warehouse = kind === WAREHOUSE_CATEGORIES;
+    $("inventoryCategoriesHeading").textContent = warehouse ? "دسته‌بندی انبار کالا" : "دسته‌بندی کالا";
+    $("inventory-category-search-field").hidden = !warehouse;
+  }
   if (!initialized) {
     initialized = true;
     $("inventory-categories-form").addEventListener("submit", (event) => {
@@ -279,6 +312,7 @@ export async function initializeInventorySettings() {
       if (!name)
         return message("inventoryOptionsStatus", "عنوان را وارد کنید.", true);
       const id = editingCategory;
+      const kind = categoryKind;
       const data = {
         name,
         parent_id: Number($("inventory-categories-parent").value) || null,
@@ -286,7 +320,7 @@ export async function initializeInventorySettings() {
       };
       void mutate(
         "inventoryOptionsStatus",
-        () => saveInventoryOption("categories", data, id),
+        () => saveInventoryOption(kind, data, id),
         (saved) => {
           categories = id
             ? categories.map((item) => (item.id === id ? saved : item))
@@ -295,6 +329,7 @@ export async function initializeInventorySettings() {
           renderCategories();
         },
         "دسته‌بندی ذخیره شد.",
+        () => categoryKind === kind,
       );
     });
     $("inventory-categories-cancel").addEventListener("click", () =>
@@ -312,18 +347,20 @@ export async function initializeInventorySettings() {
     );
     $("inventory-category-delete-form").addEventListener("submit", (event) => {
       event.preventDefault();
-      const id = deletingCategory;
-      if (pending || id == null) return;
+      if (pending || !deletingCategory) return;
+      const { id, kind, confirmUnassignment } = deletingCategory;
       $("inventory-category-delete-error").textContent = "";
       void mutate(
         "inventory-category-delete-error",
-        () => deleteInventoryCategory(id),
+        () => deleteInventoryCategory(kind, id, confirmUnassignment),
         () => {
           dialog.close();
           categories = categories.filter((item) => item.id !== id);
           renderCategories();
           $("inventory-categories-name").focus();
         },
+        "",
+        () => categoryKind === kind,
       );
     });
     $("inventory-units-form").addEventListener("submit", (event) => {
@@ -336,6 +373,7 @@ export async function initializeInventorySettings() {
     $("refreshInventoryOptions").addEventListener("click", load);
     $("refreshUnitOptions").addEventListener("click", load);
     $("inventory-units-search").addEventListener("input", renderUnits);
+    $("inventory-categories-search").addEventListener("input", renderCategories);
     onPageRefresh(load, {
       isVisible: () =>
         ["inventory", "units"].some(

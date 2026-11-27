@@ -48,6 +48,17 @@ export function transactionActions(record, changed, { iconOnly = false } = {}) {
     cell.title = `${record.invoice.invoice_code} · مانده: ${money(record.invoice.remaining)}`;
     return cell;
   }
+  if (record.purchase_invoice) {
+    const invoice = record.purchase_invoice;
+    const purchase = node("button", "text-xs font-bold text-persian-blue underline", `فاکتور خرید ${invoice.invoice_number}`);
+    purchase.type = "button";
+    purchase.addEventListener("click", async () => {
+      const { showPurchaseDetails } = await import("../warehouse/purchase-details.js");
+      await showPurchaseDetails(invoice.id, changed);
+    });
+    cell.append(purchase);
+    return cell;
+  }
   for (const invoice of record.invoice_allocations || []) {
     const allocation = node("p", "mb-1 text-xs text-mirage/60", `${invoice.invoice_code} · ${money(invoice.amount)}`);
     allocation.title = `مانده فاکتور: ${money(invoice.remaining)}`;

@@ -13,14 +13,14 @@ from models.order import CASH_ACCOUNT_NUMBER, Product, Order, OrderItem, OrderPa
 from models.fiscal_year import InventoryChange
 from services.finance_service import FinanceError, next_transaction_number, payment_bank, require, validate_receipt_reference
 from services.fiscal_period import active_period, effective_day, ensure_open, in_active_period, jalali
-from services.inventory_stock import StockPosting, line_quantities, opposite, post_stock, quantities_for
+from services.inventory_stock import StockPosting, line_quantities, opposite, post_stock, quantities_for, warehouse_balances
 from services.reference_codes import compact_transaction_numbers
 from services.receivables import CUSTOMER_RECEIPT_METHOD, active_bounds, direct_receipts, general_allocations, invoice_positions
 from schemas.customer_schema import normalize_text
 from security.password import verify_password
 from services.inventory_service import (
     category_path, enabled_unit_names, products_by_id, require_category,
-    require_enabled_unit, with_category_names,
+    require_enabled_unit, require_warehouse_category, WAREHOUSE_CATEGORIES, with_category_names,
 )
 from services.production_service import has_production_stock, production_stock_products
 from models.inventory import Brand, Purchase, PurchaseItem
@@ -65,7 +65,7 @@ def upgrade_product_constraints(engine):
         try:
             connection.exec_driver_sql("BEGIN IMMEDIATE")
             migrated = connection.exec_driver_sql(
-                "SELECT 1 FROM sqlite_master WHERE type='index' AND name='ux_products_name_brand'"
+                "SELECT 1 FROM sqlite_master WHERE type='index' AND name IN ('ux_products_name_brand', 'ux_products_catalog_name_brand')"
             ).scalar()
             if not migrated:
                 sequence = connection.exec_driver_sql("SELECT seq FROM sqlite_sequence WHERE name='products'").scalar()
@@ -84,6 +84,10 @@ def upgrade_product_constraints(engine):
                 connection.exec_driver_sql("CREATE INDEX ix_products_category_id ON products(category_id)")
                 if connection.exec_driver_sql("PRAGMA foreign_key_check").first():
                     raise RuntimeError("Product migration violated a foreign key")
+            connection.exec_driver_sql("DROP INDEX IF EXISTS ux_products_name_brand")
+            connection.exec_driver_sql("""CREATE UNIQUE INDEX IF NOT EXISTS ux_products_catalog_name_brand
+                ON products(catalog, name, COALESCE(brand_id, 0))""")
+            connection.exec_driver_sql("CREATE UNIQUE INDEX IF NOT EXISTS ux_products_legacy_product_id ON products(legacy_product_id)")
             connection.commit()
         finally:
             connection.rollback()
@@ -91,35 +95,46 @@ def upgrade_product_constraints(engine):
 
 
 def products(db, include_inactive=False, for_order=False):
-    query = db.query(Product).filter(Product.deleted_at.is_(None))
+    query = db.query(Product).filter(Product.deleted_at.is_(None), Product.catalog == "sales")
     if not include_inactive:
         query = query.filter(Product.active.is_(True))
     units = {normalize_text(name) for name in enabled_unit_names(db)} if for_order else None
     referenced = {product_id for (product_id,) in db.query(OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Order.deleted_at.is_(None)).distinct().all()}
-    referenced.update(product_id for (product_id,) in db.query(Purchase.product_id).distinct().all())
-    referenced.update(product_id for (product_id,) in db.query(PurchaseItem.product_id).distinct().all())
+    detached = select(Product.legacy_product_id).where(Product.legacy_product_id.is_not(None))
+    for model in (Purchase, PurchaseItem):
+        referenced.update(db.scalars(select(model.product_id).where(model.product_id.not_in(detached)).distinct()))
     referenced.update(db.scalars(production_stock_products().distinct()))
+    referenced.update(db.scalars(warehouse_balances().having(func.sum(InventoryChange.delta) != 0)))
     query = with_category_names(query, Product.category_id).outerjoin(Product.brand).add_columns(Brand.name)
-    return [{**product_data(item, name, parent_name, brand_name), "can_delete": item.id not in referenced}
-            for item, name, parent_name, brand_name in query.order_by(Product.id)
+    query = with_category_names(query, Product.warehouse_category_id, WAREHOUSE_CATEGORIES, "warehouse_category")
+    return [{**product_data(item, name, parent, brand_name, warehouse_name, warehouse_parent), "can_delete": item.id not in referenced}
+            for item, name, parent, brand_name, warehouse_name, warehouse_parent in query.order_by(Product.id)
             if units is None or normalize_text(item.unit) in units]
 
 
-def product_data(item, name, parent_name, brand_name):
+def product_data(item, name, parent_name, brand_name, warehouse_name, warehouse_parent):
     return {**{column.name: getattr(item, column.name) for column in Product.__table__.columns},
-            "category_path": category_path(name, parent_name), "brand_name": brand_name}
+            "category_path": category_path(name, parent_name), "brand_name": brand_name,
+            "warehouse_category_path": category_path(warehouse_name, warehouse_parent)}
 
 
-def save_product(db, data, product_id=None):
+def save_product(db, data, product_id=None, *, catalog="sales"):
     db.rollback()
     try:
         db.execute(text("BEGIN IMMEDIATE"))
-        item = require(db, Product, product_id, "کالا") if product_id is not None else Product()
+        item = require(db, Product, product_id, "کالا") if product_id is not None else Product(catalog=catalog)
+        if item.catalog != catalog:
+            raise FinanceError("کالا در این فهرست پیدا نشد.", 404)
+        in_warehouse = catalog == "warehouse"
         previous_stock = item.stock
         if product_id is not None and item.revision != data.revision:
             raise FinanceError("کالا یا موجودی تغییر کرده است. فهرست را بروزرسانی و دوباره ویرایش کنید.", 409)
         unit = require_enabled_unit(db, data.unit, current=item.unit if product_id is not None else None)
-        category, parent = require_category(db, data.category_id, current=item.category_id if product_id is not None else None)
+        category, parent = (None, None) if in_warehouse else require_category(
+            db, data.category_id, current=item.category_id if product_id is not None else None,
+        )
+        warehouse_id = data.warehouse_category_id if "warehouse_category_id" in data.model_fields_set else item.warehouse_category_id
+        warehouse, warehouse_parent = require_warehouse_category(db, warehouse_id, current=item.warehouse_category_id)
         # Legacy edits omit both fields and keep the product's saved brand.
         if product_id is not None and data.model_fields_set.isdisjoint({"requires_brand", "brand_id"}):
             brand = item.brand
@@ -129,7 +144,7 @@ def save_product(db, data, product_id=None):
                 raise FinanceError("برند کالا را از تنظیمات انتخاب کنید.", 422)
             item.requires_brand = data.requires_brand
             item.brand_id = brand.id if brand else None
-        duplicate = db.query(Product.id).filter_by(name=data.name, brand_id=brand.id if brand else None)
+        duplicate = db.query(Product.id).filter_by(catalog=catalog, name=data.name, brand_id=brand.id if brand else None)
         if product_id is not None:
             duplicate = duplicate.filter(Product.id != product_id)
         if duplicate.first():
@@ -137,24 +152,26 @@ def save_product(db, data, product_id=None):
         target_stock = data.stock if product_id is None or "stock" in data.model_fields_set else previous_stock
         if previous_stock is not None and target_stock is None and has_open_stock_operations(db, item.id):
             raise FinanceError("تا زمانی که عملیات قابل برگشت برای کالا وجود دارد، کنترل موجودی را نمی‌توان غیرفعال کرد.", 409)
-        for key, value in data.model_dump(exclude={"revision", "unit", "category_id", "requires_brand", "brand_id", "price", "stock"}).items():
+        for key, value in data.model_dump(exclude={"revision", "unit", "category_id", "warehouse_category_id", "requires_brand", "brand_id", "price", "stock"}).items():
             setattr(item, key, value)
         if product_id is None or "price" in data.model_fields_set:
             item.price = data.price
         item.unit = unit
-        item.category_id = category.id
+        item.category_id = category.id if category else None
+        item.warehouse_category_id = warehouse_id
         if product_id is not None:
             item.revision += 1
         db.add(item)
         db.flush()
         if product_id is None:
-            item.product_code = f"P-{item.id:06d}"
+            item.product_code = f"{'W' if in_warehouse else 'P'}-{item.id:06d}"
             db.flush()
-        if target_stock is not None or previous_stock is not None:
+        if not in_warehouse and (target_stock is not None or previous_stock is not None):
             post_stock(db, {item.id: item}, StockPosting(
                 f"product:{item.id}:{item.revision}", effective_day(active_period(db)),
                 {item.id: (target_stock or 0) - (previous_stock or 0)}), tracked=target_stock is not None)
-        result = product_data(item, category.name, parent.name if parent else None, brand.name if brand else None)
+        result = product_data(item, category.name if category else None, parent.name if parent else None, brand.name if brand else None,
+                              warehouse.name if warehouse else None, warehouse_parent.name if warehouse_parent else None)
         db.commit()
         return result
     except Exception:
@@ -173,12 +190,9 @@ def has_open_stock_operations(db, product_id):
             InventoryChange.product_id == product_id, InventoryChange.delta == 0,
         ).exists(),
     )
-    purchases = db.query(Purchase.id).join(PurchaseItem).filter(
-        PurchaseItem.product_id == product_id, Purchase.deleted_at.is_(None))
     if period:
         orders = orders.filter(Order.invoice_date >= period.start_date)
-        purchases = purchases.filter(Purchase.purchase_date >= period.start_date)
-    return orders.first() is not None or purchases.first() is not None or has_production_stock(db, product_id, period)
+    return orders.first() is not None or has_production_stock(db, product_id, period)
 
 
 def delete_product(db, product_id, data, user):
@@ -190,22 +204,29 @@ def delete_product(db, product_id, data, user):
         # reference between the dependency check and deletion.
         db.execute(text("BEGIN IMMEDIATE"))
         product = require(db, Product, product_id, "کالا", include_deleted=True)
+        if product.catalog != "sales":
+            raise FinanceError("کالا در این فهرست پیدا نشد.", 404)
         if product.deleted_at is not None:
             db.commit()
             return {"id": product_id, "deleted": True}
-        if db.query(Purchase.id).filter_by(product_id=product.id).first() or db.query(PurchaseItem.id).filter_by(product_id=product.id).first():
+        has_purchase = (db.query(Purchase.id).filter_by(product_id=product.id).first()
+                        or db.query(PurchaseItem.id).filter_by(product_id=product.id).first())
+        if has_purchase and not db.query(Product.id).filter_by(catalog="warehouse", legacy_product_id=product.id).first():
             raise FinanceError("این کالا در خرید ثبت‌شده استفاده شده و قابل حذف نیست. می‌توانید آن را غیرفعال کنید.", 409)
         if db.query(OrderItem.id).join(Order, Order.id == OrderItem.order_id).filter(
                 OrderItem.product_id == product.id, Order.deleted_at.is_(None)).first():
             raise FinanceError("این کالا در سفارش ثبت‌شده استفاده شده و قابل حذف نیست. می‌توانید آن را غیرفعال کنید.", 409)
         if has_production_stock(db, product.id):
             raise FinanceError("این کالا در تولید ثبت‌شده استفاده شده و قابل حذف نیست.", 409)
+        warehouse_balance = db.execute(warehouse_balances().where(InventoryChange.product_id == product.id)).one_or_none()
+        if warehouse_balance and warehouse_balance.quantity:
+            raise FinanceError("این کالا موجودی انبار دارد و قابل حذف نیست. می‌توانید آن را غیرفعال کنید.", 409)
         if product.stock is not None:
             post_stock(db, {product.id: product}, StockPosting(
                 f"product:{product.id}:delete", effective_day(active_period(db)), {product.id: -product.stock}),
                 tracked=False, retiring=True)
-        if db.query(OrderItem.id).filter(OrderItem.product_id == product.id).first():
-            # Deleted invoices retain immutable history and foreign keys.
+        if has_purchase or db.query(OrderItem.id).filter(OrderItem.product_id == product.id).first():
+            # Historical documents retain their original product reference.
             product.deleted_at = datetime.now(timezone.utc)
             product.active = False
             product.revision += 1
@@ -665,6 +686,8 @@ def edit_order(db, order_id, data):
         for product_id, quantity in quantities.items():
             if quantity > old_quantities[product_id]:
                 product = require(db, Product, product_id, "کالا", active=True)
+                if product.catalog != "sales":
+                    raise FinanceError("کالا در فهرست فروش پیدا نشد.", 404)
                 require_enabled_unit(db, product.unit, enabled=units)
         revision = data.revision + 1
         reference = edit_stock(db, order, old_quantities, quantities, catalog, data.invoice_date, revision)
@@ -739,6 +762,8 @@ def save_order(db, data):
         for product_id in quantities:
             # The batch holds these records in the session identity map.
             product = require(db, Product, product_id, "کالا", active=True)
+            if product.catalog != "sales":
+                raise FinanceError("کالا در فهرست فروش پیدا نشد.", 404)
             require_enabled_unit(db, product.unit, enabled=units)
         number = data.order_number or next_number(db)
         if data.order_number and db.query(Order.id).filter(Order.order_number == number).first():

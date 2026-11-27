@@ -1,5 +1,7 @@
+import { advancePurchasePayment, purchaseRow, selectPurchaseItem, waitForPurchaseForm } from "./purchase-browser-helpers.mjs";
 // Run against serve_customers_fixture.py with a disposable database.
 import assert from "node:assert/strict";
+import { selectOrderProduct } from "./order_product_picker.mjs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -147,12 +149,18 @@ try {
     String(door.id),
   );
   await settings.locator("#cancelSettingsProductEdit").click();
+  const stored = await settings.evaluate(async ({ name, unit, price }) => {
+    const { financeRequest } = await import("/src/js/finance/finance-api.js");
+    const options = await financeRequest("/settings/inventory-options");
+    return financeRequest("/inventory/products", { method: "POST", body: {
+      name, unit, price, warehouse_category_id: options["warehouse-categories"].find((item) => item.name === "عمومی").id,
+    } });
+  }, product);
 
   const warehouse = await context.newPage();
   await warehouse.goto(base + "/page/warehouse-page.html#purchase");
-  await waitForLabel(warehouse, "#purchaseCategory option", "UPVC / Door");
-  await warehouse.locator("#purchaseCategory").selectOption(String(door.id));
-  await warehouse.locator("#purchaseItemName").selectOption(String(product.id));
+  await waitForPurchaseForm(warehouse);
+  const purchaseItem = await selectPurchaseItem(warehouse, stored.warehouse_category_id, stored.id);
 
   await settings.bringToFront();
   await settings.locator('[data-settings-target="inventory"]').click();
@@ -172,36 +180,31 @@ try {
   await settings.locator("#inventory-category-delete-cancel").click();
 
   await warehouse.bringToFront();
-  await waitForLabel(
-    warehouse,
-    "#purchaseCategory option",
-    "UPVC frames / Door",
-  );
-  assert.equal(
-    await warehouse.locator("#purchaseCategory").inputValue(),
-    String(door.id),
-  );
-  assert.equal(
-    await warehouse.locator("#purchaseItemName").inputValue(),
-    String(product.id),
-  );
-  await warehouse.locator("#purchaseQuantity").fill("2");
-  await warehouse.locator("#purchasePrice").fill("700");
+  await waitForPurchaseForm(warehouse);
+  await purchaseItem.click();
+  assert.equal(await warehouse.locator("[data-category-option]").filter({ hasText: "UPVC frames / Door" }).count(), 0);
+  await warehouse.keyboard.press("Escape");
+  assert.equal(await purchaseItem.getAttribute("data-category-id"), String(stored.warehouse_category_id));
+  assert.equal(await purchaseItem.getAttribute("data-product-id"), String(stored.id));
+  await purchaseRow(warehouse).locator(".item-quantity").fill("2");
+  await purchaseRow(warehouse).locator(".item-price").fill("700");
+  await advancePurchasePayment(warehouse);
   const purchased = response(warehouse, "POST", "/api/purchases");
-  await warehouse.locator('#purchaseEntryForm button[type="submit"]').click();
+  await warehouse.locator("#finalizeOrder").click();
   const receipt = await purchased;
   assert.equal(receipt.status(), 201, await receipt.text());
   assert.equal(
     (await receipt.json()).rows[0].category_path,
-    "UPVC frames / Door",
+    "عمومی",
   );
 
   const orders = await context.newPage();
   await orders.goto(base + "/page/orders-page.html");
   await orders.locator(".orders-create").click();
-  await waitForLabel(orders, ".item-product optgroup", "UPVC frames / Door");
   const salesSelect = orders.locator(".item-product").first();
-  await salesSelect.selectOption(String(product.id));
+  await salesSelect.fill(product.name);
+  await orders.getByText("UPVC frames / Door", { exact: true }).waitFor();
+  await selectOrderProduct(salesSelect, product);
   assert.equal(await orders.locator(".item-unit").first().textContent(), "عدد");
 
   const reports = await context.newPage();

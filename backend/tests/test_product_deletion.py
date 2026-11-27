@@ -59,6 +59,39 @@ class ProductDeletionTests(unittest.TestCase):
         })[0], 200)
         self.assertEqual(self.remove(self.product["id"])[0], 409)
 
+    def test_sales_only_product_can_be_removed_from_warehouse(self):
+        product = self.product
+        warehouse = self.request("GET", "/settings/inventory-options")[1]["warehouse-categories"][0]
+        fields = {key: product[key] for key in ("name", "unit", "price", "category_id", "revision")}
+        self.assertEqual(self.request("PUT", f'/products/{product["id"]}', {
+            **fields, "warehouse_category_id": warehouse["id"],
+        })[0], 200)
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("""INSERT INTO fiscal_inventory_changes
+                (scope, reference, product_id, business_date, delta, tracked, name, unit)
+                VALUES ('warehouse', 'warehouse:opening', ?, '2026-10-14', 0, 1, ?, ?)""",
+                       (product["id"], product["name"], product["unit"]))
+        order = self.post("/orders", self.payload())
+        invoice_url = f'/orders/{order["id"]}/invoice'
+        invoice = self.request("GET", invoice_url)[1]
+        before = next(row for row in self.request("GET", "/products")[1] if row["id"] == product["id"])
+        self.assertFalse(before["can_delete"])
+        entry = next(row for row in self.request("GET", "/inventory/products")[1] if row["id"] == product["id"])
+        self.assertEqual((entry["stock"], entry["removal_blocked_reason"]), (0, None))
+
+        remove_url = f'/inventory/products/{product["id"]}'
+        body = {"password": "test-password", "confirmed": True}
+        self.assertEqual(self.request("DELETE", remove_url, body, authenticated=False)[0], 401)
+        self.assertEqual(self.request("DELETE", remove_url, {**body, "password": "wrong"})[0], 403)
+        self.assertEqual(self.request("DELETE", remove_url, body), (200, {"id": product["id"], "removed": True}))
+        after = next(row for row in self.request("GET", "/products")[1] if row["id"] == product["id"])
+        self.assertEqual((after["stock"], after["category_id"], after["warehouse_category_id"]),
+                         (before["stock"], before["category_id"], None))
+        self.assertEqual(self.request("GET", invoice_url)[1], invoice)
+        self.assertEqual(self.request("GET", "/purchases")[1]["total"], 0)
+        self.assertNotIn(product["id"], [row["id"] for row in self.request("GET", "/inventory/products")[1]])
+        self.assertEqual(self.remove(product["id"])[0], 409)
+
     def test_deleted_invoice_allows_product_deletion_and_preserves_history(self):
         order = self.post("/orders", self.payload())
         self.assertEqual(self.request("DELETE", f'/orders/{order["id"]}/invoice', {"password": "test-password", "confirmed": True})[0], 200)

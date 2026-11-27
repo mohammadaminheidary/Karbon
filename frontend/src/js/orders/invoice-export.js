@@ -532,7 +532,8 @@ export async function showFinalInvoice(orderId, archive = {}) {
     root.querySelector("#pdfFinalInvoice").textContent = "خروجی PDF";
     const rendered = await renderInvoice(saved.kind === "purchase" ? {
       ...saved, customer: saved.supplier || { name: "رسید خرید", phone_numbers: [] },
-      paid: 0, remaining: saved.total, order_number: "—", jalali_payment_date: "—",
+      paid: saved.paid ?? 0, remaining: saved.remaining ?? saved.total, order_number: "—",
+      jalali_payment_date: saved.payments.at(-1)?.jalali_date ?? "—",
     } : saved);
     if (current !== version) return;
     const previews = [],

@@ -109,6 +109,9 @@ function render(result, reset) {
   );
   setText("revenueValue", exact(d.finance.income));
   setText("expenseValue", exact(d.finance.expense));
+  $("dashboardPurchaseExpenses").disabled = false;
+  if (d.purchase_obligations)
+    setText("dashboardPurchaseObligationAmount", `${exact(d.purchase_obligations.amount)} تومان مانده خرید`);
   setText("inventoryValue", exact(d.inventory.value));
   setText("revenueChange", comparison(d.finance.income, d.previous.income));
   setText("expenseChange", comparison(d.finance.expense, d.previous.expense));
@@ -660,6 +663,15 @@ function startPolling() {
 }
 startPage(async () => {
   if (!(await protectPage())) return false;
+  $("dashboardPurchaseObligations").addEventListener("click", async () => {
+    const { showPurchaseObligations } = await import("../warehouse/purchase-details.js");
+    await showPurchaseObligations(data?.period.end);
+  });
+  $("dashboardPurchaseExpenses").addEventListener("click", async () => {
+    if (!data) return;
+    const { showPurchaseExpenses } = await import("../warehouse/purchase-details.js");
+    await showPurchaseExpenses(data.period.start, data.period.end);
+  });
   requestedRange = rollingRange(30);
   const start = mountDateInput($("dashboardStart"), { separator: "-" });
   const end = mountDateInput($("dashboardEnd"), { separator: "-" });

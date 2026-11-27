@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, LargeBinary, String
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, LargeBinary, String
 
 from database import Base
 from models.finance import utc_now
@@ -68,14 +68,18 @@ class InventoryHistory(Base):
     __tablename__ = "fiscal_inventory_history"
     id = Column(Integer, primary_key=True)
     available_from = Column(Date, nullable=False)
+    warehouse_available_from = Column(Date)
 
 
 class InventoryChange(Base):
     __tablename__ = "fiscal_inventory_changes"
     __table_args__ = (Index("ux_inventory_change_reference_product", "reference", "product_id", unique=True),
-                      Index("ix_inventory_change_product_id", "product_id", "id"))
+                      Index("ix_inventory_change_product_id", "product_id", "id"),
+                      Index("ix_inventory_change_scope_product", "scope", "product_id"),
+                      CheckConstraint("scope IN ('sales', 'warehouse')"))
     id = Column(Integer, primary_key=True)
     reference = Column(String(100), nullable=False)
+    scope = Column(String(12), nullable=False, server_default="sales")
     posted_at = Column(DateTime(timezone=True), nullable=True, default=utc_now)
     # Catalog records can be removed. The journal retains their identity.
     product_id = Column(Integer, nullable=False)

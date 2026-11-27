@@ -17,6 +17,7 @@ class ProductWrite(StrictFields):
     unit: str = Field(min_length=1, max_length=80)
     # Omitted by older clients; the service retains/assigns the Settings category.
     category_id: int | None = Field(default=None, strict=True, gt=0, le=9223372036854775807)
+    warehouse_category_id: int | None = Field(default=None, strict=True, gt=0, le=9223372036854775807)
     requires_brand: bool = Field(default=False, strict=True)
     brand_id: int | None = Field(default=None, strict=True, gt=0, le=9223372036854775807)
     price: int = Field(default=0, strict=True, ge=0, le=LIMIT)

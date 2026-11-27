@@ -117,7 +117,8 @@ class FactoryResetTests(TestCase):
             self.assertEqual(db.execute("SELECT account_number, opening_balance FROM bank_accounts").fetchall(), [("backup-account", 0)])
             self.assertEqual(db.execute("SELECT member_id FROM member_faces").fetchall(), [(1,)])
             self.assertEqual(db.execute("SELECT member_id FROM member_face_photos").fetchall(), [(1,)])
-            self.assertEqual(db.execute("SELECT product_id, delta, tracked FROM fiscal_inventory_changes").fetchall(), [(1, 0, 1)])
+            self.assertEqual(db.execute("SELECT scope, product_id, delta, tracked FROM fiscal_inventory_changes ORDER BY scope").fetchall(),
+                             [("sales", 1, 0, 1), ("warehouse", 1, 0, 1)])
             self.assertEqual(db.execute("SELECT json_extract(data, '$.scope') FROM invoice_settings").fetchone(), ("existing-store",))
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 

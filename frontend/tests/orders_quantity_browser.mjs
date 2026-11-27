@@ -1,6 +1,7 @@
 // Disposable fixture: serve_customers_fixture.py --backend-port 8027
 // --frontend-port 5527 --customers 25 --orders --finance.
 import assert from "node:assert/strict";
+import { selectOrderProduct } from "./order_product_picker.mjs";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(
@@ -128,7 +129,7 @@ try {
     await page.locator("#orderCustomerSearch").click();
     await page.locator(".orders-customer-option").first().click();
     await page.locator("#orderCustomerDetails").waitFor({ state: "visible" });
-    await row().locator(".item-product").selectOption(String(service.id));
+    await selectOrderProduct(row().locator(".item-product"), service);
     await row().locator(".item-price").fill("125000");
     await check(1);
     assert.equal(
@@ -200,7 +201,7 @@ try {
       true,
     );
     await page.locator(".orders-add-row").last().click();
-    await row(1).locator(".item-product").selectOption(String(service.id));
+    await selectOrderProduct(row(1).locator(".item-product"), service);
     await row(1).locator(".item-quantity-increase").click();
     await check(3, 100000);
     await page.locator("#orderDiscount").fill("25000");

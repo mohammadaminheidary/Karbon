@@ -18,6 +18,7 @@ let initialized = false,
   loadedKind = "sale",
   total = 0,
   loading = false,
+  purchaseHistory = false,
   searchTimer;
 
 function renderPurchases() {
@@ -27,12 +28,13 @@ function renderPurchases() {
     const heading = node("h3", "font-bold");
     heading.append(document.createTextNode("فاکتور خرید "), node("bdi", "", invoice.invoice_number));
     summary.append(heading, node("p", "mt-2 text-xs text-mirage/60",
-      [invoice.supplier_name, invoice.jalali_date, money(invoice.total)].filter(Boolean).join(" · ")));
+      [invoice.supplier_name, invoice.jalali_date, money(invoice.total),
+        invoice.remaining == null ? "" : `مانده ${money(invoice.remaining)}`].filter(Boolean).join(" · ")));
     const details = node("button", "finance-button border border-french-gray/40", "نمایش فاکتور خرید");
     details.type = "button";
     details.addEventListener("click", async () => {
-      const { showFinalInvoice } = await import("./invoice-export.js");
-      await showFinalInvoice(invoice.id, { kind: "purchase" });
+      const { showPurchaseDetails } = await import("../warehouse/purchase-details.js");
+      await showPurchaseDetails(invoice.id, () => load());
     });
     const actions = node("div", "flex flex-wrap gap-2");
     const edit = node("a", "finance-button border border-french-gray/40", "ویرایش خرید");
@@ -41,13 +43,14 @@ function renderPurchases() {
     cancel.type = "button";
     cancel.addEventListener("click", () => confirmFinanceDelete({
       path: `/purchases/${invoice.id}`,
-      description: `خرید ${invoice.invoice_number} لغو شود؟ مقدار ثبت‌شده از موجودی کالاها کسر می‌شود.`,
+      description: `خرید ${invoice.invoice_number} لغو شود؟ موجودی کالا و ماندهٔ حساب‌های مرتبط بروزرسانی می‌شوند.`,
       onDeleted: () => {
         notify("خرید لغو و موجودی بروزرسانی شد.", { type: "success" });
         publishLocalDataChange();
       },
     }));
-    actions.append(details, edit, cancel);
+    actions.append(details);
+    if (invoice.editable !== false) actions.append(edit, cancel);
     row.append(summary, actions);
     return row;
   }));
@@ -158,7 +161,8 @@ async function load(more = false) {
     let data;
     do {
       data = await financeRequest(
-        `${endpoint}?${new URLSearchParams({ search, skip: nextRecords.length, limit: 20 })}`,
+        `${endpoint}?${new URLSearchParams({ search, skip: nextRecords.length, limit: 20,
+          ...(kind === "purchase" && purchaseHistory ? { history: "true" } : {}) })}`,
       );
       if (current !== version) return;
       const existing = new Set(nextRecords.map((record) => record.id));
@@ -188,7 +192,8 @@ async function load(more = false) {
   }
 }
 
-export async function initializeInvoiceSettings() {
+export async function initializeInvoiceSettings(panel, section) {
+  purchaseHistory = section === "purchase-invoices";
   if (!initialized) {
     initialized = true;
     $("refreshInvoices").addEventListener("click", refreshData(() => load()));
@@ -214,6 +219,10 @@ export async function initializeInvoiceSettings() {
     onPageRefresh(() => load(), {
       isVisible: () => $("settingsInvoicesList").getClientRects().length > 0,
     });
+  }
+  if (purchaseHistory) {
+    $("settingsInvoicesKind").value = "purchase";
+    $("settingsInvoicesSearch").placeholder = "نام یا کد تأمین‌کننده یا شماره فاکتور…";
   }
   await load();
 }

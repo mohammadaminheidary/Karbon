@@ -48,6 +48,10 @@ class StockWorkflowTests(unittest.TestCase):
         self.assertEqual(status, 200, result)
         return {row["reference"]: row["delta"] for row in result["items"]}
 
+    def warehouse_stock(self, product):
+        return next((row["stock"] for row in self.request("GET", "/inventory/products")[1]
+                     if row["id"] == product["id"]), 0)
+
     def test_same_name_is_unique_per_brand_and_stock_is_separate(self):
         first = self.post("/settings/brands", {"name": "First"})
         second = self.post("/settings/brands", {"name": "Second"})
@@ -60,7 +64,8 @@ class StockWorkflowTests(unittest.TestCase):
             **fields, "brand_id": first["id"], "revision": two["revision"],
         })[0], 409)
         self.post("/purchases", self.receipt(self.line(one, 1)))
-        self.assertEqual((self.stock(self.product), self.stock(one), self.stock(two)), (10, -1, -2))
+        self.assertEqual((self.stock(self.product), self.stock(one), self.stock(two)), (10, -2, -2))
+        self.assertEqual((self.warehouse_stock(one), self.warehouse_stock(two)), (1, 0))
         with closing(sqlite3.connect(self.database)) as db, db:
             with self.assertRaises(sqlite3.IntegrityError):
                 db.execute("UPDATE products SET brand_id=? WHERE id=?", (first["id"], two["id"]))
@@ -74,7 +79,8 @@ class StockWorkflowTests(unittest.TestCase):
         body = self.receipt(self.line(self.product, 5), self.line(self.finished, 3), self.line(self.product, 2),
                             supplier_id=supplier["id"])
         purchase = self.post("/purchases", body)
-        self.assertEqual((self.stock(self.product), self.stock(self.finished)), (17, 3))
+        self.assertEqual((self.warehouse_stock(self.product), self.warehouse_stock(self.finished)), (7, 3))
+        self.assertEqual((self.stock(self.product), self.stock(self.finished)), (10, 0))
         order_body = self.order_body(invoice_date=self.date, payment_date=self.date, discount=0, payments=[], items=[
             {"product_id": self.product["id"], "quantity": 8, "unit_price": 100},
             {"product_id": self.product["id"], "quantity": 5, "unit_price": 100},
@@ -85,7 +91,8 @@ class StockWorkflowTests(unittest.TestCase):
         order_url = f'/orders/{sale["id"]}'
         for method, suffix in (("GET", "invoice"), ("POST", "complete"), ("POST", "reactivate"), ("POST", "complete")):
             self.assertEqual(self.request(method, f"{order_url}/{suffix}")[0], 200)
-        self.assertEqual((self.stock(self.product), self.stock(self.finished)), (4, 2))
+        self.assertEqual((self.stock(self.product), self.stock(self.finished)), (-3, -1))
+        self.assertEqual((self.warehouse_stock(self.product), self.warehouse_stock(self.finished)), (7, 3))
         purchase_url = f'/purchases/{purchase["id"]}'
         replacement = self.receipt(self.line(self.product, 2), self.line(self.finished, 2), revision=1,
                                    supplier_id=supplier["id"])
@@ -94,10 +101,11 @@ class StockWorkflowTests(unittest.TestCase):
         self.assertEqual((updated["invoice_number"], updated["revision"], updated["row_count"]), (purchase["invoice_number"], 2, 2))
         self.assertEqual(self.request("PUT", purchase_url, replacement), (200, updated))
         self.assertEqual(self.request("PUT", purchase_url, {**replacement, "request_id": str(uuid4())})[0], 409)
-        self.assertEqual((self.stock(self.product), self.stock(self.finished)), (-1, 1))
+        self.assertEqual((self.stock(self.product), self.stock(self.finished)), (-3, -1))
+        self.assertEqual((self.warehouse_stock(self.product), self.warehouse_stock(self.finished)), (2, 2))
         self.assertEqual(self.request("DELETE", order_url, self.confirmation)[0], 200)
         self.assertEqual(self.request("DELETE", f"{order_url}/invoice", self.confirmation)[0], 200)
-        self.assertEqual((self.stock(self.product), self.stock(self.finished)), (12, 2))
+        self.assertEqual((self.stock(self.product), self.stock(self.finished)), (10, 0))
         self.assertEqual(self.request("DELETE", f'/customers/{supplier["id"]}')[0], 409)
         self.assertEqual(self.request("DELETE", purchase_url, self.confirmation)[0], 200)
         self.assertEqual(self.request("DELETE", purchase_url, self.confirmation)[0], 200)
@@ -105,13 +113,14 @@ class StockWorkflowTests(unittest.TestCase):
         self.assertEqual(self.request("GET", "/purchases")[1]["total"], 0)
         self.assertEqual(self.request("DELETE", f'/customers/{supplier["id"]}')[0], 204)
         self.assertEqual((self.stock(self.product), self.stock(self.finished)), (10, 0))
+        self.assertEqual((self.warehouse_stock(self.product), self.warehouse_stock(self.finished)), (0, 0))
         dashboard = self.request("GET", "/dashboard?start_date=2026-10-31&end_date=2026-10-31")[1]
         self.assertEqual(dashboard["purchases"]["count"], 0)
         self.assertEqual(next(row["stock"] for row in dashboard["inventory"]["products"] if row["id"] == self.product["id"]), 10)
-        purchase_ref, sale_ref = f'purchase:{purchase["id"]}', f'sale:{sale["id"]}'
-        self.assertEqual({ref: qty for ref, qty in self.postings(self.product).items() if not ref.startswith("product")}, {
-            f"{purchase_ref}:1:apply": 7, f"{sale_ref}:issue": -13, f"{purchase_ref}:2:reverse": -7,
-            f"{purchase_ref}:2:apply": 2, f"{sale_ref}:cancel": 13, f"{purchase_ref}:cancel": -2,
+        purchase_ref = f'purchase:{purchase["id"]}'
+        self.assertEqual(self.postings(self.product), {
+            f"{purchase_ref}:1:apply": 7, f"{purchase_ref}:2:reverse": -7,
+            f"{purchase_ref}:2:apply": 2, f"{purchase_ref}:cancel": -2,
         })
 
     def test_document_is_stock_neutral_and_later_tracking_does_not_inflate_cancellation(self):
@@ -120,7 +129,7 @@ class StockWorkflowTests(unittest.TestCase):
             "rows": [{"kind": "expense", "bank_id": self.bank["id"], "document_account_id": account["id"], "amount": 400}]})
         self.assertEqual(self.request("DELETE", f'/documents/{document["id"]}', self.confirmation)[0], 200)
         self.assertEqual(self.stock(self.product), 10)
-        self.assertEqual(len(self.postings(self.product)), 1)
+        self.assertEqual(self.postings(self.product), {})
         order = self.post("/orders", self.order_body(discount=0, payments=[], items=[
             {"product_id": self.service["id"], "quantity": 2, "unit_price": 100},
         ]))
@@ -129,7 +138,10 @@ class StockWorkflowTests(unittest.TestCase):
         self.assertEqual(self.request("PUT", url, {**product, "stock": 3})[0], 200)
         self.assertEqual(self.request("DELETE", f'/orders/{order["id"]}', self.confirmation)[0], 200)
         self.assertEqual(self.stock(self.service), 3)
-        self.assertEqual(self.postings(self.service)[f'sale:{order["id"]}:issue'], 0)
+        self.assertEqual(self.postings(self.service), {})
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(db.execute("SELECT delta FROM fiscal_inventory_changes WHERE reference=? AND scope='sales'",
+                                        (f'sale:{order["id"]}:issue',)).fetchone(), (0,))
 
 
 class InventoryReferenceMigrationTests(unittest.TestCase):
@@ -173,6 +185,9 @@ with SessionLocal() as db:
                     DROP TRIGGER inventory_change_no_update;
                     DROP TRIGGER inventory_change_no_delete;
                     DROP INDEX ux_inventory_change_reference_product;
+                    UPDATE fiscal_inventory_changes SET scope='sales' WHERE scope='warehouse';
+                    UPDATE fiscal_inventory_history SET warehouse_available_from=NULL;
+                    UPDATE products SET stock=stock+3, revision=revision+1 WHERE id=1;
                     DELETE FROM fiscal_inventory_changes WHERE reference='sale:2:issue';
                     ALTER TABLE fiscal_inventory_changes DROP COLUMN reference;
                     ALTER TABLE fiscal_inventory_changes DROP COLUMN posted_at;
@@ -184,13 +199,15 @@ with SessionLocal() as db:
                     ALTER TABLE purchases DROP COLUMN last_edit_fingerprint;
                 """)
                 before = db.execute("SELECT id, stock, revision FROM products").fetchall()
-                changes = db.execute("SELECT id, product_id, delta FROM fiscal_inventory_changes").fetchall()
+                changes = db.execute("SELECT id, product_id, delta FROM fiscal_inventory_changes ORDER BY id").fetchall()
             for _ in range(2):
                 run("import app")
             with closing(sqlite3.connect(database)) as db:
                 self.assertEqual(db.execute("SELECT id, stock, revision FROM products").fetchall(), before)
-                self.assertEqual(db.execute("SELECT id, product_id, delta FROM fiscal_inventory_changes").fetchall(), changes)
+                self.assertEqual(db.execute("SELECT id, product_id, delta FROM fiscal_inventory_changes WHERE scope='sales' ORDER BY id").fetchall(), changes)
                 self.assertEqual(db.execute("SELECT reference FROM fiscal_inventory_changes WHERE delta < 0").fetchall(), [("sale:1:issue",)])
+                self.assertEqual(db.execute("SELECT product_id, SUM(delta) FROM fiscal_inventory_changes WHERE scope='warehouse' GROUP BY product_id").fetchall(),
+                                 [(1, 11), (2, 2)])
                 self.assertEqual(db.execute("SELECT revision FROM purchases").fetchone(), (1,))
                 self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
             run('''
@@ -202,13 +219,15 @@ from schemas.finance_schema import FinanceDelete
 from security.password import hash_password
 from services.finance_service import FinanceError
 from services.inventory_service import cancel_purchase
+from services.inventory_stock import warehouse_balances
 from services.order_service import delete_invoice
 confirmation = FinanceDelete(password="migration-pass", confirmed=True)
 user = User(password_hash=hash_password("migration-pass"))
 with SessionLocal() as db:
     delete_invoice(db, 1, confirmation, user)
     cancel_purchase(db, 1, confirmation, user)
-    assert db.get(Product, 1).stock == 10
+    assert db.get(Product, 1).stock == 13
+    assert dict(db.execute(warehouse_balances()).all()) == {1: 8, 2: 2}
     try:
         delete_invoice(db, 2, confirmation, user)
     except FinanceError as exc:

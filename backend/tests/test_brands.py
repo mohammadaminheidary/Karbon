@@ -59,7 +59,7 @@ class BrandTests(unittest.TestCase):
 
         self.send("PUT", brand_path, {"name": "Acme Tools"})
         current = self.send("GET", "/products?for_order=true")[0]
-        self.assertEqual((current["brand_name"], current["stock"], current["price"]), ("Acme Tools", 6, 120))
+        self.assertEqual((current["brand_name"], current["stock"], current["price"]), ("Acme Tools", 3, 120))
         dashboard = self.send("GET", "/dashboard?start_date=2026-10-31&end_date=2026-10-31")
         self.assertEqual(dashboard["inventory"]["products"][0]["brand_name"], "Acme Tools")
         self.assertEqual((dashboard["product_sales"][0]["brand_name"], dashboard["product_sales"][0]["gross"]), ("Acme Tools", "240"))

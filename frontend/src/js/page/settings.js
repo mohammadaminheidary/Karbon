@@ -59,9 +59,12 @@ const settingsSections = new Map([
   ["banks", initializeBankAccounts],
   ["products", initializeProductSettings],
   ["inventory", initializeInventorySettings],
+  ["warehouse-categories", initializeInventorySettings],
+  ["warehouse-products", initializeProductSettings],
   ["units", initializeInventorySettings],
   ["brands", initializeBrandSettings],
   ["invoices", initializeInvoiceSettings],
+  ["purchase-invoices", initializeInvoiceSettings],
   ["invoice-settings", initializeInvoiceDesignSettings],
   ["appearance", null],
   ["security", initializeSecuritySettings],
@@ -212,6 +215,11 @@ function setSettingsButtonState(
 }
 
 
+const sharedSettingsPanels = new Map([
+  ["warehouse-categories", "inventory"],
+  ["warehouse-products", "products"],
+  ["purchase-invoices", "invoices"],
+]);
 const sectionLoads = new Map();
 async function showSettingsSection(
   requestedSection,
@@ -225,6 +233,7 @@ async function showSettingsSection(
     )
       ? requestedSection
       : "general";
+  const panelName = sharedSettingsPanels.get(section) ?? section;
 
 
   document
@@ -236,7 +245,7 @@ async function showSettingsSection(
         const active =
           panel.dataset
             .settingsPanel ===
-          section;
+          panelName;
 
 
         panel.classList.toggle(
@@ -256,7 +265,7 @@ async function showSettingsSection(
         const active =
           button.dataset
             .settingsTarget ===
-          section;
+          (section === "purchase-invoices" ? "invoices" : section);
 
 
         setSettingsButtonState(
@@ -275,7 +284,9 @@ async function showSettingsSection(
     );
   }
 
-  const selected = document.querySelector(`[data-settings-target="${section}"]`);
+  const selected = document.querySelector('[data-settings-target][aria-current="true"]');
+  const group = selected?.closest(".settings-nav-disclosure");
+  if (group) group.open = true;
   if (selected && window.matchMedia("(max-width: 800px)").matches) {
     // Scroll only the compact navigation strip; leave the page's reading position intact.
     const nav = getElement("settingsNavigation");
@@ -284,18 +295,19 @@ async function showSettingsSection(
   }
 
 
-  const panel = document.querySelector(`[data-settings-panel="${section}"]`);
+  const panel = document.querySelector(`[data-settings-panel="${panelName}"]`);
+  if (selected) panel?.setAttribute("aria-labelledby", selected.id);
   const newProduct = getElement("openCreateProductButton");
-  newProduct.hidden = section !== "products";
+  newProduct.hidden = panelName !== "products";
   newProduct.closest(".navbar-title-island").classList.toggle("orders-title-island", !newProduct.hidden);
-  const version = (sectionLoads.get(section) || 0) + 1;
-  sectionLoads.set(section, version);
+  const version = (sectionLoads.get(panelName) || 0) + 1;
+  sectionLoads.set(panelName, version);
   panel?.setAttribute("aria-busy", "true");
   try {
     const initialize = settingsSections.get(section);
-    if (initialize) await initialize(panel);
+    if (initialize) await initialize(panel, section);
   } finally {
-    if (sectionLoads.get(section) === version) panel?.setAttribute("aria-busy", "false");
+    if (sectionLoads.get(panelName) === version) panel?.setAttribute("aria-busy", "false");
   }
 }
 

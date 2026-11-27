@@ -39,7 +39,7 @@ function inventoryRow(product, availability, showMovements) {
   row.append(
     identity,
     node("td", "", product.brand_name ?? "—"),
-    node("td", "", product.category_path ?? "—"),
+    node("td", "", product.warehouse_category_path ?? "بدون دسته‌بندی انبار"),
     node("td", "", product.unit),
     node("td", "warehouse-quantity", formatNumber(product.stock)),
     status,
@@ -102,18 +102,17 @@ startPage(async () => {
     const current = ++version;
     inventory.setAttribute("aria-busy", "true");
     try {
-      const products = await financeRequest("/products?include_inactive=true", { cache: "no-store" });
+      const products = await financeRequest("/inventory/products?catalog_only=true", { cache: "no-store" });
       if (current !== version) return;
       const selection = category.value;
       const categories = new Map();
       const stats = { total: 0, inactive: 0, empty: 0, available: 0, value: 0n };
       catalog = [];
       for (const product of products) {
-        if (product.stock == null) continue;
-        const categoryId = String(product.category_id);
+        const categoryId = String(product.warehouse_category_id ?? "");
         const inStock = product.stock > 0;
         const availability = product.active ? (inStock ? "available" : "empty") : "inactive";
-        if (product.category_path) categories.set(categoryId, product.category_path);
+        if (product.warehouse_category_path) categories.set(categoryId, product.warehouse_category_path);
         stats.total++;
         if (!product.active) stats.inactive++;
         if (availability === "empty") stats.empty++;
@@ -179,7 +178,7 @@ function initializeMovements() {
         const row = node("li", "orders-record");
         const direction = movement.delta > 0 ? "+" : "";
         row.append(node("span", "font-bold", `${direction}${formatNumber(movement.delta)} ${movement.unit} · ${date.format(new Date(movement.business_date))}`),
-          node("bdi", "block orders-hint", movement.reference));
+          node("bdi", "block orders-hint", movement.reference === "opening" ? "ماندهٔ آغازین انبار" : movement.reference));
         return row;
       });
       if (!append) items.replaceChildren();

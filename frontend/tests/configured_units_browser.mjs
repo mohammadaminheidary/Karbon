@@ -1,5 +1,7 @@
+import { choosePurchaseCategory, selectPurchaseItem, purchaseRow, waitForPurchaseForm } from "./purchase-browser-helpers.mjs";
 // Run with serve_customers_fixture.py --customers 3 --orders --finance.
 import assert from "node:assert/strict";
+import { selectOrderProduct } from "./order_product_picker.mjs";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(
@@ -164,6 +166,10 @@ try {
   const response = await saved;
   assert.equal(response.status(), 201, await response.text());
   const product = await response.json();
+  const category = await api("POST", "/settings/inventory-options/warehouse-categories", { name: `دسته ${name}` }, 201);
+  const stored = await api("POST", "/inventory/products", {
+    name: product.name, unit: product.unit, price: product.price, warehouse_category_id: category.id,
+  }, 201);
   await page.waitForFunction(
     () => !document.getElementById("settingsProductFields").disabled,
   );
@@ -183,10 +189,7 @@ try {
   await orderPage.goto(base + "/page/orders-page.html");
   await orderPage.locator(".orders-create").click();
   const productSelect = orderPage.locator("#orderItems .item-product").first();
-  await productSelect
-    .locator(`option[value="${product.id}"]`)
-    .waitFor({ state: "attached" });
-  await productSelect.selectOption(String(product.id));
+  await selectOrderProduct(productSelect, product);
   assert.equal(
     await orderPage.locator("#orderItems .item-unit").first().textContent(),
     name,
@@ -203,12 +206,10 @@ try {
   assert.equal(await choice().isChecked(), false);
   await orderPage.bringToFront();
   await orderPage.waitForFunction(
-    (id) =>
-      !document.querySelector(
-        `#orderItems .item-product option[value="${id}"]`,
-      ),
-    product.id,
+    () => !document.querySelector("#orderItems .item-product").dataset.productId,
   );
+  await productSelect.fill(product.name);
+  await orderPage.getByText("کالایی پیدا نشد.", { exact: true }).waitFor();
   assert.equal(
     await orderPage.locator("#orderItems .item-unit").first().textContent(),
     "—",
@@ -266,62 +267,24 @@ try {
   );
   await page.locator("#saveSettingsProduct").click();
   assert.equal((await edited).status(), 200);
-  // Purchase entry uses the identical catalog and responds to empty selections.
-  const category = await api(
-    "POST",
-    "/settings/inventory-options/categories",
-    { name: `دسته ${name}` },
-    201,
-  );
-  const currentProduct = (
-    await api("GET", "/products?include_inactive=true")
-  ).find((item) => item.id === product.id);
-  await api(
-    "PUT",
-    `/products/${product.id}`,
-    Object.fromEntries(
-      [
-        "name",
-        "unit",
-        "price",
-        "stock",
-        "active",
-        "revision",
-        "category_id",
-      ].map((key) => [
-        key,
-        key === "category_id" ? category.id : currentProduct[key],
-      ]),
-    ),
-  );
+  // An inactive unit blocks both selectors while their product records remain independent.
   await page.goto(base + "/page/warehouse-page.html#purchase");
   await ready();
-  await page.waitForFunction(() =>
-    document.querySelector('#purchaseEntryPage[aria-busy="false"]'),
-  );
-  await page.locator("#purchaseCategory").selectOption(String(category.id));
-  assert.equal(
-    await page
-      .locator(`#purchaseItemName option[value="${product.id}"]`)
-      .count(),
-    0,
-  );
-  assert.equal(await page.locator("#purchaseUnit").inputValue(), "");
+  await waitForPurchaseForm(page);
+  await choosePurchaseCategory(page, category.id);
+  assert.equal(await page.locator(`[data-product-option="${stored.id}"]`).count(), 0);
+  assert.equal(await purchaseRow(page).locator(".item-unit").textContent(), "—");
   const options = await api("GET", "/settings/inventory-options");
   for (const u of options.units.filter((u) => u.active))
     await api("PUT", `/settings/inventory-options/units/${u.id}`, {
       name: u.name,
       active: false,
     });
-  await page.locator("#reloadPurchaseOptions").click();
-  await page.waitForFunction(() =>
-    document.querySelector('#purchaseEntryPage[aria-busy="false"]'),
-  );
-  assert.equal(await page.locator("#purchaseItemName").isDisabled(), true);
-  assert.equal(
-    await page.locator("#purchaseUnit").evaluate((el) => el.readOnly),
-    true,
-  );
+  await page.reload();
+  await ready();
+  await waitForPurchaseForm(page);
+  await choosePurchaseCategory(page, category.id);
+  await page.getByText("در این دسته‌بندی کالای قابل خرید وجود ندارد.").waitFor();
   await page.goto(base + "/page/settings-page.html#products");
   await ready();
   await page.locator("#openCreateProductButton").click();
@@ -335,12 +298,9 @@ try {
   });
   await page.goto(base + "/page/warehouse-page.html#purchase");
   await ready();
-  await page.waitForFunction(() =>
-    document.querySelector('#purchaseEntryPage[aria-busy="false"]'),
-  );
-  await page.locator("#purchaseCategory").selectOption(String(category.id));
-  await page.locator("#purchaseItemName").selectOption(String(product.id));
-  assert.equal(await page.locator("#purchaseUnit").inputValue(), name);
+  await waitForPurchaseForm(page);
+  await selectPurchaseItem(page, category.id, stored.id);
+  assert.equal(await purchaseRow(page).locator(".item-unit").textContent(), name);
   await page.goto(base + "/page/settings-page.html#units");
   await ready();
   await optionsReady();

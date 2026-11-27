@@ -12,10 +12,11 @@ from models.customer import Customer
 from models.document import Document, DocumentAccount
 from models.finance import BankAccount, BankDirectory, ExpenseCategory, FinancialTransaction as Tx
 from models.fiscal_year import FiscalInventoryOpening, InventoryChange, InventoryHistory
-from models.inventory import InventoryOption, Purchase, PurchaseItem
+from models.inventory import InventoryOption, Purchase, PurchaseItem, PurchasePayment
 from models.order import CASH_ACCOUNT_NUMBER, Order, OrderItem, OrderPayment, Product
 from services.fiscal_period import bank_openings, jalali, year_dates, year_of
 from services.inventory_service import PURCHASE_INTERNAL_FIELDS
+from services import purchase_payments
 from services.receivables import CUSTOMER_RECEIPT_METHOD, general_allocations, invoice_positions
 
 
@@ -42,7 +43,8 @@ def inventory_at(db, cutoff):
     tracked = {}
     quantities = Counter()
     states = {}
-    for change in db.scalars(select(InventoryChange).order_by(InventoryChange.business_date, InventoryChange.id)):
+    for change in db.scalars(select(InventoryChange).where(InventoryChange.scope == "sales")
+                             .order_by(InventoryChange.business_date, InventoryChange.id)):
         totals[change.product_id] += change.delta
         if change.tracked is not None and (change.product_id not in tracked or tracked[change.product_id].id < change.id):
             tracked[change.product_id] = change
@@ -54,7 +56,7 @@ def inventory_at(db, cutoff):
                     (max(saved.business_date, history.available_from), saved.id)):
                 states[change.product_id] = change
     live = {pid: qty for pid, qty in db.execute(select(Product.id, Product.stock).where(
-        Product.deleted_at.is_(None), Product.stock.is_not(None)))}
+        Product.deleted_at.is_(None), Product.catalog == "sales", Product.stock.is_not(None)))}
     expected = {pid: totals[pid] for pid, change in tracked.items() if change.tracked}
     if expected != live:
         return {"available": False, "reason": "سوابق تغییر موجودی برای بازسازی مانده در تاریخ پایان سال کافی نیست.", "rows": []}
@@ -162,6 +164,9 @@ def capture(db, year):
               "end_jalali": jalali(cutoff), "next_year": year + 1, "timezone": zone.key}
     transactions = db.scalars(select(Tx).where(Tx.deleted_at.is_(None), Tx.transaction_date <= cutoff)
                               .order_by(Tx.transaction_date, Tx.transaction_time, Tx.id)).all()
+    purchase_links = dict(db.execute(select(PurchasePayment.transaction_id, PurchasePayment.purchase_id).join(
+        Tx, Tx.id == PurchasePayment.transaction_id,
+    ).where(Tx.deleted_at.is_(None), Tx.transaction_date <= cutoff)).all())
     receipts = defaultdict(list)
     allocations = {}
     for payment, tx in db.execute(select(OrderPayment, Tx).join(Tx, Tx.id == OrderPayment.transaction_id)
@@ -245,6 +250,7 @@ def capture(db, year):
             "expense_category": (expense_names.get(tx.expense_category_id) or document_names.get(tx.document_account_id)
                                  or tx.title) if tx.kind == "expense" else None,
             "order_id": allocation.order_id if allocation else None,
+            "purchase_id": purchase_links.get(tx.id),
         })
         if tx.kind == "income":
             payment_data.append({
@@ -284,6 +290,7 @@ def capture(db, year):
         total = item.quantity * item.purchase_price
         purchase_totals[item.purchase_id] += total
         purchase_items.append({**columns(item), "total": total})
+    purchase_history = purchase_payments.payment_history(db, [purchase.id for purchase in purchases], cutoff)
     inventory = inventory_at(db, cutoff)
     saved_inventory = db.get(FiscalInventoryOpening, year)
     opening_inventory = saved_inventory.data if saved_inventory else inventory_at(db, start - timedelta(days=1))
@@ -308,6 +315,10 @@ def capture(db, year):
         "purchase_issuance": {str(p.id): {key: p.invoice_snapshot[key] for key in ("presentation", "supplier")
                                              if key in p.invoice_snapshot}
                               for p in purchases if p.invoice_snapshot},
+        "purchase_finances": {str(p.id): {**purchase_payments.balance(
+            purchase_totals[p.id] - p.discount + p.tax + p.shipping,
+            sum(payment["amount"] for payment in purchase_history[p.id])),
+            "payments": purchase_history[p.id]} for p in purchases if p.id in purchase_history},
         "inventory": inventory, "opening_inventory": opening_inventory,
         "products": [products[pid] for pid in sorted(products)],
         "product_categories": [columns(c) for c in categories if c.id in category_ids],

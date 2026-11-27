@@ -6,7 +6,7 @@ let dialog,
   root,
   pending = false,
   action;
-export function confirmFinanceDelete({ path, description, onDeleted, orderCancellation = false }) {
+export function confirmFinanceDelete({ path, description, onDeleted, fields, orderCancellation = false }) {
   if (pending) return;
   if (!root) {
     root = node("dialog", "bottom-curtain finance-surface");
@@ -35,6 +35,7 @@ export function confirmFinanceDelete({ path, description, onDeleted, orderCancel
         await financeRequest(current.path, {
           method: "DELETE",
           body: {
+            ...current.fields,
             password: root.querySelector("input").value,
             confirmed: true,
           },
@@ -52,7 +53,7 @@ export function confirmFinanceDelete({ path, description, onDeleted, orderCancel
       await current.onDeleted?.();
     });
   }
-  action = { path, onDeleted, orderCancellation };
+  action = { path, onDeleted, fields, orderCancellation };
   root.toggleAttribute("data-order-cancellation", orderCancellation);
   root.querySelector("form").reset();
   root.querySelector("#deleteTitle").textContent = orderCancellation ? "لغو سفارش" : "آیا مطمئن هستید؟";

@@ -15,7 +15,8 @@ class InventorySettingsTests(unittest.TestCase):
             db.execute("DELETE FROM inventory_options")
 
     def test_settings_round_trip_normalization_and_kind_isolation(self):
-        self.assertEqual(self.request("GET", "/settings/inventory-options")[1], {"categories": [], "units": []})
+        self.assertEqual(self.request("GET", "/settings/inventory-options")[1],
+                         {"categories": [], "units": [], "warehouse-categories": []})
         status, category = self.request("POST", "/settings/inventory-options/categories", {"name": "  مواد  اوليه  "})
         self.assertEqual(status, 201)
         self.assertEqual(category["name"], "مواد اولیه")

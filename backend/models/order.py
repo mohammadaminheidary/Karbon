@@ -12,14 +12,19 @@ PRODUCT_BRAND_CHECK = "(requires_brand = 0 AND brand_id IS NULL) OR (requires_br
 class Product(Base):
     __tablename__ = "products"
     __table_args__ = (CheckConstraint("price >= 0 AND price <= 999999999999"), CheckConstraint(PRODUCT_BRAND_CHECK),
-                      Index("ux_products_name_brand", "name", text("COALESCE(brand_id, 0)"), unique=True),
+                      CheckConstraint("catalog IN ('sales', 'warehouse')"),
+                      Index("ux_products_catalog_name_brand", "catalog", "name", text("COALESCE(brand_id, 0)"), unique=True),
+                      Index("ux_products_legacy_product_id", "legacy_product_id", unique=True),
                       {"sqlite_autoincrement": True})
     id = Column(Integer, primary_key=True)
+    catalog = Column(String(12), nullable=False, server_default="sales")
+    legacy_product_id = Column(Integer, nullable=True)
     product_code = Column(String(32), nullable=True, unique=True)
     revision = Column(Integer, nullable=False, default=1)
     name = Column(String(150), nullable=False)
     unit = Column(String(80), nullable=False)
     category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=True)
+    warehouse_category_id = Column(Integer, ForeignKey("inventory_options.id", ondelete="RESTRICT"), nullable=True, index=True)
     requires_brand = Column(Boolean, nullable=False, default=False, server_default="0")
     brand_id = Column(Integer, ForeignKey("brands.id", ondelete="RESTRICT"), index=True)
     brand = relationship("Brand")

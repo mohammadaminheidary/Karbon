@@ -25,14 +25,16 @@ from database import Base
 from models.backup_settings import BackupSettings
 from models.fiscal_year import FISCAL_TABLES
 from models.factory_reset import CHALLENGE_COLUMNS, FactoryResetChallenge, upgrade_factory_reset_challenges
-from models.inventory import ProductionRun
+from models.inventory import ProductionRun, PurchasePayment
 from schemas.backup_schema import BrowserPreferences
 from services.backup_settings import initialize_backup_settings, parse_timestamp, record_backup_success, sync_directory
 from services.default_customer import initialize_default_customer
 from services.invoice_settings_service import INVOICE_COLUMNS, SETTINGS_TABLES, initialize_invoice_storage
 from security.face_templates import template_key
 from services.fiscal_period import initialize_fiscal_storage
-from services.inventory_service import PURCHASE_REVISION_COLUMNS, upgrade_purchase_revisions
+from services.inventory_service import (
+    PURCHASE_REVISION_COLUMNS, initialize_category_storage, initialize_purchase_storage, initialize_warehouse_constraints,
+)
 from services.order_service import upgrade_product_constraints
 
 
@@ -214,7 +216,7 @@ def validate_database(path, recovery):
                 continue
             if legacy_invoices and table.name in invoice_names:
                 continue
-            if table in (ProductionRun.__table__, FactoryResetChallenge.__table__, BackupSettings.__table__) \
+            if table in (ProductionRun.__table__, FactoryResetChallenge.__table__, BackupSettings.__table__, PurchasePayment.__table__) \
                     and table.name not in table_names:
                 continue
             required = set(table.columns.keys())
@@ -222,8 +224,14 @@ def validate_database(path, recovery):
                 required -= CHALLENGE_COLUMNS.keys()
             if table.name == "purchases":
                 required -= PURCHASE_REVISION_COLUMNS.keys()
+            if table.name == "inventory_options":
+                required.discard("deleted_at")
+            if table.name == "products":
+                required -= {"warehouse_category_id", "catalog", "legacy_product_id"}
             if table.name == "fiscal_inventory_changes":
-                required -= {"reference", "posted_at"}
+                required -= {"reference", "posted_at", "scope"}
+            if table.name == "fiscal_inventory_history":
+                required.discard("warehouse_available_from")
             if legacy_invoices:
                 required -= INVOICE_COLUMNS.get(table.name, {}).keys()
             if legacy_fiscal:
@@ -391,14 +399,16 @@ def restore_snapshot(snapshot, recovery, created_at):
         if not inspect(staged).has_table("fiscal_years"):
             Base.metadata.create_all(staged, tables=FISCAL_TABLES)
         Base.metadata.create_all(staged, tables=SETTINGS_TABLES)
-        Base.metadata.create_all(staged, tables=[ProductionRun.__table__, FactoryResetChallenge.__table__])
+        Base.metadata.create_all(staged, tables=[ProductionRun.__table__, FactoryResetChallenge.__table__, PurchasePayment.__table__])
         with staged.begin() as connection:
             connection.exec_driver_sql("BEGIN IMMEDIATE")
-            upgrade_purchase_revisions(connection)
             upgrade_factory_reset_challenges(connection)
+        initialize_category_storage(staged)
+        initialize_purchase_storage(staged)
         initialize_invoice_storage(staged)
         initialize_backup_settings(staged)
         upgrade_product_constraints(staged)
+        initialize_warehouse_constraints(staged)
         initialize_default_customer(staged)
         initialize_fiscal_storage(staged, zone=ZoneInfo(recovery["timezone"]))
     finally:

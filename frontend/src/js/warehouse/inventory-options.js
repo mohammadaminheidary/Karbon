@@ -1,5 +1,7 @@
 import { financeRequest } from "../finance/finance-api.js";
 
+export const WAREHOUSE_CATEGORIES = "warehouse-categories";
+
 export const getInventoryOptions = () =>
   financeRequest("/settings/inventory-options", { cache: "no-store" });
 
@@ -12,8 +14,8 @@ export const saveInventoryOption = (kind, data, id) =>
     body: data,
   });
 
-export const deleteInventoryCategory = (id) =>
-  financeRequest(`/settings/inventory-options/categories/${id}`, {
+export const deleteInventoryCategory = (kind, id, confirmUnassignment) =>
+  financeRequest(`/settings/inventory-options/${kind}/${id}${confirmUnassignment ? "?confirm_unassignment=true" : ""}`, {
     method: "DELETE",
   });
 
@@ -35,14 +37,16 @@ export function categoryGroups(categories) {
 export function populateCategorySelect(
   field,
   categories,
-  { current = null, selected = field.value } = {},
+  { current = null, selected = field.value, optional = false } = {},
 ) {
   const available = categoryGroups(categories)
     .flatMap(({ main, children }) => [main, ...children])
     .filter((item) => categoryIsSelectable(item) || item.id === current);
   field.replaceChildren(
     new Option(
-      available.length
+      optional
+        ? "بدون دسته‌بندی انبار"
+        : available.length
         ? "انتخاب دسته‌بندی"
         : "ابتدا دسته‌بندی را در تنظیمات تعریف کنید",
       "",
@@ -58,7 +62,7 @@ export function populateCategorySelect(
   field.value = available.some((item) => String(item.id) === String(selected))
     ? String(selected)
     : "";
-  field.disabled = available.length === 0;
+  field.disabled = !optional && available.length === 0;
 }
 
 // The original unit is offered only while editing its owning record. It stays

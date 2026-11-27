@@ -18,6 +18,7 @@ from models.member import Member
 from models.order import Order, OrderItem, Product
 from models.task import Task
 from services.inventory_service import category_path, with_category_names
+from services.purchase_payments import obligations
 from services.finance_service import bank_list
 from services.fiscal_period import active_period, effective_day, in_active_period
 from services.receivables import active_bounds, invoice_positions
@@ -141,7 +142,7 @@ def dashboard(db, start, end, view="full", include_debtors=False, include_produc
 
     products = with_category_names(
         db.query(Product.id, Product.name, Product.unit, Product.price, Product.stock, Product.active, Product.category_id)
-        .filter(Product.deleted_at.is_(None)), Product.category_id,
+        .filter(Product.deleted_at.is_(None), Product.catalog == "sales"), Product.category_id,
     ).outerjoin(Brand, Brand.id == Product.brand_id).add_columns(Brand.name.label("brand_name")).all()
     inventory = [dict(id=p.id, name=p.name, unit=p.unit, price=str(p.price), stock=p.stock,
                       category_id=p.category_id, category_path=category_path(p.category_name, p.category_parent_name),
@@ -218,6 +219,7 @@ def dashboard(db, start, end, view="full", include_debtors=False, include_produc
         banks=dict(items=banks, balance=str(sum(int(row["balance"]) for row in banks)),
                    opening_balance=str(sum(int(row["opening_balance"]) for row in banks))),
         purchases=dict(count=purchase_count, value=str(purchase_value)),
+        purchase_obligations=obligations(db, limit=0, cutoff=end),
         **({"product_sales": product_sales_rows(db, start, end)} if include_products else {}),
         tasks=dict(total=sum(task_counts.values()), todo=task_counts["todo"], in_progress=task_counts["in_progress"],
                    completed=task_counts["completed"], overdue=overdue_tasks),

@@ -1,3 +1,4 @@
+import { selectPurchaseItem, waitForPurchaseForm } from "./purchase-browser-helpers.mjs";
 // Run against serve_customers_fixture.py with a disposable database.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -103,6 +104,14 @@ try {
   const saved = await save;
   assert.equal(saved.status(), 201, await saved.text());
   const product = await saved.json();
+  const store = (fields) => page.evaluate(async (data) => {
+    const { financeRequest } = await import("/src/js/finance/finance-api.js");
+    const options = await financeRequest("/settings/inventory-options");
+    return financeRequest("/inventory/products", { method: "POST", body: {
+      ...data, warehouse_category_id: options["warehouse-categories"].find((item) => item.name === "عمومی").id,
+    } });
+  }, fields);
+  const stored = await store({ name: product.name, unit: product.unit, price: product.price, requires_brand: true, brand_id: brand.id });
   assert.equal(product.brand_id, brand.id);
   const productRow = $(`[data-product-id="${product.id}"]`);
   await productRow.getByText(/Fixture panel · Acme/).waitFor();
@@ -162,23 +171,22 @@ try {
   assert.equal(unbrandedProduct.status(), 201, await unbrandedProduct.text());
   const unbrandedData = await unbrandedProduct.json();
   assert.deepEqual([unbrandedData.brand_id, unbrandedData.price], [null, 0]);
+  await store({ name: unbrandedData.name, unit: unbrandedData.unit });
   await page.goto(`${base}/page/warehouse-page.html`);
   await ready();
   await $("#warehouseInventory").getByText("Unbranded stock").waitFor();
   await $("#buyItemsButton").click();
-  await $("#purchaseCategory:enabled").selectOption(
-    String(product.category_id),
-  );
-  await $("#purchaseItemName option")
-    .filter({ hasText: "Fixture panel · Acme Tools" })
-    .waitFor({ state: "attached" });
+  await waitForPurchaseForm(page);
+  const purchaseField = await selectPurchaseItem(page, stored.warehouse_category_id, stored.id);
+  assert.match(await purchaseField.inputValue(), /Fixture panel · Acme Tools/);
 
   await page.goto(`${base}/page/orders-page.html`);
   await ready();
   await $(".orders-create").click();
-  await $(".item-product option")
+  await $(".item-product").first().fill("Fixture panel");
+  await $(".orders-product-option")
     .filter({ hasText: "Fixture panel · Acme Tools" })
-    .waitFor({ state: "attached" });
+    .waitFor();
 
   await page.goto(`${base}/page/settings-page.html#products`);
   await productRow.getByRole("button", { name: "ویرایش", exact: true }).click();
@@ -198,6 +206,16 @@ try {
     [data.brand_id, data.requires_brand, data.stock, data.price],
     [null, false, 5, 0],
   );
+  await modal.waitFor({ state: "hidden" });
+  await $("#settings-tab-warehouse-products").click();
+  await $(`[data-product-id="${stored.id}"]`).getByRole("button", { name: "ویرایش", exact: true }).click();
+  await formReady();
+  assert.equal(await brandChoice.inputValue(), String(brand.id));
+  await requiresBrand.uncheck();
+  const storedEdit = result("PUT", `/inventory/products/${stored.id}`);
+  await $("#saveSettingsProduct").click();
+  const storedResponse = await storedEdit;
+  assert.equal(storedResponse.status(), 200, await storedResponse.text());
   await modal.waitFor({ state: "hidden" });
   await $("#settings-tab-brands").click();
   await deleteButton.click();

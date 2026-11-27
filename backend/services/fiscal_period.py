@@ -25,6 +25,7 @@ DATED_CHILDREN = (
     ("order_items", "order_id", "orders", "invoice_date"),
     ("order_payments", "transaction_id", "financial_transactions", "transaction_date"),
     ("purchase_items", "purchase_id", "purchases", "purchase_date"),
+    ("purchase_payments", "transaction_id", "financial_transactions", "transaction_date"),
 )
 OPENING_TABLES = ("fiscal_bank_openings", "fiscal_customer_openings",
                   "fiscal_invoice_openings", "fiscal_inventory_openings")
@@ -202,6 +203,94 @@ def upgrade_inventory_references(connection):
         connection.exec_driver_sql(f"""CREATE TRIGGER IF NOT EXISTS inventory_change_no_{action.lower()}
             BEFORE {action} ON fiscal_inventory_changes
             BEGIN SELECT RAISE(ABORT, 'inventory journal is append-only'); END""")
+    if "scope" not in columns:
+        connection.exec_driver_sql("""ALTER TABLE fiscal_inventory_changes ADD COLUMN scope VARCHAR(12)
+            NOT NULL DEFAULT 'sales' CHECK (scope IN ('sales', 'warehouse'))""")
+    connection.exec_driver_sql("""CREATE INDEX IF NOT EXISTS ix_inventory_change_scope_product
+        ON fiscal_inventory_changes(scope, product_id)""")
+    history_columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(fiscal_inventory_history)")}
+    if "warehouse_available_from" not in history_columns:
+        connection.exec_driver_sql("ALTER TABLE fiscal_inventory_history ADD COLUMN warehouse_available_from DATE")
+
+
+def initialize_warehouse_journal(db, history, today):
+    if history.warehouse_available_from is not None:
+        return
+    # Keep recorded purchase postings in both historical views. The original
+    # entries still reconcile the pre-split sales balance.
+    db.execute(text("""
+        INSERT INTO fiscal_inventory_changes
+            (scope, reference, posted_at, product_id, business_date, delta, tracked, name, product_code, unit)
+        SELECT 'warehouse', 'warehouse:' || reference, posted_at, product_id, business_date,
+               delta, tracked, name, product_code, unit
+        FROM fiscal_inventory_changes WHERE scope='sales' AND reference GLOB 'purchase:*'
+        ORDER BY id
+    """))
+    # Receipts predating the journal still provide their latest line quantities.
+    for suffix, sign, deleted in (("apply", 1, ""), ("cancel", -1, "WHERE p.deleted_at IS NOT NULL")):
+        reference = ("'warehouse:purchase:' || p.id || ':' || p.revision || ':apply'" if suffix == "apply"
+                     else "'warehouse:purchase:' || p.id || ':cancel'")
+        db.connection().exec_driver_sql(f"""
+            INSERT INTO fiscal_inventory_changes
+                (scope, reference, posted_at, product_id, business_date, delta, name, product_code, unit)
+            SELECT 'warehouse', {reference}, p.created_at, i.product_id, p.purchase_date,
+                   {sign} * SUM(i.quantity), i.product_name, product.product_code, i.unit
+            FROM purchases p JOIN purchase_items i ON i.purchase_id=p.id
+            JOIN products product ON product.id=i.product_id
+            {deleted}
+            GROUP BY p.id, i.product_id
+            ON CONFLICT(reference, product_id) DO NOTHING
+        """)
+    # Opening adjustments carry forward the current balance exactly once, net
+    # of the receipt history copied above.
+    db.execute(text("""
+        INSERT INTO fiscal_inventory_changes
+            (scope, reference, product_id, business_date, delta, tracked, name, product_code, unit)
+        SELECT 'warehouse', 'warehouse:opening', p.id, :today, COALESCE(p.stock, 0) - COALESCE(m.quantity, 0),
+               1, p.name, p.product_code, p.unit
+        FROM products p
+        LEFT JOIN (SELECT product_id, SUM(delta) AS quantity FROM fiscal_inventory_changes
+                   WHERE scope='warehouse' GROUP BY product_id) m ON m.product_id=p.id
+        WHERE p.deleted_at IS NULL AND (p.stock IS NOT NULL OR m.product_id IS NOT NULL)
+    """), {"today": today})
+    first = db.scalar(select(func.min(InventoryChange.business_date)).where(InventoryChange.scope == "warehouse"))
+    history.warehouse_available_from = min(today, first) if first else today
+
+
+def split_product_catalogs(connection):
+    if connection.exec_driver_sql("SELECT 1 FROM inventory_purchase_migrations WHERE version=4").scalar():
+        return
+    connection.exec_driver_sql("""
+        INSERT INTO products
+            (catalog, legacy_product_id, product_code, revision, name, unit, warehouse_category_id,
+             requires_brand, brand_id, price, active)
+        SELECT 'warehouse', p.id, 'W-' || printf('%06d', p.id), 1, p.name, p.unit, p.warehouse_category_id,
+               p.requires_brand, p.brand_id, p.price, p.active
+        FROM products p
+        WHERE p.catalog='sales' AND p.deleted_at IS NULL AND (
+            p.warehouse_category_id IS NOT NULL
+            OR EXISTS (SELECT 1 FROM purchases WHERE product_id=p.id)
+            OR EXISTS (SELECT 1 FROM purchase_items WHERE product_id=p.id)
+            OR EXISTS (SELECT 1 FROM fiscal_inventory_changes
+                       WHERE scope='warehouse' AND product_id=p.id GROUP BY product_id HAVING SUM(delta) != 0)
+        )
+    """)
+    # Rekey warehouse movements once. Keep original purchase documents and
+    # the sales journal intact, including closed fiscal snapshots.
+    connection.exec_driver_sql("DROP TRIGGER IF EXISTS inventory_change_no_update")
+    connection.exec_driver_sql("""
+        UPDATE fiscal_inventory_changes AS movement SET product_id = warehouse.id
+        FROM products AS warehouse
+        WHERE movement.scope='warehouse' AND warehouse.legacy_product_id=movement.product_id
+    """)
+    connection.exec_driver_sql("""CREATE TRIGGER inventory_change_no_update
+        BEFORE UPDATE ON fiscal_inventory_changes
+        BEGIN SELECT RAISE(ABORT, 'inventory journal is append-only'); END""")
+    connection.exec_driver_sql("""
+        UPDATE products SET warehouse_category_id=NULL WHERE id IN (
+            SELECT legacy_product_id FROM products WHERE legacy_product_id IS NOT NULL)
+    """)
+    connection.exec_driver_sql("INSERT INTO inventory_purchase_migrations (version) VALUES (4)")
 
 
 def initialize_fiscal_storage(engine, zone=None):
@@ -211,18 +300,22 @@ def initialize_fiscal_storage(engine, zone=None):
         upgrade_inventory_references(db.connection())
         if active_period(db):
             install_guards(db.connection())
-        if db.get(InventoryHistory, 1) is None:
-            today = datetime.now(zone or app_timezone()).date()
+        today = datetime.now(zone or app_timezone()).date()
+        history = db.get(InventoryHistory, 1)
+        if history is None:
             # The previous application kept a single mutable stock count. If
             # already affected by later business dates, it cannot be unwound.
             last_sale = db.scalar(select(func.max(Order.invoice_date)).where(Order.deleted_at.is_(None)))
             last_purchase = db.scalar(select(func.max(Purchase.purchase_date)))
             available_from = max(filter(None, (today, last_sale, last_purchase)))
-            db.add(InventoryHistory(id=1, available_from=available_from))
-            for product in db.scalars(select(Product).where(Product.deleted_at.is_(None))):
+            history = InventoryHistory(id=1, available_from=available_from)
+            db.add(history)
+            for product in db.scalars(select(Product).where(Product.deleted_at.is_(None), Product.catalog == "sales")):
                 db.add(InventoryChange(reference="opening", product_id=product.id, business_date=available_from,
                                        delta=product.stock or 0, tracked=product.stock is not None,
                                        name=product.name, product_code=product.product_code, unit=product.unit))
+        initialize_warehouse_journal(db, history, today)
+        split_product_catalogs(db.connection())
         db.commit()
 
 

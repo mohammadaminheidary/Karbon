@@ -4,6 +4,7 @@
 // when Playwright and Chromium are installed outside frontend/node_modules.
 // This test submits real orders only in that disposable database.
 import assert from "node:assert/strict";
+import { selectOrderProduct } from "./order_product_picker.mjs";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(
@@ -160,14 +161,14 @@ try {
     // Switching back clears the large details and preserves normal form scrolling.
     await selectCustomer(customers[0]);
     await wheelToEnd("#orderCustomerDetails");
-    await page.locator(".item-product").selectOption(String(product.id));
+    await selectOrderProduct(page.locator(".item-product"), product);
     await page
       .locator("#orderDescription")
       .fill(`Scroll test ${width}x${height}`);
     await page.locator("#orderDiscount").fill("1000");
     // Add content dynamically, then resize an already-scrolled open form.
     await page.locator(".orders-add-row").last().click();
-    await page.locator(".item-product").last().selectOption(String(product.id));
+    await selectOrderProduct(page.locator(".item-product").last(), product);
     await page.setViewportSize({ width, height: height - 60 });
     await settled();
     await wheelToEnd("#orderDescription");

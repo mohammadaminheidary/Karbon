@@ -129,7 +129,11 @@ with SessionLocal() as db:
         db.add(Customer(customer_code=1001 + index, first_name=f"مشتری {{index + 1}}", last_name="آزمایشی", gender="male" if index % 2 else "female", phone_numbers=[f"0912{{index + 1:07d}}"], address="آدرس محیط آزمایشی"))
     if {args.orders!r}:
         category_id = db.query(InventoryOption.id).filter_by(kind="categories", name="عمومی").scalar()
-        db.add_all([Product(product_code="P-000001", name="چاپ کارت", unit="بسته", category_id=category_id, price=100000, stock=20), Product(product_code="P-000002", name="طراحی", unit="ساعت", category_id=category_id, price=50000, stock=None)])
+        warehouse_id = db.query(InventoryOption.id).filter_by(kind="warehouse-categories", name="عمومی").scalar()
+        db.add_all([Product(product_code="P-000001", name="چاپ کارت", unit="بسته", category_id=category_id, price=100000, stock=20),
+                    Product(product_code="P-000002", name="طراحی", unit="ساعت", category_id=category_id, price=50000, stock=None),
+                    Product(catalog="warehouse", product_code="W-000003", name="چاپ کارت", unit="بسته",
+                            warehouse_category_id=warehouse_id, price=100000)])
     if {args.finance!r} and not {args.bank_ledger}:
         db.add(BankAccount(name="بانک محیط آزمایش", account_number="123456789", opening_balance=1000000))
         db.add(ExpenseCategory(title="مواد اولیه آزمایشی"))

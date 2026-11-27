@@ -41,23 +41,38 @@ class PurchaseTests(unittest.TestCase):
         with closing(sqlite3.connect(self.database)) as db:
             return db.execute("SELECT stock, revision FROM products WHERE id=?", (self.product["id"],)).fetchone()
 
+    def warehouse_stock(self, product=None):
+        product = product or self.product
+        status, rows = self.request("GET", "/inventory/products")
+        self.assertEqual(status, 200, rows)
+        return next((row["stock"] for row in rows if row["id"] == product["id"]), 0)
+
     def test_purchase_persistence_date_stock_snapshot_and_sale(self):
-        purchase = self.post("/purchases", self.payload())
+        body = self.payload(discount=100, description="خرید آزمایشی\nتحویل انبار")
+        purchase = self.post("/purchases", body)
         self.assertRegex(purchase["invoice_number"], r"^PUR-\d{6,}$")
         self.assertEqual(purchase["purchase_date"], "2026-10-31")
         self.assertEqual(purchase["jalali_date"], "1405/08/09")
-        self.assertEqual((purchase["product_name"], purchase["unit"], purchase["total"]), ("کالای خرید", "عدد", 2100))
-        self.assertEqual(self.stock(), (13, 2))
+        self.assertEqual((purchase["product_name"], purchase["unit"], purchase["total"]), ("کالای خرید", "عدد", 2000))
+        self.assertEqual((purchase["description"], purchase["discount"]), (body["description"], 100))
+        self.assertEqual(self.request("GET", f'/purchases/{purchase["id"]}/invoice')[1]["description"], body["description"])
+        self.assertEqual(self.stock(), (10, 1))
+        self.assertEqual(self.warehouse_stock(), 3)
         self.assertEqual(self.request("GET", f'/purchases/{purchase["id"]}')[1], purchase)
         with closing(sqlite3.connect(self.database)) as db, db:
             self.assertEqual(db.execute("SELECT quantity,purchase_price FROM purchases").fetchone(), (3, 700))
             self.assertEqual(db.execute("SELECT price FROM products").fetchone()[0], 1000)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM orders").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM financial_transactions").fetchone()[0], 0)
             db.execute("UPDATE products SET name='نام جدید' WHERE id=?", (self.product["id"],))
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
         self.assertEqual(self.request("GET", f'/purchases/{purchase["id"]}')[1]["product_name"], "کالای خرید")
         customer = self.post("/customers", {"first_name": "خریدار", "last_name": str(uuid4()), "phone_numbers": []})
         self.post("/orders", {"request_id": str(uuid4()), "customer_id": customer["id"], "invoice_date": "1405/08/10", "payment_date": "1405/08/10", "items": [{"product_id": self.product["id"], "quantity": 12, "unit_price": 1000}]})
-        self.assertEqual(self.stock()[0], 1)
+        self.assertEqual(self.stock()[0], -2)
+        self.assertEqual(self.warehouse_stock(), 3)
+        movements = self.request("GET", f'/inventory/movements?product_id={self.product["id"]}')[1]["items"]
+        self.assertEqual([(row["reference"], row["delta"]) for row in movements], [(f'purchase:{purchase["id"]}:1:apply', 3)])
 
     def test_concurrent_retries_and_separate_purchases(self):
         body = self.payload()
@@ -65,20 +80,22 @@ class PurchaseTests(unittest.TestCase):
             results = list(pool.map(lambda _: self.request("POST", "/purchases", body), range(6)))
         self.assertTrue(all(status == 201 for status, _ in results), results)
         self.assertEqual(len({data["id"] for _, data in results}), 1)
-        self.assertEqual(self.stock(), (13, 2))
+        self.assertEqual(self.warehouse_stock(), 3)
         self.assertEqual(self.request("POST", "/purchases", {**body, "quantity": 4})[0], 409)
-        self.assertEqual(self.stock(), (13, 2))
+        self.assertEqual(self.warehouse_stock(), 3)
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
             results = list(pool.map(lambda _: self.request("POST", "/purchases", self.payload(quantity=1)), range(6)))
         self.assertTrue(all(status == 201 for status, _ in results), results)
         self.assertEqual(len({data["invoice_number"] for _, data in results}), 6)
-        self.assertEqual(self.stock(), (19, 8))
+        self.assertEqual(self.warehouse_stock(), 9)
+        self.assertEqual(self.stock(), (10, 1))
 
     def test_validation_and_rollback(self):
         for changes in [{"quantity": 0}, {"quantity": -1}, {"quantity": 1.5}, {"quantity": "2"}, {"quantity": True}, {"quantity": 1000001},
                         {"purchase_price": -1}, {"purchase_price": 1.5}, {"quantity": 1000000, "purchase_price": 999999999999},
                         {"purchase_date": "1405/12/30"}, {"purchase_date": "2026-10-31"}, {"purchase_date": ""},
-                        {"product_id": 999999}, {"category_id": self.other["id"]}, {"unit": "متر"}, {"invoice_number": "fake"}, {"request_id": "bad"}]:
+                        {"product_id": 999999}, {"category_id": self.other["id"]}, {"unit": "متر"}, {"invoice_number": "fake"},
+                        {"request_id": "bad"}, {"discount": -1}, {"discount": 2101}, {"description": "a" * 1001}]:
             self.assertEqual(self.request("POST", "/purchases", self.payload(**changes))[0], 422, changes)
             self.assertEqual(self.stock(), (10, 1))
         with closing(sqlite3.connect(self.database)) as db:
@@ -93,19 +110,19 @@ class PurchaseTests(unittest.TestCase):
         self.request("PUT", f'/settings/inventory-options/units/{self.unit["id"]}', {"name": "عدد", "active": False})
         self.assertEqual(self.request("POST", "/purchases", body)[0], 422)
         self.request("PUT", f'/settings/inventory-options/units/{self.unit["id"]}', {"name": "عدد", "active": True})
-        for sql in ["stock=NULL", "active=0", "stock=1000000000"]:
-            with closing(sqlite3.connect(self.database)) as db, db:
-                db.execute(f"UPDATE products SET {sql} WHERE id=?", (self.product["id"],))
-            self.assertEqual(self.request("POST", "/purchases", body)[0], 422)
-            with closing(sqlite3.connect(self.database)) as db, db:
-                db.execute("UPDATE products SET stock=10,active=1 WHERE id=?", (self.product["id"],))
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE products SET active=0 WHERE id=?", (self.product["id"],))
+        self.assertEqual(self.request("POST", "/purchases", body)[0], 422)
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE products SET stock=NULL,active=1 WHERE id=?", (self.product["id"],))
         purchase = self.post("/purchases", body)
         product = next(item for item in self.request("GET", "/products")[1] if item["id"] == self.product["id"])
         self.assertFalse(product["can_delete"])
         self.assertEqual(self.request("DELETE", f'/products/{self.product["id"]}', {"password": "test-password", "confirmed": True})[0], 409)
         self.request("PUT", f'/settings/inventory-options/units/{self.unit["id"]}', {"name": "عدد", "active": False})
         self.assertEqual(self.post("/purchases", body), purchase)  # Retry checks precede catalog changes.
-        self.assertEqual(self.stock(), (13, 2))
+        self.assertEqual(self.stock(), (None, 1))
+        self.assertEqual(self.warehouse_stock(), 3)
 
     def test_authentication_and_settings_category_validation(self):
         for method, path, body in [("GET", "/purchases/next-number", None), ("GET", "/purchases/1", None), ("POST", "/purchases", self.payload())]:
@@ -123,11 +140,12 @@ class PurchaseTests(unittest.TestCase):
             db.execute("CREATE TRIGGER reject_purchase BEFORE INSERT ON purchases BEGIN SELECT RAISE(ABORT, 'test failure'); END")
         self.assertEqual(self.request("POST", "/purchases", body)[0], 409)
         self.assertEqual(self.stock(), (10, 1))
+        self.assertEqual(self.warehouse_stock(), 0)
         with closing(sqlite3.connect(self.database)) as db, db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM purchases").fetchone()[0], 0)
             db.execute("DROP TRIGGER reject_purchase")
         self.post("/purchases", body)
-        self.assertEqual(self.stock(), (13, 2))
+        self.assertEqual(self.warehouse_stock(), 3)
 
     def multi_payload(self):
         second = self.post("/products", {"name": "کالای دوم", "category_id": self.other["id"], "unit": "عدد", "price": 2000, "stock": 5})
@@ -142,11 +160,12 @@ class PurchaseTests(unittest.TestCase):
         self.assertEqual((result["total_quantity"], result["row_count"], result["total"]), (9, 3, 5900))
         self.assertEqual([row["position"] for row in result["rows"]], [1, 2, 3])
         self.assertEqual([row["total"] for row in result["rows"]], [2100, 1800, 2000])
-        self.assertEqual(self.stock(), (17, 2))
+        self.assertEqual(self.warehouse_stock(), 7)
         self.assertEqual(self.post("/purchases", body), result)
         self.assertEqual(self.request("POST", "/purchases", {**body, "rows": list(reversed(body["rows"]))})[0], 409)
         with closing(sqlite3.connect(self.database)) as db, db:
-            self.assertEqual(db.execute("SELECT stock,revision FROM products WHERE id=?", (second["id"],)).fetchone(), (7, 2))
+            self.assertEqual(db.execute("SELECT stock,revision FROM products WHERE id=?", (second["id"],)).fetchone(), (5, 1))
+            self.assertEqual(self.warehouse_stock(second), 2)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM purchases").fetchone()[0], 1)
             db.execute("UPDATE products SET name='تغییر نام' WHERE id=?", (second["id"],))
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
@@ -165,9 +184,11 @@ class PurchaseTests(unittest.TestCase):
             self.assertEqual(self.request("POST", "/purchases", {**body, "rows": rows})[0], 422, rows)
             self.assertEqual(self.stock(), (10, 1))
         with closing(sqlite3.connect(self.database)) as db, db:
-            db.execute("UPDATE products SET stock=999999995 WHERE id=?", (self.product["id"],))
+            db.execute("""INSERT INTO fiscal_inventory_changes (reference, scope, product_id, business_date, delta, name, unit)
+                VALUES ('warehouse:test-opening', 'warehouse', ?, '2026-10-31', 999999995, 'Test', 'عدد')""", (self.product["id"],))
         self.assertEqual(self.request("POST", "/purchases", {**body, "rows": [row, row]})[0], 422)
-        self.assertEqual(self.stock(), (999999995, 1))
+        self.assertEqual(self.warehouse_stock(), 999999995)
+        self.assertEqual(self.stock(), (10, 1))
         with closing(sqlite3.connect(self.database)) as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM purchases").fetchone()[0], 0)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM purchase_items").fetchone()[0], 0)
@@ -178,6 +199,7 @@ class PurchaseTests(unittest.TestCase):
             db.execute("CREATE TRIGGER reject_second_purchase_row BEFORE INSERT ON purchase_items WHEN NEW.position=2 BEGIN SELECT RAISE(ABORT, 'row failure'); END")
         self.assertEqual(self.request("POST", "/purchases", body)[0], 409)
         self.assertEqual(self.stock(), (10, 1))
+        self.assertEqual((self.warehouse_stock(), self.warehouse_stock(second)), (0, 0))
         with closing(sqlite3.connect(self.database)) as db, db:
             self.assertEqual(db.execute("SELECT stock FROM products WHERE id=?", (second["id"],)).fetchone()[0], 5)
             self.assertEqual(db.execute("SELECT COUNT(*) FROM purchases").fetchone()[0], 0)
@@ -187,7 +209,7 @@ class PurchaseTests(unittest.TestCase):
             results = list(pool.map(lambda _: self.request("POST", "/purchases", body), range(6)))
         self.assertTrue(all(status == 201 for status, _ in results), results)
         self.assertEqual(len({data["id"] for _, data in results}), 1)
-        self.assertEqual(self.stock(), (17, 2))
+        self.assertEqual(self.warehouse_stock(), 7)
 
 
 if __name__ == "__main__":

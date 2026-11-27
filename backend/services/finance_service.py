@@ -14,6 +14,7 @@ from models.customer import Customer
 from models.document import DocumentAccount
 from models.finance import BankAccount, BankDirectory, ExpenseCategory, FinancialTransaction as Transaction
 from models.fiscal_year import FiscalBankOpening, FiscalYear
+from models.inventory import Purchase, PurchasePayment
 from models.order import Order, OrderPayment, CASH_ACCOUNT_NUMBER
 from schemas.finance_schema import parse_jalali
 from schemas.customer_schema import normalize_text, DIGITS
@@ -194,9 +195,17 @@ def save_bank(db, data, record_id=None):
 
 def invoice_links(db, transactions, *, cutoff=None):
     """Batch invoice links without counting a split receipt twice in the ledger."""
+    expenses = [item.id for item in transactions if item.kind == "expense"]
+    links = {}
+    if expenses:
+        rows = db.execute(select(PurchasePayment.transaction_id, Purchase.id, Purchase.invoice_number).join(
+            Purchase, Purchase.id == PurchasePayment.purchase_id,
+        ).where(PurchasePayment.transaction_id.in_(expenses)))
+        links.update({tx_id: {"purchase_invoice": {"id": purchase_id, "invoice_number": number}}
+                      for tx_id, purchase_id, number in rows})
     receipts = [item for item in transactions if item.kind == "income" and item.customer_id is not None]
     if not receipts:
-        return {}
+        return links
     ids = [item.id for item in receipts]
     customer_ids = {item.customer_id for item in receipts}
     if cutoff is None:
@@ -218,7 +227,6 @@ def invoice_links(db, transactions, *, cutoff=None):
                              paid, func.coalesce(positions.c.remaining, func.max(Order.total - paid, 0))).join(
         Order, Order.id == allocations.c.order_id,
     ).outerjoin(positions, positions.c.id == Order.id).order_by(Order.invoice_date, Order.id))
-    links = {}
     for order_id, transaction_id, amount, method, code, subtotal, discount, total, paid, remaining in rows:
         metadata = links.setdefault(transaction_id, {})
         invoice = {"order_id": order_id, "invoice_code": code, "subtotal": subtotal, "discount": discount, "total": total,
@@ -340,7 +348,7 @@ def save_transaction(db, data):
                 raise FinanceError("شناسه درخواست قبلاً برای تراکنش دیگری استفاده شده است.", 409)
             bank = require(db, BankAccount, prior.bank_id, "بانک")
             result = serialize(prior, bank, db.get(BankDirectory, bank.bank) if bank.bank else None)
-            if result["invoice"] is not None:
+            if result["invoice"] is not None or result.get("purchase_invoice"):
                 raise FinanceError("شناسه درخواست قبلاً برای پرداخت فاکتور استفاده شده است.", 409)
             db.commit()
             return result
@@ -573,6 +581,8 @@ def edit_transaction(db, transaction_id, data):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         item = require(db, Transaction, transaction_id, "تراکنش")
+        if db.query(PurchasePayment.id).filter_by(transaction_id=item.id).first():
+            raise FinanceError("پرداخت خرید را از جزئیات فاکتور خرید ویرایش کنید.", 409)
         if db.query(OrderPayment.id).filter(OrderPayment.transaction_id == item.id).first():
             raise FinanceError("پرداخت متصل به فاکتور نهایی‌شده از دفتر مالی قابل ویرایش نیست.", 409)
         if item.document_id is not None:
@@ -598,6 +608,8 @@ def delete_finance_record(db, model, record_id, data, user):
             ensure_open(db, item.transaction_date)
         if model is Transaction and item.document_id is not None:
             raise FinanceError("تراکنش متصل به سند را با حذف یا ویرایش همان سند تغییر دهید.", 409)
+        if model is Transaction and db.query(PurchasePayment.id).filter_by(transaction_id=item.id).first():
+            raise FinanceError("پرداخت خرید را از جزئیات فاکتور خرید حذف کنید.", 409)
         if model is Transaction and db.query(OrderPayment.id).filter(OrderPayment.transaction_id == item.id).first():
             raise FinanceError("پرداخت متصل به فاکتور نهایی‌شده قابل حذف نیست.", 409)
         if model is BankAccount and item.account_number == CASH_ACCOUNT_NUMBER:

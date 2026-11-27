@@ -399,23 +399,28 @@
   gap: 16px;
   margin-top: 20px;
 }
-.orders-customer-picker {
-  position: relative;
-}
-.orders-customer-dropdown {
-  position: relative;
-  margin-top: 8px;
+.orders-picker-dropdown {
+  position: fixed;
+  inset: auto;
+  margin: 0;
   padding: 8px;
-  background: rgb(255 255 255 / 90%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: white;
   border: 1px solid rgb(182 192 198 / 35%);
   border-radius: 16px;
   box-shadow: 0 8px 24px rgb(15 23 42 / 7%);
 }
-#orderCustomerOptions {
-  max-height: 180px;
-  overflow-y: auto;
+@media (prefers-reduced-motion: no-preference) {
+  .orders-picker-dropdown:popover-open {
+    animation: orders-picker-in 140ms ease-out both;
+  }
 }
-.orders-customer-option {
+@keyframes orders-picker-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+:is(.orders-customer-option, .orders-product-option) {
   display: block;
   text-align: start;
   width: 100%;
@@ -424,10 +429,33 @@
   font-size: 0.75rem;
   cursor: pointer;
 }
-.orders-customer-option:hover,
-.orders-customer-option:focus {
+:is(.orders-customer-option, .orders-product-option):is(:hover, :focus, .is-highlighted) {
   background: color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
   outline: none;
+}
+.orders-product-category {
+  padding: 6px 12px;
+  color: rgb(15 23 42 / 65%);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+.orders-product-field {
+  position: relative;
+}
+.orders-product-field::after {
+  position: absolute;
+  inset-inline-end: 14px;
+  top: calc(50% - 5px);
+  width: 7px;
+  height: 7px;
+  border: solid rgb(15 23 42 / 55%);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+  content: "";
+}
+.orders-product-field .item-product {
+  padding-inline-end: 30px;
 }
 .orders-customer-details {
   display: grid;
@@ -538,9 +566,11 @@
 }
 .item-total {
   display: block;
-  color: rgb(15 23 42 / 50%);
-  font-size: 0.75rem;
-  margin-top: 12px;
+  color: var(--color-mirage);
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin-top: 10px;
   white-space: nowrap;
 }
 .orders-row-action td {
@@ -552,6 +582,42 @@
   color: var(--color-persian-blue);
   background: color-mix(in srgb, var(--color-persian-blue) 4%, transparent);
   font-size: 0.6875rem;
+}
+.orders-discount {
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid rgb(182 192 198 / 35%);
+  border-radius: 16px;
+}
+.orders-discount-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+  align-items: end;
+  margin-top: 8px;
+}
+.orders-discount-fields label {
+  display: grid;
+  align-content: end;
+}
+.orders-discount-amount {
+  color: rgb(15 23 42 / 70%);
+  font-size: 0.75rem;
+}
+.orders-discount-amount output {
+  display: block;
+  margin-top: 8px;
+  color: var(--color-mirage);
+  font-size: 0.9375rem;
+  font-weight: 800;
+}
+@media (max-width: 640px) {
+  .orders-discount-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .orders-discount-fields > label:first-child {
+    grid-column: 1 / -1;
+  }
 }
 .orders-totals {
   display: grid;

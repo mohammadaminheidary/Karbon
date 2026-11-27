@@ -81,8 +81,13 @@ export class NavbarPanelDialog {
   async open(focusTarget) {
     if (this.active) return;
     this.previousFocus = document.activeElement;
-    await this.transition.open();
-    if (this.active && !this.closing)
+    const opening = this.transition.open();
+    const initialFocus = document.activeElement;
+    await opening;
+    const currentFocus = document.activeElement;
+    // A control used during the opening animation keeps its focus.
+    if (this.active && !this.closing &&
+        (initialFocus === currentFocus || !this.root.contains(currentFocus)))
       (focusTarget && !focusTarget.disabled ? focusTarget : this.root).focus({
         preventScroll: true,
       });

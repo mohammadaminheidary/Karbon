@@ -107,6 +107,27 @@
   font-weight: 800;
   box-shadow: inset -3px 0 var(--color-persian-blue);
 }
+.settings-nav-disclosure > summary {
+  list-style: none;
+}
+.settings-nav-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.settings-nav-disclosure > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-inline-start: auto;
+  border-right: 1.5px solid currentColor;
+  border-block-end: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.settings-nav-disclosure[open] > summary::after {
+  transform: rotate(225deg);
+}
+.settings-nav-children {
+  padding-inline-start: 12px;
+}
 .settings-content {
   min-width: 0;
 }
@@ -570,6 +591,15 @@
   }
   .settings-nav-group {
     display: contents;
+  }
+  .settings-nav-disclosure {
+    display: flex;
+    flex-shrink: 0;
+  }
+  .settings-nav-disclosure[open] > .settings-nav-children {
+    display: flex;
+    gap: 6px;
+    padding-inline-start: 6px;
   }
   .settings-nav-label {
     display: none;

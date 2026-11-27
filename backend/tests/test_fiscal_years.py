@@ -190,6 +190,35 @@ class FiscalFixture(ExitStack):
 
 
 class FiscalYearTests(unittest.TestCase):
+    def test_purchase_payment_carries_payable_and_preserves_closed_invoice(self):
+        with FiscalFixture() as f:
+            bank, product = f.references()
+            prior_day, next_day = f"{f.year}/08/01", f"{f.year + 1}/01/01"
+            payment = {"request_id": str(uuid4()), "method": "transfer", "bank_id": bank["id"],
+                       "transaction_date": prior_day, "amount": 400}
+            purchase = f.post("/purchases", {
+                "request_id": str(uuid4()), "purchase_date": prior_day, "category_id": product["category_id"],
+                "product_id": product["id"], "quantity": 2, "purchase_price": 500, "payments": [payment],
+            })
+            path = f'/purchases/{purchase["id"]}'
+            preview = f.preview(f.year)
+            self.assertEqual(preview["summary"]["expense"], 400)
+            self.assertEqual(f.confirm(f.year, preview)[0], 200)
+            issued = f'{API}/{f.year}/records/purchases/{purchase["id"]}/issued?version=1'
+            status, archive = f.call("GET", issued)
+            self.assertEqual(status, 200, archive)
+            self.assertEqual((archive["paid"], archive["remaining"]), (400, 600))
+            self.assertEqual(f.call("GET", "/purchases/obligations")[1]["amount"], 600)
+            locked = f'{path}/payments/{purchase["payments"][0]["id"]}'
+            self.assertEqual(f.call("DELETE", locked, {"password": PASSWORD, "confirmed": True})[0], 409)
+            next_payment = {**payment, "request_id": str(uuid4()), "transaction_date": next_day, "amount": 600}
+            self.assertEqual(f.post(f"{path}/payments", next_payment)["payment_status"], "settled")
+            live = f.call("GET", path)[1]
+            self.assertEqual([row["editable"] for row in live["payments"]], [False, True])
+            self.assertEqual(f.call("GET", "/purchases/obligations")[1]["count"], 0)
+            self.assertEqual(f.call("GET", issued)[1], archive)
+            self.assertEqual(f.preview(f.year + 1)["summary"]["expense"], 600)
+
     def test_general_receipts_reconcile_across_rollover_and_preserve_closed_archive(self):
         with FiscalFixture() as f:
             bank, product = f.references()
@@ -498,7 +527,7 @@ class FiscalYearTests(unittest.TestCase):
             self.assertEqual(preview["summary"]["credits"], 600_000)
             self.assertEqual(preview["summary"]["not_due"], 5_000_000)
             self.assertEqual(preview["summary"]["purchase_value"], 3_000_000)
-            self.assertEqual(preview["inventory"]["rows"][0]["quantity"], 2041)
+            self.assertEqual(preview["inventory"]["rows"][0]["quantity"], 1941)
             self.assertFalse(any(preview["next_activity"].values()))
             self.assertEqual(f.call("GET", f"{API}/{year}/preview", token=f.operator)[0], 403)
             self.assertEqual(f.confirm(year, preview, token=f.operator)[0], 403)
@@ -546,6 +575,10 @@ class FiscalYearTests(unittest.TestCase):
             self.assertEqual(dashboard["finance"]["transactions"], 0)
             self.assertEqual(dashboard["purchases"], {"count": 0, "value": "0"})
             self.assertEqual(f.call("GET", "/orders")[1]["items"], [])
+            purchase_history = f.call("GET", "/purchases?history=true")[1]["items"]
+            self.assertEqual(len(purchase_history), 1)
+            self.assertFalse(purchase_history[0]["editable"])
+            self.assertEqual(f.call("GET", f'/purchases/{purchase_history[0]["id"]}')[0], 200)
             self.assertEqual(f.call("GET", "/documents")[1]["items"], [])
             accounts = f.call("GET", "/banks")[1]
             self.assertEqual({b["id"]: b["opening_balance"] for b in accounts},
