@@ -26,6 +26,7 @@ from config import APP_TIMEZONE, DATABASE_PATH
 from database import engine
 import models
 from models import Customer, BankAccount, ExpenseCategory, FinancialTransaction, Document, DocumentAccount, Task, Member, Attendance
+from models.customer import DEFAULT_CUSTOMER_CODE
 from models.order import Order, OrderItem, OrderPayment, Product
 from models.inventory import InventoryOption
 from schemas.customer_schema import CustomerWrite
@@ -125,7 +126,7 @@ class Generator:
                 row = dict(id=next_ids[name], **values)
                 rows[name].append(row)
                 return row
-            code = max(1000, connection.scalar(select(func.max(Customer.customer_code))) or 0)
+            code = max(DEFAULT_CUSTOMER_CODE, connection.scalar(select(func.max(Customer.customer_code))) or 0)
             transaction_number = connection.scalar(select(func.max(FinancialTransaction.transaction_number))) or 0
             category_code = (connection.scalar(select(func.max(ExpenseCategory.display_code))) or 0) + 1
             bank = add(BankAccount, name=f"Synthetic account {batch}", account_number=f"TEST-{batch}",
@@ -241,7 +242,7 @@ class Generator:
     def delete(self, progress=lambda value, message: None):
         """Clear all business data, including real, edited and untracked records.
 
-        Keep authentication and the bundled bank catalog so Karbon remains usable.
+        Keep authentication, the bundled bank catalog and the default customer.
         The user explicitly requested a complete dashboard reset via this button.
         """
         counts = {}
@@ -251,13 +252,16 @@ class Generator:
             tables = [table for table in reversed(actual.sorted_tables)
                       if table.name not in {"users", "bank_directory", "customer_id_registry"}]
             for index, table in enumerate(tables):
-                deleted = connection.execute(delete(table)).rowcount
+                statement = delete(table)
+                if table.name == Customer.__tablename__:
+                    statement = statement.where(table.c.customer_code != DEFAULT_CUSTOMER_CODE)
+                deleted = connection.execute(statement).rowcount
                 if table.name != owned.name:
                     counts[table.name] = deleted
                 progress(95 * (index + 1) / max(1, len(tables)),
                          f"Cleared {table.name}: {deleted:,} records")
             progress(99, "Committing full data reset…")
-        progress(100, "All business data deleted · dashboard is empty")
+        progress(100, "Business data cleared")
         return dict(counts=counts, total=sum(counts.values()))
 
     def delete_generated(self, progress=lambda value, message: None):

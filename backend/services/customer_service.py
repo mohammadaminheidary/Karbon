@@ -1,7 +1,7 @@
 from sqlalchemy import String, case, cast, exists, func, insert, or_, select, text
 from sqlalchemy.orm import object_session
 
-from models.customer import Customer, utc_now
+from models.customer import Customer, DEFAULT_CUSTOMER_CODE, utc_now
 from models.finance import FinancialTransaction
 from models.inventory import Purchase
 from models.order import Order
@@ -17,6 +17,10 @@ class DuplicateCustomers(Exception):
 
 
 class CustomerNotFound(Exception):
+    pass
+
+
+class SystemCustomerProtected(Exception):
     pass
 
 
@@ -62,6 +66,7 @@ def get_summary(db, customer_id):
 def serialize_customer(customer, summary=None):
     return {
         **{column.name: getattr(customer, column.name) for column in Customer.__table__.columns},
+        "is_system": customer.is_system,
         "summary": summary if summary is not None else get_summary(object_session(customer), customer.id),
     }
 
@@ -122,7 +127,8 @@ def list_customers(db, search="", skip=0, limit=50, *, options_only=False, custo
         if include_address:
             fields += (Customer.address,)
         items = query.with_entities(*fields).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
-        return {"items": [dict(row._mapping) for row in items], "total": total, "skip": skip, "limit": limit}
+        return {"items": [dict(row._mapping, is_system=row.customer_code == DEFAULT_CUSTOMER_CODE) for row in items],
+                "total": total, "skip": skip, "limit": limit}
     items = query.outerjoin(balances, balances.c.customer_id == Customer.id).add_columns(
         balances.c.order_count, balances.c.sales, balances.c.paid, balances.c.debt, balances.c.invoices,
     ).order_by(Customer.id.desc()).offset(skip).limit(limit).all()
@@ -132,7 +138,10 @@ def list_customers(db, search="", skip=0, limit=50, *, options_only=False, custo
 
 
 def next_code(db):
-    return 1001 + db.query(Customer).filter(Customer.deleted_at.is_(None)).count()
+    highest = db.query(func.max(Customer.customer_code)).filter(
+        Customer.deleted_at.is_(None), Customer.customer_code > DEFAULT_CUSTOMER_CODE,
+    ).scalar()
+    return (highest or DEFAULT_CUSTOMER_CODE) + 1
 
 
 def find_duplicates(db, data, exclude_id=None):
@@ -193,6 +202,8 @@ def save_customer(db, data, customer_id=None):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         customer = get_customer(db, customer_id) if customer_id is not None else None
+        if customer and customer.is_system and (data.first_name, data.last_name) != (customer.first_name, customer.last_name):
+            raise SystemCustomerProtected()
         matches = find_duplicates(db, data, exclude_id=customer_id)
         if matches and not data.confirm_duplicate:
             raise DuplicateCustomers(matches)
@@ -219,6 +230,8 @@ def delete_customer(db, customer_id):
     try:
         db.execute(text("BEGIN IMMEDIATE"))
         customer = get_customer(db, customer_id)
+        if customer.is_system:
+            raise SystemCustomerProtected()
         if db.query(Order.id).filter(Order.customer_id == customer_id, Order.deleted_at.is_(None)).first():
             raise CustomerHasOrders()
         purchases = db.query(Purchase.id).filter(Purchase.supplier_id == customer_id)

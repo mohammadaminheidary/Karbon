@@ -32,11 +32,11 @@ from services.order_service import save_order
 from schemas.order_schema import OrderWrite
 from uuid import uuid4
 with SessionLocal() as db:
-    db.add(Customer(id=1, customer_code=1001, first_name="مشتری", last_name="قدیمی", phone_numbers=[]))
+    db.add(Customer(id=2, customer_code=1001, first_name="مشتری", last_name="قدیمی", phone_numbers=[]))
     db.add(InventoryOption(kind="units", name="رول قدیمی", active=True))
     db.add(Product(id=1, product_code="P-000001", name="کالا", unit="رول قدیمی", price=1000, stock=10))
     db.commit()
-    save_order(db, OrderWrite(request_id=uuid4(), customer_id=1, invoice_date="1405/7/22", payment_date="1405/7/22", items=[{"product_id":1,"quantity":2,"unit_price":1000}]))
+    save_order(db, OrderWrite(request_id=uuid4(), customer_id=2, invoice_date="1405/7/22", payment_date="1405/7/22", items=[{"product_id":1,"quantity":2,"unit_price":1000}]))
 ''')
             with closing(sqlite3.connect(database)) as db, db:
                 # Simulate the earlier app's saved catalog and legacy free-text units.

@@ -3,14 +3,16 @@
 Call while holding the SQLite write lock, in the same transaction as deletion.
 """
 from sqlalchemy import text
+from models.customer import DEFAULT_CUSTOMER_CODE
 from services.fiscal_period import locked_date_sql
 
 OPEN_TRANSACTION = f"NOT {locked_date_sql('transaction_date')}"
 
 
 def compact_customer_codes(db):
-    rows = db.execute(text("SELECT id, customer_code FROM customers WHERE deleted_at IS NULL ORDER BY id")).all()
-    codes = [{"code": code, "id": record_id} for code, (record_id, _) in enumerate(rows, 1001)]
+    rows = db.execute(text("SELECT id, customer_code FROM customers WHERE deleted_at IS NULL AND customer_code != :reserved ORDER BY id"),
+                      {"reserved": DEFAULT_CUSTOMER_CODE}).all()
+    codes = [{"code": code, "id": record_id} for code, (record_id, _) in enumerate(rows, DEFAULT_CUSTOMER_CODE + 1)]
     changed = [item for item, (_, old) in zip(codes, rows) if item["code"] != old]
     # Two passes prevent the unique index from colliding with old codes.
     if changed:

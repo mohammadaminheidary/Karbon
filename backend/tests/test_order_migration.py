@@ -27,10 +27,10 @@ from services.order_service import save_order
 from schemas.order_schema import OrderWrite
 from uuid import uuid4
 with SessionLocal() as db:
-    db.add(Customer(id=1,customer_code=1001,first_name="مشتری",last_name="قدیمی",phone_numbers=["09120000001"]))
+    db.add(Customer(id=2,customer_code=1001,first_name="مشتری",last_name="قدیمی",phone_numbers=["09120000001"]))
     db.add(Product(id=3,product_code="P-000003",name="کالا",unit="عدد",price=1000,stock=10))
     db.commit()
-    save_order(db,OrderWrite(request_id=uuid4(),customer_id=1,invoice_date="1405/7/22",payment_date="1405/7/22",items=[{"product_id":3,"quantity":2,"unit_price":1000}],payments=[{"method":"cash","amount":500}]))
+    save_order(db,OrderWrite(request_id=uuid4(),customer_id=2,invoice_date="1405/7/22",payment_date="1405/7/22",items=[{"product_id":3,"quantity":2,"unit_price":1000}],payments=[{"method":"cash","amount":500}]))
 '''
             result = subprocess.run([sys.executable,"-c",prepare],cwd=ROOT/"backend",env=env,capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)

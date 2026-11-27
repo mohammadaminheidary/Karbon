@@ -30,7 +30,8 @@ with SessionLocal() as db:
         customer = save_customer(db, CustomerWrite(first_name='original', last_name='customer'))
     assert customer['permanent_id'] == '080805-153000-AAAA'
     delete_customer(db, customer['id'])
-    assert not db.execute(text('SELECT 1 FROM customer_id_registry')).first()
+    assert not db.execute(text('SELECT 1 FROM customer_id_registry WHERE permanent_id=:id'),
+                          {'id': customer['permanent_id']}).first()
 ''')
             self.run_script(database, r'''
 import app
@@ -85,7 +86,7 @@ with SessionLocal() as db:
     db.execute(text('DELETE FROM customers WHERE id=:id'), {'id': reused['id']})
     db.commit()
     initialize_customer_ids(engine)
-    assert db.execute(text('SELECT COUNT(*) FROM customer_id_registry')).scalar_one() == 2
+    assert db.execute(text('SELECT COUNT(*) FROM customer_id_registry')).scalar_one() == 3
     assert db.execute(text('SELECT COUNT(*) FROM customers WHERE permanent_id=:code'), {'code': replacement['permanent_id']}).scalar_one() == 1
 ''')
 
@@ -202,8 +203,9 @@ with engine.connect() as connection:
             for path in [database, Path(directory) / "restored.db"]:
                 self.run_script(path, "import app")
                 with closing(sqlite3.connect(path)) as db:
-                    self.assertEqual(db.execute("SELECT permanent_id FROM customers ORDER BY id").fetchall(), [(code,) for code in codes])
-                    self.assertEqual(db.execute("SELECT COUNT(*) FROM customer_id_registry").fetchone()[0], 2)
+                    self.assertEqual(db.execute("SELECT permanent_id FROM customers WHERE customer_code != 1000 ORDER BY id").fetchall(),
+                                     [(code,) for code in codes])
+                    self.assertEqual(db.execute("SELECT COUNT(*) FROM customer_id_registry").fetchone()[0], 3)
 
     def test_bulk_insert_retries_collisions_within_pending_batch(self):
         with tempfile.TemporaryDirectory(prefix="karbon-customer-id-batch-") as directory:
@@ -221,7 +223,7 @@ with SessionLocal() as db:
         db.add_all([Customer(customer_code=1001+i, first_name=f'batch {i}', last_name='test',
                              created_at=datetime(2026,10,30,12,tzinfo=timezone.utc)) for i in range(3)])
         db.commit()
-    assert [row.permanent_id for row in db.query(Customer).order_by(Customer.id)] == [
+    assert [row.permanent_id for row in db.query(Customer).filter(Customer.customer_code != 1000).order_by(Customer.id)] == [
         '080805-153000-AAAA', '080805-153000-BBBB', '080805-153000-CCCC']
     # A broken random source must fail cleanly without a partial registration.
     with patch('services.customer_service.utc_now', return_value=datetime(2026,10,30,12,tzinfo=timezone.utc)), \
@@ -232,8 +234,97 @@ with SessionLocal() as db:
             pass
         else:
             raise AssertionError('expected safe allocation failure')
-    assert db.query(Customer).count() == 3
+    assert db.query(Customer).count() == 4
 ''')
+
+    def test_default_customer_seed_is_atomic_on_concurrent_initialization(self):
+        with tempfile.TemporaryDirectory(prefix="karbon-default-customer-") as directory:
+            database = Path(directory) / "test.db"
+            self.run_script(database, r'''
+from concurrent.futures import ThreadPoolExecutor
+import models
+from database import Base, engine
+from services.customer_ids import initialize_customer_ids
+from services.default_customer import initialize_default_customer
+Base.metadata.create_all(engine)
+initialize_customer_ids(engine)
+with ThreadPoolExecutor(max_workers=4) as workers:
+    list(workers.map(initialize_default_customer, [engine] * 8))
+''')
+            with closing(sqlite3.connect(database)) as db:
+                original = db.execute("SELECT * FROM customers").fetchall()
+                self.assertEqual(len(original), 1)
+                self.assertEqual(db.execute("SELECT customer_code, first_name, last_name, phone_numbers FROM customers").fetchone(),
+                                 (1000, "مشتری", "حضوری", "[]"))
+                customer_id = original[0][0]
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM customer_id_registry").fetchone()[0], 1)
+                for statement in (
+                    "DELETE FROM customers WHERE customer_code = 1000",
+                    "UPDATE customers SET deleted_at = CURRENT_TIMESTAMP WHERE customer_code = 1000",
+                    "UPDATE customers SET customer_code = 1001 WHERE customer_code = 1000",
+                    "UPDATE customers SET first_name = 'other' WHERE customer_code = 1000",
+                    "UPDATE customers SET last_name = 'other' WHERE customer_code = 1000",
+                    "UPDATE customers SET rowid = rowid + 1 WHERE customer_code = 1000",
+                    "INSERT OR REPLACE INTO customers (id,customer_code,first_name,last_name,phone_numbers,created_at,updated_at,permanent_id) "
+                    f"VALUES ({customer_id},1001,'replacement','customer','[]',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'010101-010101-AAAA')",
+                    "INSERT OR REPLACE INTO customers (customer_code,first_name,last_name,phone_numbers,created_at,updated_at,permanent_id) "
+                    "VALUES (1000,'replacement','customer','[]',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'010101-010101-AAAA')",
+                ):
+                    with self.subTest(statement=statement), self.assertRaisesRegex(sqlite3.IntegrityError, "system customer"):
+                        db.execute(statement)
+            self.run_script(database, "import app")
+            with closing(sqlite3.connect(database)) as db:
+                self.assertEqual(db.execute("SELECT * FROM customers").fetchall(), original)
+
+    def test_existing_customer_code_1000_keeps_identity_and_linked_records(self):
+        with tempfile.TemporaryDirectory(prefix="karbon-adopt-customer-") as directory:
+            database = Path(directory) / "test.db"
+            self.run_script(database, r'''
+from datetime import date
+import models
+from database import Base, engine, SessionLocal
+from models.customer import Customer
+from models.finance import BankAccount, FinancialTransaction
+from models.order import Order
+Base.metadata.create_all(engine)
+day = date(2026, 10, 14)
+with SessionLocal() as db:
+    db.add_all([
+        Customer(id=7, customer_code=1000, first_name='legacy', last_name='customer',
+                 phone_numbers=['09121234567'], notes='keep me', permanent_id='010101-010101-AAAA'),
+        Customer(id=8, customer_code=1002, first_name='regular', last_name='customer'),
+        BankAccount(id=1, name='bank', account_number='test'),
+    ])
+    db.flush()
+    db.add(Order(id=1, customer_id=7, request_id='legacy-order', request_fingerprint='legacy',
+                 invoice_code='legacy', order_number='legacy', invoice_date=day, payment_date=day,
+                 subtotal=100, discount=0, invoice_snapshot={'customer': {'name': 'legacy customer'}}))
+    db.add(FinancialTransaction(id=1, transaction_number=1, customer_id=7, request_id='legacy-payment', kind='income',
+                                bank_id=1, title='legacy customer', account_code='1000', amount=40,
+                                transaction_date=day, transaction_time='12:00:00', time_mode='manual'))
+    db.commit()
+''')
+            with closing(sqlite3.connect(database)) as db:
+                orders = db.execute("SELECT * FROM orders").fetchall()
+                finance = db.execute("SELECT * FROM financial_transactions").fetchall()
+            self.run_script(database, "import app")
+            self.run_script(database, r'''
+import app
+from database import SessionLocal
+from sqlalchemy import text
+from services.customer_service import next_code
+with SessionLocal() as db:
+    assert next_code(db) == 1002
+    db.execute(text('UPDATE customers SET customer_code = 1002 WHERE id = 8'))
+    assert next_code(db) == 1003
+''')
+            with closing(sqlite3.connect(database)) as db:
+                self.assertEqual(db.execute("SELECT id, permanent_id, first_name, last_name, phone_numbers, notes "
+                                            "FROM customers WHERE customer_code = 1000").fetchall(),
+                                 [(7, "010101-010101-AAAA", "مشتری", "حضوری", '["09121234567"]', "keep me")])
+                self.assertEqual(db.execute("SELECT * FROM orders").fetchall(), orders)
+                self.assertEqual(db.execute("SELECT * FROM financial_transactions").fetchall(), finance)
+                self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
 
     def test_failed_migration_rolls_back_schema_and_customer_changes(self):
         with tempfile.TemporaryDirectory(prefix="karbon-customer-id-rollback-") as directory:

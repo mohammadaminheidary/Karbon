@@ -34,7 +34,7 @@ class FinanceIntegrationTests(unittest.TestCase):
             db.execute("DELETE FROM financial_transactions")
             db.execute("DELETE FROM bank_accounts")
             db.execute("DELETE FROM expense_categories")
-            db.execute("DELETE FROM customers")
+            db.execute("DELETE FROM customers WHERE customer_code != 1000")
         self.customer = self.post("/customers", {"first_name": "علی", "last_name": "مالی"})
         self.bank = self.post("/banks", bank_payload(account_number="۰۰۱۲۳", opening_balance=1000))
         self.category = self.post("/settings/expense-categories", {"title": "خرید مواد"})

@@ -10,7 +10,7 @@ from sqlalchemy import case, func, text
 
 from config import app_timezone
 from models.attendance import Attendance
-from models.customer import Customer
+from models.customer import Customer, DEFAULT_CUSTOMER_CODE
 from models.document import Document, DocumentAccount
 from models.finance import ExpenseCategory, FinancialTransaction as Transaction
 from models.inventory import Brand, Purchase, PurchaseItem
@@ -117,10 +117,15 @@ def dashboard(db, start, end, view="full", include_debtors=False, include_produc
     outstanding = sum(int(value) for value in debts.values())
     overdue = sum(int(value or 0) for _, _, value in debts_by_customer)
 
-    customer_columns = (Customer.id, Customer.first_name, Customer.last_name, Customer.created_at) if include_debtors else (Customer.id, Customer.created_at)
+    customer_columns = (Customer.id, Customer.customer_code, Customer.created_at)
+    if include_debtors:
+        customer_columns += (Customer.first_name, Customer.last_name)
     customers = db.query(*customer_columns).filter(Customer.deleted_at.is_(None)).all()
     new_customers = 0
     for customer in customers:
+        # Initialization does not count as acquiring a new customer.
+        if customer.customer_code == DEFAULT_CUSTOMER_CODE:
+            continue
         created = customer.created_at
         day = created.replace(tzinfo=created.tzinfo or timezone.utc).astimezone(zone).date()
         if day in daily:

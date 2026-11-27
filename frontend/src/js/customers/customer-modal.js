@@ -265,6 +265,8 @@ export async function openCreateCustomerModal() {
   const current = ++generation;
   editingCustomer = null;
   get("customerForm").reset();
+  get("customerFirstName").readOnly = false;
+  get("customerLastName").readOnly = false;
   lastContactDate.value = formatJalaliInput(new Date());
   clearErrors();
   get("customerFormTitle").textContent = "مشتری جدید";
@@ -293,6 +295,8 @@ export function openEditCustomerModal(customer) {
   clearErrors();
   get("customerFormTitle").textContent = "ویرایش مشتری";
   get("customerCode").value = customer.customer_code;
+  get("customerFirstName").readOnly = Boolean(customer.is_system);
+  get("customerLastName").readOnly = Boolean(customer.is_system);
   for (const [id, key] of [
     ["customerFirstName", "first_name"],
     ["customerLastName", "last_name"],
@@ -308,7 +312,7 @@ export function openEditCustomerModal(customer) {
   get("customerPhonesContainer").replaceChildren();
   customer.phone_numbers.forEach((phone) => addPhone(phone));
   setBusy(false);
-  formDialog.open(get("customerFirstName"));
+  formDialog.open(get(customer.is_system ? "customerAddress" : "customerFirstName"));
 }
 
 export function initializeCustomerModal({ onSaved: saved, prepareCreateOrder: prepare }) {

@@ -65,7 +65,7 @@ with SessionLocal() as db:
         db.add(Task(title="source task" if source else "target task", date=today))
         if source:
             db.add_all([
-                Customer(id=1, first_name="backup customer", last_name="test", customer_code=1),
+                Customer(id=2, first_name="backup customer", last_name="test", customer_code=1001),
                 Product(id=1, name="stock item", unit="عدد", price=123, stock=19),
                 Member(id=1, first_name="backup member", last_name="test"),
                 BankAccount(id=1, name="test account", account_number="backup-account"),
@@ -74,10 +74,10 @@ with SessionLocal() as db:
             db.add_all([
                 Attendance(id=1, member_id=1, date=today, recorded_time=clock(12), status="present"),
                 Order(id=1, request_id="restore-order", request_fingerprint="test", invoice_code="B-1",
-                      order_number="1", customer_id=1, invoice_date=today, payment_date=today,
+                      order_number="1", customer_id=2, invoice_date=today, payment_date=today,
                       subtotal=123, discount=0, status="active"),
-                FinancialTransaction(id=1, request_id="test-transaction", kind="income", customer_id=1,
-                                     bank_id=1, title="backup finance", account_code="1", amount=123,
+                FinancialTransaction(id=1, request_id="test-transaction", kind="income", customer_id=2,
+                                     bank_id=1, title="backup finance", account_code="1001", amount=123,
                                      transaction_date=today, transaction_time="12:00:00", time_mode="manual"),
                 MemberFace(member_id=1, encrypted_template=encrypt_template(1, features.tobytes()),
                            consented_at=datetime.now()),
@@ -314,7 +314,18 @@ class BackupIntegrationTests(unittest.TestCase):
             self.assertEqual(self.upload(self.make_archive(invalid), target_token)[0], 422)
         self.assertEqual(self.upload(self.make_archive({**files, "recovery.json": b" " * 4097}), target_token)[0], 413)
 
-        status, metadata, _ = self.upload(archive, target_token)
+        # Simulate a backup from before the system customer was introduced.
+        legacy_path = self.root / "legacy.db"
+        legacy_path.write_bytes(files["karbon.db"])
+        with closing(sqlite3.connect(legacy_path)) as db, db:
+            for trigger in ("customers_system_no_replace", "customers_system_identity", "customers_system_no_delete"):
+                db.execute(f"DROP TRIGGER {trigger}")
+            db.execute("DELETE FROM customers WHERE customer_code = 1000")
+        legacy = legacy_path.read_bytes()
+        legacy_manifest = {**manifest, "checksums": {**manifest["checksums"], "karbon.db": sha256(legacy).hexdigest()}}
+        status, metadata, _ = self.upload(self.make_archive({
+            **files, "karbon.db": legacy, "manifest.json": json.dumps(legacy_manifest).encode(),
+        }), target_token)
         self.assertEqual(status, 200, metadata)
         self.assertEqual(metadata["karbon_version"], "1.0.0")
         self.assertEqual(metadata["created_at"], manifest["created_at"])
@@ -352,7 +363,8 @@ class BackupIntegrationTests(unittest.TestCase):
             self.assertEqual(db.execute("PRAGMA page_size").fetchone(), (8192,))
             for sql, expected in [
                 ("SELECT title FROM tasks", "source task"),
-                ("SELECT first_name FROM customers", "backup customer"),
+                ("SELECT COUNT(*) FROM customers WHERE customer_code = 1000", 1),
+                ("SELECT first_name FROM customers WHERE customer_code = 1001", "backup customer"),
                 ("SELECT stock FROM products", 19),
                 ("SELECT subtotal FROM orders", 123),
                 ("SELECT amount FROM financial_transactions", 123),

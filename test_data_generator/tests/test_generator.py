@@ -6,7 +6,7 @@ from sqlalchemy import MetaData, select, text
 from sqlalchemy.orm import Session
 
 from test_data_generator.generator import (Generator, SafetyError, TABLES, owned,
-    engine, DATABASE_PATH, APP_TIMEZONE, Customer, Order, Product, Task, Member,
+    engine, DATABASE_PATH, APP_TIMEZONE, Customer, DEFAULT_CUSTOMER_CODE, Order, Product, Task, Member,
     Attendance, FinancialTransaction, OrderItem, OrderPayment)
 from services.dashboard_service import dashboard
 from services.order_service import list_invoices, invoice, order_details
@@ -203,19 +203,23 @@ class GeneratorIntegrationTests(unittest.TestCase):
             member_id=member_id, angle="front", encrypted_image=b"test photo placeholder"))
         customer_id = self.connection.scalar(select(owned.c.record_id).where(owned.c.table_name == "customers"))
         self.connection.execute(Customer.__table__.update().where(Customer.id == customer_id).values(notes="Edited by user"))
+        default = self.connection.execute(select(Customer.__table__).where(
+            Customer.customer_code == DEFAULT_CUSTOMER_CODE)).one()
 
         for quantity in (3, 7):
             before = self.snapshot()
             result = self.generator.delete()
-            self.assertEqual(self.connection.exec_driver_sql("SELECT COUNT(*) FROM customer_id_registry").scalar_one(), 0)
+            self.assertEqual(self.connection.exec_driver_sql("SELECT permanent_id FROM customer_id_registry").scalar_one(),
+                             default.permanent_id)
             self.assertEqual(result["total"], sum(len(rows) for name, rows in before.items()
-                if name not in {"users", "bank_directory", owned.name}))
+                if name not in {"users", "bank_directory", owned.name}) - 1)
             after = self.snapshot()
             for name, rows in after.items():
-                self.assertEqual(rows, before[name] if name in {"users", "bank_directory"} else [], name)
+                expected = [repr(tuple(default))] if name == "customers" else before[name] if name in {"users", "bank_directory"} else []
+                self.assertEqual(rows, expected, name)
             report = self.report()
             self.assertEqual(report["finance"], dict(income="0", expense="0", net="0", transactions=0))
-            self.assertEqual(report["customers"]["total"], 0)
+            self.assertEqual(report["customers"]["total"], 1)
             self.assertEqual(report["customers"]["debtor_count"], 0)
             self.assertEqual(report["orders"]["total"], 0)
             self.assertEqual(report["orders"]["outstanding"], "0")
@@ -228,7 +232,7 @@ class GeneratorIntegrationTests(unittest.TestCase):
             self.assertEqual(report["documents"]["total"], 0)
             generated = self.generator.generate(quantity)
             self.assertEqual(generated["counts"]["customers"], quantity)
-            self.assertEqual(self.report()["customers"]["total"], quantity)
+            self.assertEqual(self.report()["customers"]["total"], quantity + 1)
             self.assertEqual(self.report()["orders"]["total"], quantity)
         self.generator.delete()
         self.assertEqual(self.generator.delete()["total"], 0)

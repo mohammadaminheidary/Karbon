@@ -33,7 +33,13 @@ class ReportsIntegrationTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        customers.CustomersIntegrationTests.setUpClass.__func__(cls)
+        customers.CustomersIntegrationTests.setUpClass.__func__(cls, before_startup='''
+from database import engine
+from models.customer import Customer
+Customer.__table__.create(engine)
+with engine.begin() as connection:
+    connection.exec_driver_sql("INSERT INTO sqlite_sequence(name, seq) VALUES ('customers', 1000)")
+''')
         # unittest skips tearDownClass if seeding fails; never leave its API alive.
         cls.addClassCleanup(lambda: cls.tearDownClass() if cls.server.poll() is None else None)
         with closing(sqlite3.connect(cls.database)) as db, db:
@@ -46,7 +52,7 @@ class ReportsIntegrationTests(unittest.TestCase):
                 names = list(rows[0]); marks=','.join('?' for _ in names)
                 db.executemany(f"INSERT INTO {table} ({','.join(names)}) VALUES ({marks})", [tuple(r[n] for n in names) for r in rows])
             now = "2026-10-31 12:34:56.123456"
-            insert("customers", [dict(id=i,customer_code=i,permanent_id=f"050809-123456-{i:04d}",
+            insert("customers", [dict(id=i,customer_code=1000+i,permanent_id=f"050809-123456-{i:04d}",
                 first_name="علی " + str(i),last_name="رضایی",gender="male" if i%2 else None,
                 address=None if i%2 else "",last_contact_date="2026-10-31" if i%2 else None,
                 phone_numbers=json.dumps(["09120000000","۰۹۱۲"],ensure_ascii=False),
@@ -118,6 +124,8 @@ class ReportsIntegrationTests(unittest.TestCase):
         for name in TABLES:
             with self.subTest(module=name):
                 body={"include_deleted":True}
+                if name == "customers":
+                    body["excluded_ids"] = [1001]
                 status,data=self.request("POST",f"/reports/{name}/preview",body)
                 self.assertEqual(status,200); self.assertEqual(data["total"],1000); self.assertEqual(len(data["items"]),50)
                 start=time.perf_counter(); xlsx=self.binary(name,"xlsx",body); xlsx_time=time.perf_counter()-start
@@ -158,8 +166,8 @@ class ReportsIntegrationTests(unittest.TestCase):
         self.assertEqual(status,200); self.assertEqual(data["total"],500)
         self.assertEqual(data["items"][0]["values"]["customer_id.first_name"],"علی 1")
         self.assertEqual(data["items"][0]["values"]["customer_id.permanent_id"],"050809-123456-0001")
-        self.assertEqual(self.request("POST","/reports/customers/preview",{})[1]["total"],999)
-        self.assertEqual(self.request("POST","/reports/customers/preview",{"filters":[{"field":"address","op":"is_null"}]})[1]["total"],500)
+        self.assertEqual(self.request("POST","/reports/customers/preview",{})[1]["total"],1000)
+        self.assertEqual(self.request("POST","/reports/customers/preview",{"filters":[{"field":"address","op":"is_null"}]})[1]["total"],501)
         self.assertEqual(self.request("POST","/reports/customers/preview",{"filters":[{"field":"address","value":""}]})[1]["total"],499)
         self.assertEqual(self.request("POST","/reports/customers/preview",{"search":"%' OR 1=1 --"})[1]["total"],0)
         status,options=self.request("GET","/reports/orders/options?field=status")
@@ -280,7 +288,8 @@ class ReportsIntegrationTests(unittest.TestCase):
         status,data=self.request("POST","/reports/customers/preview",{"include_deleted":True,"ids":ids,"columns":["id"]})
         self.assertEqual(status,200);self.assertEqual(data["total"],1000)
         status,data=self.request("POST","/reports/customers/preview",{"include_deleted":True,"excluded_ids":ids,"columns":["id"]})
-        self.assertEqual(status,200);self.assertEqual(data["total"],0)
+        self.assertEqual(status,200);self.assertEqual(data["total"],1)
+        self.assertEqual(data["items"][0]["values"]["id"],1001)
 
 
 if __name__ == "__main__": unittest.main()

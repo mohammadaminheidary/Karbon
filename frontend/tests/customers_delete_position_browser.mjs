@@ -38,7 +38,19 @@ try {
   customer = await api("POST", "/customers", { first_name: "آزمون", last_name: "جایگاه حذف" });
   await page.addInitScript(token => localStorage.setItem("karbon_auth", JSON.stringify({ token })), token);
   await page.goto(`${base}/page/customers-page.html`);
-  await page.locator(`[data-customer-id="${customer.id}"]`).click();
+  const card = page.locator(`[data-customer-id="${customer.id}"]`);
+  const details = page.locator("#customerDetailsModal");
+  await card.click();
+  const close = details.locator("[data-dialog-close]");
+  assert.equal(await close.count(), 1);
+  assert.equal(await details.locator("footer [data-dialog-close]").count(), 0);
+  assert.ok(await close.evaluate((button) => {
+    const title = document.getElementById("customerDetailsTitle");
+    return button.getBoundingClientRect().left >= title.getBoundingClientRect().right;
+  }));
+  await close.click();
+  await page.waitForFunction(() => !document.getElementById("customerDetailsModal").open);
+  await card.click();
   await page.waitForFunction(() => !document.getElementById("deleteCustomerButton").disabled);
   for (const [width, height] of [[1440, 1000], [1920, 1080], [768, 1024], [390, 844], [844, 390], [320, 568]]) {
     await page.setViewportSize({ width, height });

@@ -6,6 +6,9 @@ from database import Base
 from services.customer_ids import customer_id_default
 
 
+DEFAULT_CUSTOMER_CODE = 1000
+
+
 class CustomerIDRegistry(Base):
     __tablename__ = "customer_id_registry"
 
@@ -36,3 +39,7 @@ class Customer(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
     deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+    @property
+    def is_system(self):
+        return self.customer_code == DEFAULT_CUSTOMER_CODE

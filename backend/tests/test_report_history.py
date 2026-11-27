@@ -25,7 +25,7 @@ class ReportHistoryTests(unittest.TestCase):
     def setUp(self):
         with closing(sqlite3.connect(self.database)) as db, db:
             db.execute("DELETE FROM generated_reports")
-            db.execute("DELETE FROM customers")
+            db.execute("DELETE FROM customers WHERE customer_code != 1000")
         status, self.customer = self.request("POST", "/customers", {"first_name": "مشتری اصلی", "last_name": "آزمایش", "phone_numbers": []})
         self.assertEqual(status, 201)
 
@@ -128,7 +128,7 @@ class ReportHistoryTests(unittest.TestCase):
         self.assertEqual(self.request("GET", "/reports/history")[1], {"total": 1, "items": [remaining]})
         with closing(sqlite3.connect(self.database)) as db:
             self.assertEqual(db.execute("SELECT count(*) FROM generated_reports").fetchone()[0], 1)
-            self.assertEqual(db.execute("SELECT count(*) FROM customers").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT count(*) FROM customers").fetchone()[0], 2)
 
     def test_save_failure_leaves_no_partial_history_and_can_retry(self):
         with closing(sqlite3.connect(self.database)) as db, db:

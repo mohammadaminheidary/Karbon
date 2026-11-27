@@ -92,6 +92,7 @@ class CustomerResponse(BaseModel):
 
     id: int
     customer_code: int
+    is_system: bool
     permanent_id: str
     gender: Literal["male", "female"] | None
     first_name: str

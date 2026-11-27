@@ -29,7 +29,7 @@ XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 class CustomersIntegrationTests(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls, before_startup=""):
         cls.temp = tempfile.TemporaryDirectory(prefix="karbon-customers-")
         cls.database = str(Path(cls.temp.name) / "test.db")
         with socket.socket() as sock:
@@ -39,6 +39,7 @@ class CustomersIntegrationTests(unittest.TestCase):
         cls.log = open(Path(cls.temp.name) / "server.log", "w+")
         env = dict(os.environ, KARBON_DATABASE_PATH=cls.database, KARBON_JWT_SECRET="isolated-test-secret-only")
         bootstrap = f'''
+{before_startup}
 import app
 from database import SessionLocal
 from models.user import User
@@ -92,7 +93,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
 
     def setUp(self):
         with closing(sqlite3.connect(self.database)) as db, db:
-            db.execute("DELETE FROM customers")
+            db.execute("DELETE FROM customers WHERE customer_code != 1000")
 
     def create(self, **changes):
         payload = {"first_name": "علی", "last_name": "رضایی", "gender": "male", "phone_numbers": []}
@@ -151,7 +152,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual((result["valid"], result["duplicate"], result["invalid"]), (1, 2, 2))
         self.assertEqual([row["row"] for row in result["preview"]], [2, 3, 5, 6, 7])
         self.assertEqual(result["preview"][0]["values"]["phone_numbers"], ["09123456789", "02112345678"])
-        self.assertEqual(self.request("GET", "/customers")[1]["total"], 1)
+        self.assertEqual(self.request("GET", "/customers")[1]["total"], 2)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             commits = list(executor.map(process, ["commit", "commit"]))
@@ -166,7 +167,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(status, 200, retry)
         self.assertEqual((retry["inserted"], retry["duplicate"], retry["invalid"]), (0, 3, 2))
         customers = self.request("GET", "/customers")[1]["items"]
-        self.assertEqual(len(customers), 2)
+        self.assertEqual(len(customers), 3)
         self.assertEqual((customers[0]["first_name"], customers[0]["gender"], customers[0]["notes"]), ("مریم", "female", "یادداشت ثبت"))
         self.assertEqual(customers[1]["phone_numbers"], ["09120001111"])
 
@@ -176,9 +177,9 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(self.request("GET", "/customers/options", authenticated=False)[0], 401)
         status, data = self.request("GET", "/customers/options?limit=1")
         self.assertEqual(status, 200)
-        self.assertEqual(data["total"], 2)
+        self.assertEqual(data["total"], 3)
         self.assertEqual(data["items"][0]["id"], two["id"])
-        self.assertEqual(set(data["items"][0]), {"id", "customer_code", "first_name", "last_name", "phone_numbers"})
+        self.assertEqual(set(data["items"][0]), {"id", "customer_code", "first_name", "last_name", "phone_numbers", "is_system"})
         self.assertEqual(self.request("GET", "/customers/options?skip=1&limit=1")[1]["items"][0]["id"], one["id"])
         self.assertEqual(self.request("GET", "/customers/options?search=09121111111")[1]["total"], 1)
         self.assertEqual(self.request("GET", "/customers/options?search=%25")[1]["items"], [])
@@ -188,8 +189,9 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
 
     def test_empty_create_and_persistence(self):
         empty = self.request("GET", "/customers")[1]
-        self.assertEqual(empty["total"], 0)
-        self.assertEqual((empty["total_customers"], empty["unsettled_customers"], empty["settled_customers"]), (0, 0, 0))
+        self.assertEqual(empty["total"], 1)
+        self.assertTrue(empty["items"][0]["is_system"])
+        self.assertEqual((empty["total_customers"], empty["unsettled_customers"], empty["settled_customers"]), (1, 0, 0))
         preview = self.request("GET", "/customers/next-code")[1]["customer_code"]
         customer = self.create(first_name="  علي  ", last_name="  رضايي ", address="  تهران  ", notes="توضیحات", last_contact_date="2026-10-06")
         self.assertEqual(customer["customer_code"], preview)
@@ -242,7 +244,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
             match = warning["detail"]["matches"][0]
             self.assertEqual(match["name_match"], name_match)
             self.assertEqual(match["matching_phones"], phones)
-        self.assertEqual(self.request("GET", "/customers")[1]["total"], 1)
+        self.assertEqual(self.request("GET", "/customers")[1]["total"], 2)
         self.assertEqual(self.request("PUT", f'/customers/{customer["id"]}', {"first_name": "علی", "last_name": "رضایی", "phone_numbers": ["09121234567"]})[0], 200)
         other = self.create(first_name="سارا", last_name="احمدی")
         payload = {"first_name": "علی", "last_name": "رضایی"}
@@ -261,7 +263,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         for query in ["ناشناخته", "%' OR 1=1 --", "%", "_"]:
             self.assertEqual(self.request("GET", "/customers?" + urllib.parse.urlencode({"search": query}))[1]["total"], 0)
         status, page = self.request("GET", "/customers?skip=1&limit=1")
-        self.assertEqual(page["total"], 2)
+        self.assertEqual(page["total"], 3)
         self.assertEqual(len(page["items"]), 1)
 
     def test_validation_and_code_protection(self):
@@ -300,7 +302,7 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(self.request("DELETE", f'/customers/{customer["id"]}')[0], 204)
         self.assertEqual(self.request("GET", f'/customers/{customer["id"]}')[0], 404)
         with closing(sqlite3.connect(self.database)) as db, db:
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM customers").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT customer_code FROM customers").fetchall(), [(1000,)])
             self.assertIsNone(db.execute("SELECT permanent_id FROM customer_id_registry WHERE permanent_id=?", (customer["permanent_id"],)).fetchone())
         next_customer = self.create()
         self.assertEqual(next_customer["customer_code"], customer["customer_code"])
@@ -324,12 +326,34 @@ uvicorn.run(app.app, host="127.0.0.1", port={cls.port}, log_level="warning")
         self.assertEqual(statuses.count(409), 3)
 
     def test_deletion_renumbers_only_display_codes(self):
+        default = self.request("GET", "/customers?search=1000")[1]["items"][0]
         customers = [self.create(first_name=f"Customer {index}") for index in range(4)]
         self.assertEqual(self.request("DELETE", f'/customers/{customers[1]["id"]}')[0], 204)
+        self.assertEqual(self.request("GET", f'/customers/{default["id"]}')[1], default)
         for index, customer in enumerate([customers[0], *customers[2:]]):
             saved = self.request("GET", f'/customers/{customer["id"]}')[1]
             self.assertEqual(saved["customer_code"], 1001 + index)
             self.assertEqual(saved["permanent_id"], customer["permanent_id"])
+
+    def test_system_customer_is_searchable_and_protected(self):
+        query = urllib.parse.urlencode({"search": "مشتری حضوری"})
+        options = self.request("GET", f"/customers/options?{query}")[1]["items"]
+        self.assertEqual(len(options), 1)
+        default = options[0]
+        self.assertEqual(default, {"id": default["id"], "customer_code": 1000, "first_name": "مشتری",
+                                   "last_name": "حضوری", "phone_numbers": [], "is_system": True})
+        path = f'/customers/{default["id"]}'
+        profile = {"first_name": "مشتری", "last_name": "حضوری"}
+        self.assertEqual(self.request("DELETE", path)[0], 409)
+        for field in profile:
+            self.assertEqual(self.request("PUT", path, {**profile, field: "نام دیگر"})[0], 409)
+        self.assertEqual(self.request("PUT", path, {**profile, "customer_code": 1001})[0], 422)
+        self.assertEqual(self.request("POST", "/customers", {**profile, "customer_code": 1000})[0], 422)
+        self.assertEqual(self.request("GET", "/customers/next-code")[1]["customer_code"], 1001)
+        status, saved = self.request("PUT", path, {**profile, "notes": "یادداشت آزمایشی"})
+        self.assertEqual(status, 200, saved)
+        self.assertEqual(saved["notes"], "یادداشت آزمایشی")
+        self.assertEqual(self.request("PUT", path, profile)[0], 200)
 
 
 if __name__ == "__main__":

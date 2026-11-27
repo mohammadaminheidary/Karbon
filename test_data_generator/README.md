@@ -45,8 +45,8 @@ allows only one writer; other writes can briefly wait while a batch runs.
 **Delete all data** clears every business table in reverse foreign-key order,
 including real data, generated data, edited records, old records without ownership
 markers, soft-deleted records, member photos/templates and tracking entries. This
-is a full dashboard reset. Only login accounts (`users`) and the bundled bank catalog
-(`bank_directory`) remain so the application remains usable. Foreign keys stay
+is a full dashboard reset. Login accounts, the bundled bank catalog, and the
+default customer «مشتری حضوری» remain. Foreign keys stay
 enabled, schema and ID sequences remain intact, and the complete reset rolls back
 if any step fails. The window displays this destructive behavior beside the button.
 The reset happens only when the button is clicked; installing or testing this tool

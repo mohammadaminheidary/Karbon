@@ -47,7 +47,7 @@ initialize_bank_storage(engine)
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             with closing(sqlite3.connect(database)) as db:
-                self.assertEqual(db.execute("SELECT id, customer_code FROM customers ORDER BY id").fetchall(),[(3,1001),(9,1002)])
+                self.assertEqual(db.execute("SELECT id, customer_code FROM customers ORDER BY id").fetchall(),[(3,1001),(9,1002),(10,1000)])
                 self.assertEqual(db.execute("SELECT id, display_code FROM expense_categories ORDER BY id").fetchall(),[(2,1),(8,2)])
                 self.assertEqual(db.execute("SELECT id, transaction_number, bank_id, customer_id, expense_category_id, account_code, amount FROM financial_transactions ORDER BY id").fetchall(),[(5,1,7,9,None,"1002",500),(11,2,7,None,8,"E-000002",100)])
                 self.assertEqual(db.execute("SELECT payment_method FROM financial_transactions ORDER BY id").fetchall(), [(None,), (None,)])

@@ -21,7 +21,7 @@ try {
   await login("test-password");
   const token = await page.evaluate(() => JSON.parse(localStorage.getItem("karbon_auth")).token);
   const before = await context.request.get(`${base}/api/customers`, { headers: { Authorization: `Bearer ${token}` } });
-  assert.equal((await before.json()).total_customers, 2);
+  assert.equal((await before.json()).total_customers, 3);
   await page.evaluate(() => localStorage.setItem("karbon_appearance", "{}"));
   const secondTab = await context.newPage();
   await secondTab.goto(`${base}/page/customers-page.html`);
@@ -48,8 +48,11 @@ try {
   await login("test-password");
   const newToken = await page.evaluate(() => JSON.parse(localStorage.getItem("karbon_auth")).token);
   const after = await context.request.get(`${base}/api/customers`, { headers: { Authorization: `Bearer ${newToken}` } });
-  assert.equal((await after.json()).total_customers, 0);
-  console.log("PASS: reset retains preferences and password, clears customers and invalidates old sessions");
+  const customers = await after.json();
+  assert.equal(customers.total_customers, 1);
+  assert.equal(customers.items[0].customer_code, 1000);
+  assert.equal(customers.items[0].is_system, true);
+  console.log("PASS: reset retains preferences, password and the system customer, and invalidates old sessions");
 } finally {
   await browser.close();
 }

@@ -35,12 +35,12 @@ def counter(connection, cursor, statement, parameters, context, executemany):
     if statement.lstrip().upper().startswith("SELECT"):
         reads[0] += 1
 with SessionLocal() as db:
-    db.add_all([Customer(id=i, customer_code=1000+i, first_name=f"مشتری {i}", last_name="آزمایش") for i in range(1, 26)])
+    db.add_all([Customer(id=i+1, customer_code=1000+i, first_name=f"مشتری {i}", last_name="آزمایش") for i in range(1, 26)])
     db.add(Product(id=1, product_code="P-000001", name="کالا", unit="عدد", price=100, stock=100))
     db.add_all([BankAccount(id=i, name=f"بانک {i}", account_number=str(i)) for i in range(1, 11)])
     db.commit()
     for i in range(1, 21):
-        orders.save_order(db, OrderWrite(request_id=uuid4(), customer_id=i, invoice_date="1405/07/01", payment_date="1405/07/01",
+        orders.save_order(db, OrderWrite(request_id=uuid4(), customer_id=i+1, invoice_date="1405/07/01", payment_date="1405/07/01",
             items=[dict(product_id=1, quantity=1, unit_price=100)], payments=[dict(method="pos", bank_id=1, amount=30), dict(method="transfer", bank_id=1, amount=40)]))
     count[0] = 0
     page = customers.list_customers(db, limit=25)
@@ -50,7 +50,7 @@ with SessionLocal() as db:
     count[0] = 0
     options = customers.list_customers(db, search="مشتری 2", limit=3, options_only=True)
     assert count[0] == 2 and len(options["items"]) == 3
-    assert set(options["items"][0]) == {"id", "customer_code", "first_name", "last_name", "phone_numbers"}
+    assert set(options["items"][0]) == {"id", "customer_code", "first_name", "last_name", "phone_numbers", "is_system"}
     selected = customers.list_customers(db, options_only=True, customer_id=1)
     assert selected["total"] == 1 and selected["items"][0]["id"] == 1
     count[0] = 0
@@ -79,9 +79,9 @@ with SessionLocal() as db:
     count[0] = 0
     compact_transaction_numbers(db)
     assert count[0] == 1, count  # no updates for already contiguous numbers
-    db.query(Customer).filter(Customer.id == 25).delete(); db.flush()
+    db.query(Customer).filter(Customer.id == 26).delete(); db.flush()
     compact_customer_codes(db)
-    assert db.query(Customer.customer_code).order_by(Customer.id).all() == [(1001+i,) for i in range(24)]
+    assert db.query(Customer.customer_code).order_by(Customer.id).all() == [(1000+i,) for i in range(25)]
     db.rollback()
 
     category_id = db.scalar(text("SELECT id FROM inventory_options WHERE kind='categories' LIMIT 1"))

@@ -1,5 +1,7 @@
 export const numberFormatter = new Intl.NumberFormat("fa-IR");
 export const formatNumber = (value) => numberFormatter.format(value);
+export const systemCustomerLabel = "مشتری پیش‌فرض سیستمی";
+
 export const fullName = (customer) =>
   `${customer.first_name} ${customer.last_name}`;
 export const genderLabel = (gender) =>

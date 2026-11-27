@@ -6,8 +6,7 @@ run_dir = Path(os.environ['KARBON_PERF_DIR']).resolve()
 expected = run_dir / 'base.db'
 assert Path(os.environ['KARBON_DATABASE_PATH']).resolve() == expected, 'Seed requires the isolated base.db'
 assert not expected.exists(), 'Refusing to seed an existing database'
-import app
-from database import SessionLocal
+from database import SessionLocal, engine
 from models import *
 from models.order import Product, Order, OrderItem, OrderPayment
 from models.member_face import MemberFace
@@ -17,6 +16,13 @@ from security.password import hash_password
 from services.order_service import build_invoice
 from services.reference_codes import compact_transaction_numbers
 from uuid import UUID,uuid5
+
+# Keep the IDs used by the diagnostic callers available for synthetic customers.
+Customer.__table__.create(engine)
+with engine.begin() as connection:
+ connection.exec_driver_sql("INSERT INTO sqlite_sequence(name, seq) VALUES ('customers', 1000)")
+import app
+
 now=datetime.now(APP_TIMEZONE);today=now.date()
 def uid(n):return str(UUID(int=n))
 with SessionLocal() as db:

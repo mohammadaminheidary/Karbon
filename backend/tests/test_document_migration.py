@@ -54,13 +54,13 @@ from models.document import Document
 from models.order import Order, OrderPayment
 from datetime import date
 with SessionLocal() as db:
-    db.add(Customer(id=1,customer_code=1001,first_name="مشتری",last_name="قدیمی"))
+    db.add(Customer(id=2,customer_code=1001,first_name="مشتری",last_name="قدیمی"))
     db.add(BankAccount(id=1,name="بانک",account_number="legacy",opening_balance=1000))
     db.add(Document(id=1,number="legacy-doc",description="یادداشت",date=date(2026,10,6),document_type="درآمد"))
     db.flush()
     for record_id, doc_id, amount in [(10,1,100),(11,None,50)]:
-        db.add(FinancialTransaction(id=record_id,document_id=doc_id,request_id=f"legacy-{record_id}",kind="income",bank_id=1,customer_id=1,title="مشتری قدیمی",account_code="1001",amount=amount,transaction_date=date(2026,10,6),transaction_time="12:00:00",time_mode="auto"))
-    db.add(Order(id=1,request_id="legacy-order",request_fingerprint="legacy",invoice_code="INV-OLD",order_number="O-OLD",customer_id=1,invoice_date=date(2026,10,6),payment_date=date(2026,10,6),subtotal=50,discount=0))
+        db.add(FinancialTransaction(id=record_id,document_id=doc_id,request_id=f"legacy-{record_id}",kind="income",bank_id=1,customer_id=2,title="مشتری قدیمی",account_code="1001",amount=amount,transaction_date=date(2026,10,6),transaction_time="12:00:00",time_mode="auto"))
+    db.add(Order(id=1,request_id="legacy-order",request_fingerprint="legacy",invoice_code="INV-OLD",order_number="O-OLD",customer_id=2,invoice_date=date(2026,10,6),payment_date=date(2026,10,6),subtotal=50,discount=0))
     db.flush()
     db.add(OrderPayment(id=1,order_id=1,transaction_id=11,method="transfer"))
     db.commit()
@@ -106,7 +106,7 @@ with SessionLocal() as db:
             with closing(sqlite3.connect(path)) as db:
                 self.assertEqual(db.execute("SELECT id,amount,request_id FROM financial_transactions ORDER BY id").fetchall(),[(10,100,"legacy-10"),(11,50,"legacy-11")])
                 self.assertEqual(db.execute("SELECT transaction_id FROM order_payments").fetchone()[0],11)
-                self.assertEqual(db.execute("SELECT customer_id FROM financial_transactions WHERE id=11").fetchone()[0],1)
+                self.assertEqual(db.execute("SELECT customer_id FROM financial_transactions WHERE id=11").fetchone()[0],2)
                 self.assertEqual(db.execute("SELECT count(*) FROM document_accounts").fetchone()[0],1)
                 self.assertEqual(db.execute("SELECT revision FROM documents").fetchone()[0],2)
                 self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(),[])

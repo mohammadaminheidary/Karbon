@@ -20,6 +20,7 @@ import {
   formatNumber,
   statusMeta,
   createSummary,
+  systemCustomerLabel,
 } from "./customer-utils.js";
 
 const get = (id) => document.getElementById(id);
@@ -84,7 +85,7 @@ function createCustomerCard(customer) {
   card.setAttribute("aria-expanded", String(detailsCustomerId === customer.id));
   card.setAttribute(
     "aria-label",
-    `مشاهده جزئیات ${fullName(customer)}، کد ${customer.customer_code}`,
+    `مشاهده جزئیات ${fullName(customer)}، کد ${customer.customer_code}${customer.is_system ? `، ${systemCustomerLabel}` : ""}`,
   );
   const header = element(
     "div",
@@ -98,7 +99,7 @@ function createCustomerCard(customer) {
     element(
       "p",
       "min-w-0 max-w-full break-words text-sm font-bold text-mirage",
-      `${customer.gender ? genderLabel(customer.gender) + " " : ""}${fullName(customer)}`,
+      `${customer.gender && !customer.is_system ? genderLabel(customer.gender) + " " : ""}${fullName(customer)}`,
     ),
     element(
       "p",
@@ -106,6 +107,9 @@ function createCustomerCard(customer) {
       `کد مشتری: ${formatNumber(customer.customer_code)}`,
     ),
   );
+  if (customer.is_system) identity.append(element(
+    "span", "rounded-full bg-persian-blue/10 px-2.5 py-1 text-[0.625rem] font-bold text-persian-blue", systemCustomerLabel,
+  ));
   const status = statusMeta(customer.summary.status);
   const permanentID = element("p", "text-[0.625rem] text-persian-blue");
   const permanentCode = element("bdi", "font-mono", customer.permanent_id);
@@ -315,7 +319,7 @@ function renderDetails(customer) {
     ["آخرین تماس", formatDate(customer.last_contact_date)],
     ["آدرس", customer.address],
     ["ایمیل", customer.email, true],
-    ["نوع مشتری", customer.customer_type],
+    ["نوع مشتری", customer.is_system ? systemCustomerLabel : customer.customer_type],
     ["تاریخ ثبت", timestampDate(customer.created_at)],
     ["آخرین ویرایش", timestampDate(customer.updated_at)],
     ["توضیحات مشتری", customer.notes],
@@ -398,7 +402,7 @@ async function openDetails(id) {
     selectedCustomer = customer;
     renderDetails(customer);
     get("editCustomerButton").disabled = false;
-    get("deleteCustomerButton").disabled = false;
+    get("deleteCustomerButton").disabled = Boolean(customer.is_system);
   } catch (error) {
     if (current !== detailsRequest) return;
     const message = element(
@@ -426,7 +430,7 @@ function cancelDelete() {
 }
 
 function openDelete() {
-  if (!selectedCustomer) return;
+  if (!selectedCustomer || selectedCustomer.is_system) return;
   deletingCustomer = selectedCustomer;
   get("customerDeleteDescription").textContent =
     `آیا مطمئن هستید که می‌خواهید «${fullName(deletingCustomer)}» با کد مشتری «${formatNumber(deletingCustomer.customer_code)}» را حذف کنید؟ پس از تأیید، ۴ ثانیه برای لغو حذف فرصت دارید.`;
@@ -612,6 +616,7 @@ export async function initializeCustomers() {
         if (current === detailsRequest && selectedCustomer?.id === id) {
           selectedCustomer = customer;
           renderDetails(customer);
+          get("deleteCustomerButton").disabled = Boolean(customer.is_system);
         }
       } catch { /* The details dialog retains its own retry flow. */ }
     }

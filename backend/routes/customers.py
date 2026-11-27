@@ -27,6 +27,8 @@ def customer_errors():
         yield
     except service.CustomerNotFound:
         raise HTTPException(404, "مشتری موردنظر پیدا نشد.")
+    except service.SystemCustomerProtected:
+        raise HTTPException(409, "حذف مشتری سیستمی یا تغییر نام و کد آن امکان‌پذیر نیست.")
     except customer_import.InvalidWorkbook as error:
         raise HTTPException(422, str(error))
     except CustomerIDExhausted:

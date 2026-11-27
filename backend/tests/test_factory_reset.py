@@ -108,7 +108,9 @@ class FactoryResetTests(TestCase):
         self.assertEqual((product["id"], product["name"], product["category_id"], product["stock"]), (1, "stock item", 109, 0))
         self.assertEqual(self.call(self.host, "/api/settings/inventory-options", token=new_token)[0], 200)
         with closing(sqlite3.connect(self.database)) as db:
-            for table in ("customers", "financial_transactions", "orders", "order_items", "purchases",
+            self.assertEqual(db.execute("SELECT customer_code, first_name, last_name FROM customers").fetchall(),
+                             [(1000, "مشتری", "حضوری")])
+            for table in ("financial_transactions", "orders", "order_items", "purchases",
                           "attendance", "tasks", "fiscal_snapshots", "factory_reset_challenges"):
                 self.assertEqual(db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 0, table)
             self.assertEqual(db.execute("SELECT username, password_hash FROM users ORDER BY id").fetchall(), credentials)

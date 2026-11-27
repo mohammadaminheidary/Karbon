@@ -34,7 +34,7 @@ class Application:
         self.generate_button.pack(side="left", padx=6)
         self.delete_button = ttk.Button(controls, text="Delete all data", command=lambda: self.start("delete"))
         self.delete_button.pack(side="left", padx=6)
-        ttk.Label(frame, text="Delete all data permanently removes ALL business records, including real data.\nOnly login accounts and the built-in bank catalog are kept.",
+        ttk.Label(frame, text="Delete all data permanently removes business records, including real data.\nLogin accounts, the built-in bank catalog and the default customer are kept.",
                   wraplength=600, foreground="#b42318").pack(anchor="w", pady=(8, 0))
         self.progress = ttk.Progressbar(frame, maximum=100)
         self.progress.pack(fill="x", pady=(16, 6))
@@ -94,7 +94,7 @@ class Application:
                         message = (f"Generated {result['counts']['customers']:,} customers and related data "
                                    f"({result['total']:,} total records)")
                     else:
-                        message = f"Deleted {result['total']:,} records. Dashboard is empty"
+                        message = f"Deleted {result['total']:,} records"
                     self.status.set(message)
                     self.write(message + "\n" + "\n".join(f"  {name}: {count:,}" for name, count in result["counts"].items()) + "\n\n")
                     messagebox.showinfo("Complete", message + ". Refresh the Karbon dashboard.", parent=self.root)

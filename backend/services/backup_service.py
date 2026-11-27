@@ -27,6 +27,7 @@ from models.factory_reset import CHALLENGE_COLUMNS, FactoryResetChallenge, upgra
 from models.inventory import ProductionRun
 from services.invoice_settings_service import INVOICE_COLUMNS, SETTINGS_TABLES, initialize_invoice_storage
 from security.face_templates import template_key
+from services.default_customer import initialize_default_customer
 from services.fiscal_period import initialize_fiscal_storage
 from services.inventory_service import PURCHASE_REVISION_COLUMNS, upgrade_purchase_revisions
 from services.order_service import upgrade_product_constraints
@@ -371,6 +372,7 @@ def restore_snapshot(snapshot, recovery):
             upgrade_factory_reset_challenges(connection)
         initialize_invoice_storage(staged)
         upgrade_product_constraints(staged)
+        initialize_default_customer(staged)
         initialize_fiscal_storage(staged, zone=ZoneInfo(recovery["timezone"]))
     finally:
         staged.dispose()
