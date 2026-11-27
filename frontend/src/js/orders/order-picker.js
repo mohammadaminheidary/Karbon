@@ -4,9 +4,10 @@ import { node } from "../finance/finance-utils.js";
 export function positionOrderDropdown(menu, input, dialog) {
   const anchor = input.getBoundingClientRect();
   const panel = dialog.getBoundingClientRect();
+  const form = input.closest(".orders-dialog-body")?.getBoundingClientRect() ?? panel;
   const clip = input.closest(".orders-table-scroll")?.getBoundingClientRect() ?? panel;
-  if (anchor.bottom <= Math.max(panel.top, clip.top) ||
-      anchor.top >= Math.min(panel.bottom, clip.bottom) ||
+  if (anchor.bottom <= Math.max(panel.top, form.top, clip.top) ||
+      anchor.top >= Math.min(panel.bottom, form.bottom, clip.bottom) ||
       anchor.right <= clip.left || anchor.left >= clip.right) return false;
 
   const gutter = 6;

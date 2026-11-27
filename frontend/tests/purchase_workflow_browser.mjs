@@ -119,7 +119,7 @@ try {
   await page.locator(".orders-add-row").nth(1).click();
   await fillPurchaseRow(page, firstProduct, 4, 500, 2);
   assert.equal(await page.locator("#orderSubtotal").textContent(), `${nf(5900)} تومان`);
-  await page.locator("#orderDiscountKind").selectOption("percent");
+  await page.locator('#orderDiscountKind input[value="percent"]').check();
   await page.locator("#orderDiscountPercent").fill("10");
   assert.equal(await page.locator("#orderTotal").textContent(), `${nf(5310)} تومان`);
   await page.locator("#orderDescription").fill("تحویل آزمایشی");

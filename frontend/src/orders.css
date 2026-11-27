@@ -292,7 +292,7 @@
   font-size: 0.75rem;
   font-weight: 600;
 }
-.orders-dialog-body input:not([type="checkbox"], [data-date-part]),
+.orders-dialog-body input:not([type="checkbox"], [type="radio"], [data-date-part]),
 .orders-dialog-body select,
 .orders-dialog-body textarea {
   display: block;
@@ -315,7 +315,7 @@
   color: rgb(15 23 42 / 55%);
   background: rgb(248 250 252 / 75%);
 }
-.orders-dialog-body input:not([data-date-part]):focus,
+.orders-dialog-body input:not([type="radio"], [data-date-part]):focus,
 .orders-dialog-body select:focus,
 .orders-dialog-body textarea:focus {
   outline: none;
@@ -377,6 +377,13 @@
 .orders-icon-button:hover,
 .orders-add-row:hover {
   background: color-mix(in srgb, var(--color-persian-blue) 8%, transparent);
+}
+.item-remove {
+  transition: color 150ms, background 150ms, transform 150ms;
+}
+.item-remove:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-alizarin-crimson) 10%, transparent);
+  color: var(--color-alizarin-crimson);
 }
 .orders-primary:active,
 .orders-secondary:active,
@@ -484,6 +491,26 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+.orders-customer-reveal {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+}
+.orders-customer-reveal[inert] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+}
+.orders-customer-reveal > div {
+  min-height: 0;
+  overflow: clip;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .orders-customer-reveal {
+    transition: grid-template-rows 260ms ease, opacity 260ms ease, visibility 260ms;
+  }
+}
 .orders-items-heading {
   display: flex;
   justify-content: space-between;
@@ -503,7 +530,8 @@
   border-collapse: collapse;
 }
 #createOrderModal .orders-items-table {
-  min-width: 800px;
+  min-width: 840px;
+  table-layout: fixed;
 }
 .orders-items-table th {
   padding: 12px 10px;
@@ -524,6 +552,17 @@
 }
 .orders-items-table th:nth-child(5) {
   width: 25%;
+}
+#createOrderModal th:nth-child(1) { width: 48px; }
+#createOrderModal th:nth-child(2) { width: auto; }
+#createOrderModal th:nth-child(3) { width: 164px; }
+#createOrderModal th:nth-child(4) { width: 76px; }
+#createOrderModal th:nth-child(5) { width: 152px; }
+#createOrderModal th:nth-child(6) { width: 170px; }
+#createOrderModal th:nth-child(7) { width: 56px; }
+#createOrderModal .item-unit {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .orders-items-table input,
 .orders-items-table select {
@@ -606,6 +645,25 @@
   display: grid;
   align-content: end;
 }
+.orders-discount-kind legend {
+  margin-bottom: 6px;
+  color: rgb(15 23 42 / 70%);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.orders-discount-kind label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: 12px;
+  margin-block: 4px;
+  cursor: pointer;
+}
+.orders-discount-kind input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-persian-blue);
+}
 .orders-discount-amount {
   color: rgb(15 23 42 / 70%);
   font-size: 0.75rem;
@@ -621,7 +679,7 @@
   .orders-discount-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .orders-discount-fields > label:first-child {
+  .orders-discount-kind {
     grid-column: 1 / -1;
   }
 }
@@ -649,6 +707,9 @@
   font-weight: 900;
   color: var(--color-persian-blue);
   overflow-wrap: anywhere;
+}
+#orderTotal {
+  color: var(--theme-invoice-total);
 }
 .orders-payment-top {
   display: grid;
@@ -1096,9 +1157,13 @@
 }
 
 /* Create Order shares the native, navbar-anchored registration surface. */
+.orders-modal.bottom-curtain.orders-registration-panel {
+  height: auto;
+  overflow: hidden;
+}
 .orders-registration-panel > .orders-glass {
   width: 100%;
-  max-height: none;
+  max-height: calc(100dvh - var(--task-curtain-bottom, 18px) - 18px);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -1109,18 +1174,10 @@
   opacity: 1;
 }
 
-/* The viewport-bounded curtain owns form scrolling. An unconstrained inner
-   body with overscroll containment traps gestures before they reach it. */
-.orders-registration-panel .orders-dialog-body {
-  overflow: visible;
-  overscroll-behavior: auto;
+/* Keep the actions outside the form scroller and the scrollbar inside the curtain. */
+.orders-registration-panel :is(.orders-dialog-header, .orders-dialog-footer) {
+  flex-shrink: 0;
 }
-
-.orders-registration-panel .orders-customer-details {
-  max-height: none;
-  overflow: visible;
-}
-
 /* Contain the absolute screen-reader label within the horizontal table scroller. */
 .orders-registration-panel .orders-table-scroll {
   position: relative;

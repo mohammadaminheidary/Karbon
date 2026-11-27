@@ -3,7 +3,6 @@ import { createFrameUpdate } from "./pointer-motion.js";
 export function initializeDialogCloseTooltip() {
   const tooltip = document.createElement("span");
   tooltip.className = "navbar-tooltip dialog-close-tooltip";
-  tooltip.textContent = "خروج";
   tooltip.setAttribute("aria-hidden", "true");
   if (tooltip.showPopover) tooltip.setAttribute("popover", "manual");
 
@@ -28,10 +27,11 @@ export function initializeDialogCloseTooltip() {
   // Delegate so popups built on demand share the same tooltip as static ones.
   document.addEventListener("pointerover", (event) => {
     if (event.pointerType !== "mouse") return;
-    const target = event.target.closest(".dialog-close-button");
+    const target = event.target.closest(".dialog-close-button, [data-pointer-tooltip]");
     if (!target || target === button || target.disabled) return;
     hide();
     button = target;
+    tooltip.textContent = button.dataset.pointerTooltip ?? "خروج";
     x = event.clientX;
     y = event.clientY;
     const host = button.closest("dialog[open]") || document.body;

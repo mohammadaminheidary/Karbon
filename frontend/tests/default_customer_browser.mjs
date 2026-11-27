@@ -40,8 +40,8 @@ try {
   await page.locator("#orderCustomerSearch").fill("۱۰۰۰");
   const option = page.getByRole("option", { name: new RegExp(`1000.*مشتری حضوری.*${label}`) });
   await option.click();
-  await page.locator("#orderCustomerDetails").getByText(label, { exact: true }).waitFor();
-  assert.equal(await page.locator("#orderCustomerDetails").getByText("شماره‌های تماس", { exact: true }).count(), 0);
+  await page.locator("#orderCustomerDetails").getByText("شماره‌های تماس", { exact: true }).waitFor();
+  assert.equal(await page.locator("#orderCustomerDetails").getByText(label, { exact: true }).count(), 0);
   await selectOrderProduct(page.locator("#orderItems .item-product").first(), product);
   await page.locator("#orderPay").click();
   await page.locator("#orderPaymentModal").waitFor({ state: "visible" });

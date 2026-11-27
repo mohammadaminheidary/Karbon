@@ -50,7 +50,7 @@ async function check(quantity, second = 0, discount = 0) {
 }
 async function scrollPositions() {
   return page.evaluate(() => [
-    document.getElementById("createOrderModal").scrollTop,
+    document.querySelector("#createOrderModal .orders-dialog-body").scrollTop,
     window.scrollY,
     document.querySelector("#createOrderModal .orders-table-scroll").scrollLeft,
   ]);

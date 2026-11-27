@@ -85,6 +85,32 @@ try {
       "حذف ردیف",
     ]);
     assert.equal(await row(0).locator("td").count(), 7);
+    assert.equal(await page.locator("#orderDeliveryAddress").count(), 0);
+    const columns = () => row(0).locator("td").evaluateAll((cells) =>
+      cells.map((cell) => [cell.offsetLeft, cell.offsetWidth]),
+    );
+    const blankColumns = await columns();
+    const unitPrice = row(0).locator(".item-price");
+    await unitPrice.fill("999999999999");
+    assert.equal(await row(0).locator(".item-total").textContent(), money(999999999999));
+    assert.deepEqual(await columns(), blankColumns);
+    await unitPrice.fill("");
+    await page.locator(".orders-table-scroll").first().evaluate((table) => { table.scrollLeft = 0; });
+    await page.locator("#createOrderModal .orders-dialog-body").evaluate((body) => { body.scrollTop = 0; });
+    if (width === 1440) {
+      const colors = await page.evaluate(() => {
+        const root = document.documentElement;
+        const previous = root.dataset.theme;
+        const results = ["blue", "green", "red", "black"].map((theme) => {
+          root.dataset.theme = theme;
+          return ["orderTotal", "orderSubtotal"].map((id) => getComputedStyle(document.getElementById(id)).color);
+        });
+        root.dataset.theme = previous;
+        return results;
+      });
+      assert.equal(new Set(colors.map(([total]) => total)).size, 4);
+      assert.ok(colors.every(([total, subtotal]) => total !== subtotal));
+    }
     assert.equal(
       await page
         .locator(".orders-row-action td")
@@ -98,7 +124,13 @@ try {
     await page.locator("#orderCustomerSearch").click();
     await page.locator(".orders-customer-option").first().waitFor();
     assert.equal(await tableTop(), beforeOpen, "opening and loading customers preserves table position");
-    await page.locator(".orders-customer-option").first().click();
+    const customerDetailsReveal = page.waitForFunction(() => {
+      const details = document.querySelector(".orders-customer-reveal:not([inert])");
+      if (!details) return false;
+      const opacity = Number(getComputedStyle(details).opacity);
+      return opacity > 0 && opacity < 1;
+    });
+    await Promise.all([customerDetailsReveal, page.locator(".orders-customer-option").first().click()]);
     await page.locator("#orderCustomerDetails").waitFor({ state: "visible" });
     const productInput = row(0).locator(".item-product");
     await productInput.fill("د");
@@ -133,7 +165,7 @@ try {
     await check([375000, 200000], 575000);
     assert.equal(await page.locator("#orderQuantityTotal").textContent(), "۷");
     assert.equal(await page.locator("#orderUnitPriceTotal").textContent(), money(175000));
-    await page.locator("#orderDiscountKind").selectOption("percent");
+    await page.locator('#orderDiscountKind input[value="percent"]').check();
     for (const [value, discount] of [["۱۲٫۵", 71875], ["۱۰۰", 575000], ["۰٫۰۱", 58]]) {
       await page.locator("#orderDiscountPercent").fill(value);
       assert.equal(await page.locator("#orderDiscountAmount").textContent(), money(discount));
@@ -143,7 +175,7 @@ try {
       await page.locator("#orderDiscountPercent").fill(value);
       assert.equal(await page.locator("#orderTotal").textContent(), "—");
     }
-    await page.locator("#orderDiscountKind").selectOption("fixed");
+    await page.locator('#orderDiscountKind input[value="fixed"]').check();
     // Read-only totals have their own cell and Persian digits/group separators.
     assert.equal(
       await row(0)
@@ -193,7 +225,22 @@ try {
     await row(2).locator(".item-quantity").fill("5");
     await row(2).locator(".item-price").fill("25000");
     await check([375000, 200000, 125000], 700000, 75000);
-    await row(2).locator(".item-remove").click();
+    const remove = row(2).locator(".item-remove");
+    if (width === 1440) {
+      await remove.hover();
+      const tooltip = page.locator(".dialog-close-tooltip:popover-open");
+      await tooltip.waitFor();
+      assert.equal(await tooltip.textContent(), "حذف ردیف");
+      await page.waitForFunction(() => {
+        const button = document.querySelector(".item-remove:hover");
+        return button && getComputedStyle(button).color === "rgb(220, 38, 38)";
+      });
+      const before = await tooltip.boundingBox();
+      const bounds = await remove.boundingBox();
+      await page.mouse.move(bounds.x + bounds.width / 2 + 6, bounds.y + bounds.height / 2);
+      await page.waitForFunction((x) => document.querySelector(".dialog-close-tooltip").getBoundingClientRect().x !== x, before.x);
+    }
+    await remove.click();
     await check([375000, 200000], 575000, 75000);
     await row(0).locator(".item-total").scrollIntoViewIfNeeded();
     assert.equal(
@@ -206,7 +253,7 @@ try {
     const finalDiscount = width === 1440 ? 71875 : 75000;
     const finalTotal = 575000 - finalDiscount;
     if (width === 1440) {
-      await page.locator("#orderDiscountKind").selectOption("percent");
+      await page.locator('#orderDiscountKind input[value="percent"]').check();
       await page.locator("#orderDiscountPercent").fill("۱۲٫۵");
     }
     await page.locator("#orderPay").click();
@@ -253,6 +300,7 @@ try {
     const payload = response.request().postDataJSON(),
       saved = await response.json();
     orders.push(saved.id);
+    assert.equal(Object.hasOwn(payload, "delivery_address"), false);
     assert.deepEqual(payload.items, [
       { product_id: tracked.id, quantity: 3, unit_price: 125000 },
       { product_id: service.id, quantity: 4, unit_price: 50000 },

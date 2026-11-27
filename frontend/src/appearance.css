@@ -6,6 +6,7 @@
   --theme-soft: #93c5fd;
   --theme-light: #dbeafe;
   --theme-tint: #eff6ff;
+  --theme-invoice-total: #0f766e;
 }
 :root[data-theme="red"] {
   --color-persian-blue: #b91c1c;
@@ -14,6 +15,7 @@
   --theme-soft: #fca5a5;
   --theme-light: #fee2e2;
   --theme-tint: #fef2f2;
+  --theme-invoice-total: #9d174d;
 }
 :root[data-theme="green"] {
   --color-persian-blue: #15803d;
@@ -22,6 +24,7 @@
   --theme-soft: #86efac;
   --theme-light: #dcfce7;
   --theme-tint: #f0fdf4;
+  --theme-invoice-total: #0e7490;
 }
 :root[data-theme="black"] {
   --color-persian-blue: #18181b;
@@ -30,6 +33,7 @@
   --theme-soft: #a1a1aa;
   --theme-light: #e4e4e7;
   --theme-tint: #f4f4f5;
+  --theme-invoice-total: #92400e;
 }
 
 /* All login themes share the artwork; alternate accents keep their theme tokens. */

@@ -43,10 +43,11 @@ function modal(id, title, content, footer) {
   );
   root.id = id;
   root.setAttribute("aria-hidden", "true");
+  const body = `${content}<p class="orders-error" role="alert" hidden></p>`;
   root.innerHTML = `${registration ? "" : '<button type="button" class="orders-backdrop" data-dialog-close aria-label="انصراف"></button>'}
     <section role="dialog" aria-modal="true" aria-labelledby="${id}Title" class="orders-glass scale-95 opacity-0">
       <header class="orders-dialog-header"><h2 id="${id}Title">${title}</h2><button type="button" class="dialog-close-button" data-dialog-close aria-label="بستن"></button></header>
-      <form novalidate><div class="orders-dialog-body">${content}<p class="orders-error" role="alert" hidden></p></div><footer class="orders-dialog-footer">${footer}</footer></form>
+      <form novalidate><div class="orders-dialog-body">${registration ? `<div dir="rtl">${body}</div>` : body}</div><footer class="orders-dialog-footer">${footer}</footer></form>
     </section>`;
   document.body.append(root);
   return root;
@@ -88,7 +89,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
         <input id="orderCustomerSearch" type="search" autocomplete="off" maxlength="200" placeholder="کد ${party}، نام یا شماره تماس" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="orderCustomerOptions" />
         <div id="orderCustomerDropdown" class="orders-picker-dropdown" popover="manual"><div id="orderCustomerOptions" role="listbox" aria-label="${purchase ? "تأمین‌کنندگان" : "مشتریان"}"></div><p id="orderSearchStatus" class="orders-hint" role="status"></p><button id="orderCustomerMore" type="button" class="orders-secondary" hidden>نمایش بیشتر</button></div>
       </div>
-      <dl id="orderCustomerDetails" class="orders-customer-details" hidden></dl>
+      <div class="orders-customer-reveal" inert><div><dl id="orderCustomerDetails" class="orders-customer-details"></dl></div></div>
       <div class="orders-form-grid">
         <label>کد فاکتور<input id="orderInvoiceCode" readonly dir="ltr" /></label>
         <label>تاریخ شمسی<input id="orderDate" dir="ltr" maxlength="10" placeholder="۱۴۰۵/۰۷/۲۲" /></label>
@@ -96,12 +97,15 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
       </div>
       <div class="orders-items-heading"><h3>اقلام فاکتور</h3></div>
       <div class="orders-table-scroll"><table class="orders-items-table"><thead><tr><th>ردیف</th><th>کالا</th><th>تعداد</th><th>واحد</th><th>مبلغ واحد (تومان)</th><th>مبلغ کل (تومان)</th><th><span class="sr-only">حذف ردیف</span></th></tr></thead><tbody id="orderItems"></tbody></table></div>
-      <details${purchase ? " hidden" : ""}><summary>نشانی تحویل (اختیاری)</summary><label>نشانی تحویل<textarea id="orderDeliveryAddress" rows="2" maxlength="700"></textarea></label></details>
       <label>توضیحات فاکتور<textarea id="orderDescription" rows="3" maxlength="${purchase ? 1000 : 5000}"></textarea></label>
       <section class="orders-discount" aria-labelledby="orderDiscountTitle">
         <h3 id="orderDiscountTitle">تخفیف</h3>
         <div class="orders-discount-fields">
-          <label>نوع تخفیف<select id="orderDiscountKind"><option value="fixed">مبلغ ثابت</option><option value="percent">درصدی (%)</option></select></label>
+          <fieldset id="orderDiscountKind" class="orders-discount-kind">
+            <legend>نوع تخفیف</legend>
+            <label><input type="radio" name="orderDiscountType" value="fixed" checked /> مبلغ ثابت</label>
+            <label><input type="radio" name="orderDiscountType" value="percent" /> درصدی (%)</label>
+          </fieldset>
           <label>مبلغ تخفیف (تومان)<input id="orderDiscount" inputmode="numeric" dir="ltr" maxlength="21" value="0" /></label>
           <label hidden>درصد تخفیف (%)<input id="orderDiscountPercent" inputmode="decimal" dir="ltr" maxlength="6" value="0" /></label>
           <div class="orders-discount-amount"><span>تخفیف اعمال‌شده</span><output id="orderDiscountAmount"></output></div>
@@ -131,6 +135,9 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
   const $ = (id) => document.getElementById(id);
   const customerSearch = $("orderCustomerSearch");
   const customerMenu = $("orderCustomerDropdown");
+  const customerDetails = $("orderCustomerDetails");
+  const customerReveal = customerDetails.closest(".orders-customer-reveal");
+  const scrollBody = create.querySelector(".orders-dialog-body");
   const productPicker = createProductPicker(create, (input, product, changed) => {
     const row = input.closest(".orders-item-row");
     row.querySelector(".item-unit").textContent = product.unit;
@@ -271,7 +278,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
             customerDropdown(false);
             customerSearch.value = `${item.customer_code} · ${fullName(item)}`;
             customer = null;
-            $("orderCustomerDetails").hidden = true;
+            renderCustomer();
             try {
               const selected = await getCustomer(item.id);
               if (selectedVersion !== searchVersion) return;
@@ -311,31 +318,36 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
     }
   }
   function renderCustomer() {
-    const details = $("orderCustomerDetails");
-    details.replaceChildren();
-    details.hidden = !customer;
+    customerReveal.inert = !customer;
     if (!customer) return;
-    const identity = customer.is_system
-      ? [[party, fullName(customer)], [`نوع ${party}`, systemCustomerLabel]]
-      : [["نام", customer.first_name], ["نام خانوادگی", customer.last_name], ["جنسیت", genderLabel(customer.gender)]];
-    for (const [label, value] of [
-      [`کد ${party}`, customer.customer_code],
-      ...identity,
-      ...(!customer.is_system || customer.phone_numbers.length
-        ? [["شماره‌های تماس", customer.phone_numbers.join("، ") || "ثبت نشده"]] : []),
-      ["آدرس", customer.address || "ثبت نشده"],
-      ["آخرین تماس", formatDate(customer.last_contact_date)],
-      [`توضیحات ${party}`, customer.notes || "ثبت نشده"],
+    const name = [["نام", customer.first_name], ["نام خانوادگی", customer.last_name]];
+    const phone = ["شماره‌های تماس", customer.phone_numbers.join("، ") || "ثبت نشده"];
+    const address = ["آدرس", customer.address || "ثبت نشده"];
+    const notes = [`توضیحات ${party}`, customer.notes || "ثبت نشده"];
+    const fields = purchase ? [
+      ...(customer.is_system
+        ? [[party, fullName(customer)], [`نوع ${party}`, systemCustomerLabel]]
+        : [...name, ["جنسیت", genderLabel(customer.gender)]]),
+      ...(!customer.is_system || customer.phone_numbers.length ? [phone] : []),
+      address, ["آخرین تماس", formatDate(customer.last_contact_date)], notes,
       ["تاریخ ثبت", formatDate(customer.created_at?.slice(0, 10))],
       ["آخرین ویرایش", formatDate(customer.updated_at?.slice(0, 10))],
-      ...(!purchase ? [["تعداد سفارش", formatNumber(customer.summary.order_count)],
-        ["جمع سفارش‌ها", money(customer.summary.total_orders)],
-        ["پرداختی", money(customer.summary.paid)], ["مانده", money(customer.summary.debt)]] : []),
+    ] : [
+      ...name, phone, address, notes,
+      ["تعداد سفارش‌ها", formatNumber(customer.summary.order_count)],
+      ["جمع سفارش‌ها", money(customer.summary.total_orders)],
+      ["پرداختی", money(customer.summary.paid)], ["مانده", money(customer.summary.debt)],
+    ];
+    const content = document.createDocumentFragment();
+    for (const [label, value] of [
+      [`کد ${party}`, customer.customer_code],
+      ...fields,
     ]) {
       const cell = node("div");
       cell.append(node("dt", "", label), node("dd", "", String(value)));
-      details.append(cell);
+      content.append(cell);
     }
+    customerDetails.replaceChildren(content);
   }
   customerSearch.addEventListener("input", () => {
     customer = null;
@@ -399,9 +411,9 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
       if (ctrlKey || shiftKey || !deltaY ||
           textarea.scrollHeight > textarea.clientHeight) return;
       event.preventDefault();
-      const unit = deltaMode === WheelEvent.DOM_DELTA_PAGE ? create.clientHeight
+      const unit = deltaMode === WheelEvent.DOM_DELTA_PAGE ? scrollBody.clientHeight
         : deltaMode === WheelEvent.DOM_DELTA_LINE ? parseFloat(getComputedStyle(textarea).lineHeight) || 16 : 1;
-      create.scrollTop += deltaY * unit;
+      scrollBody.scrollTop += deltaY * unit;
     }, { passive: false });
   }
   $("orderCustomerMore").addEventListener("click", () => searchCustomers(true));
@@ -420,7 +432,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
       return null;
     }
     const row = node("tr", "orders-item-row");
-    row.innerHTML = `<td class="item-number"></td><td><div class="orders-product-field"><input class="item-product" autocomplete="off" maxlength="200" placeholder="انتخاب یا جستجوی کالا" aria-label="کالا" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="orderProductOptions" /></div></td><td><div class="orders-quantity-control" dir="ltr"><button class="orders-quantity-button item-quantity-decrease" type="button" aria-label="کاهش تعداد">−</button><input class="item-quantity" value="1" inputmode="numeric" dir="ltr" maxlength="7" role="spinbutton" aria-label="تعداد" aria-valuemin="1" aria-valuemax="1000000" aria-valuenow="1" /><button class="orders-quantity-button item-quantity-increase" type="button" aria-label="افزایش تعداد">+</button></div></td><td class="item-unit">—</td><td><input class="item-price" inputmode="numeric" dir="ltr" maxlength="21" aria-label="مبلغ واحد (تومان)" /></td><td><output class="item-total" aria-label="مبلغ کل ردیف (تومان)"></output></td><td><button class="orders-icon-button item-remove" type="button" aria-label="حذف ردیف">×</button></td>`;
+    row.innerHTML = `<td class="item-number"></td><td><div class="orders-product-field"><input class="item-product" autocomplete="off" maxlength="200" placeholder="انتخاب یا جستجوی کالا" aria-label="کالا" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="orderProductOptions" /></div></td><td><div class="orders-quantity-control" dir="ltr"><button class="orders-quantity-button item-quantity-decrease" type="button" aria-label="کاهش تعداد">−</button><input class="item-quantity" value="1" inputmode="numeric" dir="ltr" maxlength="7" role="spinbutton" aria-label="تعداد" aria-valuemin="1" aria-valuemax="1000000" aria-valuenow="1" /><button class="orders-quantity-button item-quantity-increase" type="button" aria-label="افزایش تعداد">+</button></div></td><td class="item-unit">—</td><td><input class="item-price" inputmode="numeric" dir="ltr" maxlength="21" aria-label="مبلغ واحد (تومان)" /></td><td><output class="item-total" aria-label="مبلغ کل ردیف (تومان)"></output></td><td><button class="orders-icon-button item-remove" type="button" aria-label="حذف ردیف" data-pointer-tooltip="حذف ردیف">×</button></td>`;
     const action = node("tr", "orders-row-action");
     const cell = node("td");
     cell.colSpan = 7;
@@ -554,7 +566,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
     return { product_id: product?.id, quantity, unit_price, lineTotal,
       ...(purchase && product ? { category_id: Number(input.dataset.categoryId) } : {}) };
   }
-  const discountKind = $("orderDiscountKind");
+  const discountKind = create.querySelector("form").elements.namedItem("orderDiscountType");
   const fixedDiscount = $("orderDiscount");
   const percentDiscount = $("orderDiscountPercent");
 
@@ -649,9 +661,9 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
   }
   amountInput(fixedDiscount, () => changeDiscount(fixedDiscount));
   percentDiscount.addEventListener("input", () => changeDiscount(percentDiscount));
-  discountKind.addEventListener("change", () => {
+  $("orderDiscountKind").addEventListener("change", (event) => {
     showDiscountKind(discountKind.value);
-    changeDiscount(discountKind);
+    changeDiscount(event.target);
   });
   $("orderNumber").addEventListener("input", () => {
     manualNumber = true;
@@ -796,7 +808,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
       ...(!editing && invoiceWorkflow?.revision ? { invoice_settings_revision: invoiceWorkflow.revision } : {}),
       invoice_date: date(orderDate),
       order_number: manualNumber ? $("orderNumber").value.trim() || null : null,
-      ...($("orderDeliveryAddress").value.trim() ? { delivery_address: $("orderDeliveryAddress").value.trim() } : {}),
+      ...(editing?.delivery_address ? { delivery_address: editing.delivery_address } : {}),
       description: $("orderDescription").value.trim() || null,
     } };
   }
@@ -1080,8 +1092,6 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
     $("orderPay").textContent = order || purchaseId ? "ادامه و بررسی پرداخت‌ها" : "پرداخت ←";
     $("orderInvoiceCode").value = order?.invoice_code ?? "هنگام ثبت نهایی تولید می‌شود";
     $("orderNumber").value = order?.order_number ?? "";
-    $("orderDeliveryAddress").value = order?.delivery_address ?? "";
-    $("orderDeliveryAddress").closest("details").open = Boolean(order?.delivery_address);
     $("orderDescription").value = order?.description ?? "";
     defaultBusinessDate = today();
     orderDate.value = order?.jalali_date ?? defaultBusinessDate;
@@ -1090,6 +1100,7 @@ export function initializeOrderDialogs(onSaved, { purchaseFlow, onClose = () => 
     $("orderItems").replaceChildren();
     if (!order && !purchaseId) addRow();
     openDialog(createDialog);
+    scrollBody.scrollTop = 0;
     await loadReferences();
     if (failure && createDialog.active && referencesReady) error(create, failure);
   }

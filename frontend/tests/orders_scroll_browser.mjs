@@ -19,6 +19,7 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage();
 const errors = [];
+const scroller = "#createOrderModal .orders-dialog-body";
 page.on("pageerror", (error) => errors.push(error.message));
 let token;
 const customers = [],
@@ -53,27 +54,33 @@ async function selectCustomer(customer) {
     .click();
   await page.waitForFunction((name) => {
     const details = document.getElementById("orderCustomerDetails");
-    return !details.hidden && details.textContent.includes(name);
+    return !details.closest("[inert]") && details.textContent.includes(name);
   }, customer.first_name);
-  assert.equal(await page.locator("#orderCustomerDetails > div").count(), 14);
+  await page.locator(".orders-customer-reveal").evaluate(async (reveal) => {
+    await Promise.all(reveal.getAnimations().map((animation) => animation.finished));
+  });
+  assert.deepEqual(await page.locator("#orderCustomerDetails dt").allTextContents(), [
+    "کد مشتری", "نام", "نام خانوادگی", "شماره‌های تماس", "آدرس", "توضیحات مشتری",
+    "تعداد سفارش‌ها", "جمع سفارش‌ها", "پرداختی", "مانده",
+  ]);
 }
 async function wheelToEnd(target) {
   await page.locator(target).hover();
+  const footer = page.locator("#createOrderModal footer");
+  const before = await footer.boundingBox();
   await page.mouse.wheel(0, 20000);
-  await page.waitForFunction(() => {
-    const root = document.getElementById("createOrderModal");
-    return (
-      root.scrollTop > 0 &&
-      root.scrollTop + root.clientHeight >= root.scrollHeight - 2
-    );
-  });
+  await page.waitForFunction((selector) => {
+    const body = document.querySelector(selector);
+    return body.scrollTop + body.clientHeight >= body.scrollHeight - 2;
+  }, scroller);
+  assert.ok(Math.abs((await footer.boundingBox()).y - before.y) < 1, "actions stay in place while the form scrolls");
   assert.ok(
-    await page.locator("#orderPay").evaluate((button) => {
+    await footer.locator("button").evaluateAll((buttons) => buttons.every((button) => {
       const r = button.getBoundingClientRect(),
         p = button.closest("dialog").getBoundingClientRect();
       return r.top >= p.top && r.bottom <= p.bottom;
-    }),
-    "payment button is reachable by wheel scrolling",
+    })),
+    "payment and cancel stay inside the panel",
   );
 }
 async function wheelToTop() {
@@ -81,7 +88,7 @@ async function wheelToTop() {
   await page.locator("#orderDiscount").hover();
   await page.mouse.wheel(0, -20000);
   await page.waitForFunction(
-    () => document.getElementById("createOrderModal").scrollTop === 0,
+    (selector) => document.querySelector(selector).scrollTop === 0, scroller,
   );
 }
 try {
@@ -142,6 +149,8 @@ try {
       .evaluate((root) => {
         const r = root.getBoundingClientRect(),
           nav = document.getElementById("mainNavbar").getBoundingClientRect();
+        const body = root.querySelector(".orders-dialog-body");
+        const bodyStyle = getComputedStyle(body);
         return {
           fits:
             r.top >= 14 &&
@@ -150,10 +159,11 @@ try {
           dimensions: [r.top, r.right, root.scrollWidth, root.clientWidth],
           centered: Math.abs(r.left - (innerWidth - r.width) / 2) < 1,
           anchored: Math.abs(r.bottom - nav.bottom) < 1,
+          innerScrollbar: bodyStyle.direction === "ltr" && bodyStyle.scrollbarWidth === "thin",
         };
       });
     assert.ok(
-      geometry.fits && geometry.centered && geometry.anchored,
+      geometry.fits && geometry.centered && geometry.anchored && geometry.innerScrollbar,
       `${width}x${height}: ${JSON.stringify(geometry)}`,
     );
     await wheelToEnd("#orderCustomerDetails");
@@ -250,18 +260,17 @@ try {
   }
   await swipe(680, 250);
   await page.waitForFunction(
-    () => document.getElementById("createOrderModal").scrollTop > 100,
+    (selector) => document.querySelector(selector).scrollTop > 100, scroller,
   );
   // Wait for inertia to stop before reversing the gesture.
   await page.waitForTimeout(700);
   const down = await page
-    .locator("#createOrderModal")
+    .locator(scroller)
     .evaluate((root) => root.scrollTop);
   await swipe(250, 680);
   await page.waitForFunction(
-    (down) =>
-      document.getElementById("createOrderModal").scrollTop < down - 100,
-    down,
+    ({ down, scroller }) => document.querySelector(scroller).scrollTop < down - 100,
+    { down, scroller },
   );
   await cdp.detach();
   await page.keyboard.press("Escape");
