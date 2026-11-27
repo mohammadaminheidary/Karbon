@@ -1,3 +1,4 @@
+import { clickSettingsSection } from "./settings_navigation.mjs";
 import { selectPurchaseItem, waitForPurchaseForm } from "./purchase-browser-helpers.mjs";
 // Run against serve_customers_fixture.py with a disposable database.
 import assert from "node:assert/strict";
@@ -207,7 +208,7 @@ try {
     [null, false, 5, 0],
   );
   await modal.waitFor({ state: "hidden" });
-  await $("#settings-tab-warehouse-products").click();
+  await clickSettingsSection(page, "warehouse-products");
   await $(`[data-product-id="${stored.id}"]`).getByRole("button", { name: "ویرایش", exact: true }).click();
   await formReady();
   assert.equal(await brandChoice.inputValue(), String(brand.id));

@@ -1,3 +1,4 @@
+import { clickSettingsSection } from "./settings_navigation.mjs";
 // Run beside the disposable fixture in serve_customers_fixture.py.
 // KARBON_PLAYWRIGHT_PATH can point to an existing Playwright installation.
 import assert from "node:assert/strict";
@@ -243,7 +244,7 @@ try {
         "products",
         "invoices",
       ]) {
-        await page.locator(`[data-settings-target="${section}"]`).click();
+        await clickSettingsSection(page, section);
         await page
           .locator(`[data-settings-panel="${section}"]`)
           .waitFor({ state: "visible" });

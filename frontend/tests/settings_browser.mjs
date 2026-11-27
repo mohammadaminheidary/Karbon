@@ -1,3 +1,4 @@
+import { clickSettingsSection } from "./settings_navigation.mjs";
 // Fixture: python3 frontend/tests/serve_customers_fixture.py --backend-port 8017 --frontend-port 5517 --members 2 --orders --finance --customers 2
 // Run only against the disposable fixture; this test changes its login credentials.
 import { createRequire } from "node:module";
@@ -59,7 +60,7 @@ const ready = () =>
 await page.goto(base + "/page/settings-page.html");
 await ready();
 const open = async (section) => {
-  await page.locator(`[data-settings-target="${section}"]`).click();
+  await clickSettingsSection(page, section);
   await page
     .locator(
       `[data-settings-panel="${section}"]:not(.hidden)[aria-busy="false"]`,
@@ -93,6 +94,72 @@ const submit = async (id, match) => {
   assert.ok(r.ok(), `${match}: ${r.status()} ${await r.text()}`);
 };
 try {
+  const navigation = page.locator("#settingsNavigation");
+  assert.equal(await page.locator(".settings-welcome").count(), 0);
+  const cards = page.locator(".settings-category-card");
+  assert.ok(await cards.count() > 0);
+  assert.equal(await cards.locator(".settings-card-arrow path").evaluateAll((paths) =>
+    paths.every((path) => {
+      const length = path.getTotalLength();
+      const tip = path.getPointAtLength(length / 2);
+      return tip.x < path.getPointAtLength(0).x && tip.x < path.getPointAtLength(length).x;
+    }),
+  ), true);
+
+  const groups = navigation.locator("details");
+  assert.deepEqual(await groups.locator("summary span").allTextContents(),
+    ["حساب و مجموعه", "مالی و اسناد", "کالا", "انبار", "برنامه"]);
+  assert.equal(await navigation.locator("details[open]").count(), 0);
+
+  const account = groups.filter({ has: page.locator("#settings-tab-members") });
+  const accountSummary = account.locator("summary");
+  await account.evaluate((group) => {
+    group.addEventListener("transitionend", (event) => {
+      if (event.propertyName !== "grid-template-rows") return;
+      group.dataset.testTransitionEnded = String(group.open);
+    });
+  });
+  await accountSummary.focus();
+  for (const expanded of [true, false]) {
+    await accountSummary.press("Enter");
+    assert.equal(await account.evaluate((group) => group.open), expanded);
+    await page.locator(`details[data-test-transition-ended="${expanded}"]`).waitFor({ timeout: 3000 });
+  }
+
+  await accountSummary.click();
+  await page.locator('details[data-test-transition-ended="true"]').waitFor();
+  const highlight = navigation.locator(".settings-nav-indicator");
+  const checkHighlight = async (section, animated) => {
+    const button = navigation.locator(`[data-settings-target="${section}"]`);
+    const movement = await button.evaluate(async (target) => {
+      const indicator = target.closest("nav").querySelector(".settings-nav-indicator");
+      const before = indicator.getBoundingClientRect();
+      target.click();
+      const animations = indicator.getAnimations();
+      const start = indicator.getBoundingClientRect();
+      await Promise.all(animations.map((animation) => animation.finished));
+      const end = indicator.getBoundingClientRect();
+      const button = target.getBoundingClientRect();
+      return {
+        animated: animations.length > 0,
+        startedAtPrevious: Math.abs(before.y - start.y) < 1,
+        endsAtButton: ["x", "y", "width", "height"].every((key) => Math.abs(end[key] - button[key]) < 1),
+      };
+    });
+    assert.equal(movement.animated, animated);
+    if (animated) assert.equal(movement.startedAtPrevious, true);
+    assert.equal(movement.endsAtButton, true);
+  };
+  await checkHighlight("members", true);
+  await checkHighlight("security", true);
+  await accountSummary.click();
+  await highlight.waitFor({ state: "hidden" });
+  await accountSummary.click();
+  await highlight.waitFor({ state: "visible" });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await checkHighlight("general", false);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+
   // Every original tool remains reachable at phone, tablet, laptop and desktop widths.
   const sections = [
     "general",
@@ -144,6 +211,32 @@ try {
       );
     }
   }
+  for (const width of [390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 620 });
+    await open("general");
+    await page.evaluate(() => window.scrollTo({ top: 200, behavior: "instant" }));
+    const sidebar = page.locator(".settings-sidebar");
+    const before = await sidebar.boundingBox();
+    const pageScroll = await page.evaluate(() => window.scrollY);
+    assert.ok(pageScroll > 0);
+    const navBounds = await navigation.boundingBox();
+    await page.mouse.move(navBounds.x + navBounds.width / 2, navBounds.y + navBounds.height / 2);
+    await page.mouse.wheel(0, 1200);
+    await page.waitForFunction(() => {
+      const nav = document.getElementById("settingsNavigation");
+      return nav.scrollTop > 0 && nav.scrollHeight - nav.clientHeight - nav.scrollTop < 2;
+    });
+    assert.equal(await page.evaluate(() => window.scrollY), pageScroll);
+    const lastButton = page.locator("#settings-tab-factory-reset");
+    assert.equal(await lastButton.evaluate((button) => {
+      const bounds = button.getBoundingClientRect();
+      const nav = button.closest("nav").getBoundingClientRect();
+      return bounds.bottom <= nav.bottom && bounds.top >= nav.top;
+    }), true);
+    await page.evaluate(() => window.scrollBy({ top: 60, behavior: "instant" }));
+    assert.ok(await page.evaluate(() => window.scrollY) > pageScroll);
+    assert.ok(Math.abs((await sidebar.boundingBox()).y - before.y) < 1);
+  }
   await page.setViewportSize({ width: 1440, height: 1050 });
   await open("general");
   await page.screenshot({
@@ -152,7 +245,10 @@ try {
     animations: "disabled",
   });
   // Overview shortcuts and deep links.
+  await accountSummary.click();
+  assert.equal(await account.evaluate((group) => group.open), false);
   await page.locator('[data-open-settings-section="members"]').click();
+  assert.equal(await account.evaluate((group) => group.open), true);
   await page.locator("#settingsMembersTable").waitFor({ state: "visible" });
   await page.locator("#addMemberButton").click();
   await page.locator("#memberFirstName").fill("آزمون");

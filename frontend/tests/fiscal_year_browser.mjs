@@ -1,3 +1,4 @@
+import { clickSettingsSection } from "./settings_navigation.mjs";
 // Run with run_fiscal_year_browser.py against a disposable database.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -42,7 +43,7 @@ try {
   };
   await go(settings);
   await ready();
-  await page.locator("#settings-tab-fiscal-year").click();
+  await clickSettingsSection(page, "fiscal-year");
   async function closeYear() {
     await text("#fiscalActive", `سال مالی فعال ${label(year)}`);
     await page.getByRole("button", { name: "بستن سال مالی", exact: true }).click();

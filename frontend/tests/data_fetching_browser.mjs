@@ -1,3 +1,4 @@
+import { clickSettingsSection } from "./settings_navigation.mjs";
 // Run against frontend/tests/serve_customers_fixture.py with --customers 25 --finance
 // --orders --bank-ledger 25. Uses only the fixture's disposable database.
 import assert from "node:assert/strict";
@@ -100,7 +101,7 @@ try {
     "invoices",
   ];
   for (const section of sections) {
-    await page.locator(`[data-settings-target="${section}"]`).click();
+    await clickSettingsSection(page, section);
     await settled();
   }
   assert.equal(
@@ -131,7 +132,7 @@ try {
     }
   }
   for (const section of sections) {
-    await page.locator(`[data-settings-target="${section}"]`).click();
+    await clickSettingsSection(page, section);
     await settled();
   }
   const warmRequests = requests.length - coldRequests;

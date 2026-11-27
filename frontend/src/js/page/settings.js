@@ -221,6 +221,7 @@ const sharedSettingsPanels = new Map([
   ["purchase-invoices", "invoices"],
 ]);
 const sectionLoads = new Map();
+let moveSettingsIndicator;
 async function showSettingsSection(
   requestedSection,
   {
@@ -287,12 +288,8 @@ async function showSettingsSection(
   const selected = document.querySelector('[data-settings-target][aria-current="true"]');
   const group = selected?.closest(".settings-nav-disclosure");
   if (group) group.open = true;
-  if (selected && window.matchMedia("(max-width: 800px)").matches) {
-    // Scroll only the compact navigation strip; leave the page's reading position intact.
-    const nav = getElement("settingsNavigation");
-    const delta = selected.getBoundingClientRect().left - nav.getBoundingClientRect().left;
-    nav.scrollBy({ left: delta - (nav.clientWidth - selected.clientWidth) / 2, behavior: "instant" });
-  }
+  moveSettingsIndicator(selected);
+  if (selected) revealSettingsButton(selected);
 
 
   const panel = document.querySelector(`[data-settings-panel="${panelName}"]`);
@@ -311,8 +308,74 @@ async function showSettingsSection(
   }
 }
 
+function revealSettingsButton(button) {
+  const nav = getElement("settingsNavigation");
+  const { top, bottom } = button.getBoundingClientRect();
+  const navTop = nav.getBoundingClientRect().top;
+  const navBottom = navTop + nav.clientHeight;
+  const inset = 4;
+  const offset = Math.min(0, top - navTop - inset) + Math.max(0, bottom - navBottom + inset);
+  if (offset) nav.scrollTop += offset;
+}
+
+function initializeSettingsIndicator(nav) {
+  const indicator = nav.querySelector(".settings-nav-indicator");
+  const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let activeButton;
+  let animation;
+
+  function position() {
+    const group = activeButton?.closest(".settings-nav-disclosure");
+    indicator.hidden = !activeButton || Boolean(group && !group.open);
+    if (indicator.hidden) return;
+
+    const button = activeButton.getBoundingClientRect();
+    const container = nav.getBoundingClientRect();
+    Object.assign(indicator.style, {
+      left: `${button.left - container.left - nav.clientLeft + nav.scrollLeft}px`,
+      top: `${button.top - container.top - nav.clientTop + nav.scrollTop}px`,
+      width: `${button.width}px`,
+      height: `${button.height}px`,
+    });
+  }
+
+  const layout = new ResizeObserver(position);
+  layout.observe(nav);
+  for (const children of nav.querySelectorAll(".settings-nav-children")) {
+    layout.observe(children);
+  }
+  nav.addEventListener("toggle", position, { capture: true });
+  motion.addEventListener("change", () => animation?.cancel());
+
+  return (button) => {
+    if (button === activeButton) return;
+    const previous = indicator.hidden ? null : indicator.getBoundingClientRect();
+    animation?.cancel();
+    activeButton = button;
+    position();
+    if (!previous || indicator.hidden || motion.matches) return;
+
+    const next = indicator.getBoundingClientRect();
+    animation = indicator.animate(
+      [
+        { transform: `translate(${previous.left - next.left}px, ${previous.top - next.top}px) scale(${previous.width / next.width}, ${previous.height / next.height})` },
+        { transform: "none" },
+      ],
+      { duration: 240, easing: "cubic-bezier(0.2, 0.75, 0.25, 1)" },
+    );
+  };
+}
 
 function setupSettingsNavigation() {
+  const nav = getElement("settingsNavigation");
+  moveSettingsIndicator = initializeSettingsIndicator(nav);
+  nav.addEventListener("transitionend", (event) => {
+    if (event.propertyName !== "grid-template-rows" || !event.target.matches(".settings-nav-children")) return;
+    const group = event.target.parentElement;
+    const selected = group.querySelector('[data-settings-target][aria-current="true"]');
+    if (group.open && selected) revealSettingsButton(selected);
+  });
+
   document
     .querySelectorAll(
       "[data-settings-target]"

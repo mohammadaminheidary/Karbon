@@ -1,3 +1,4 @@
+import { clickSettingsSection } from "./settings_navigation.mjs";
 // Run beside serve_customers_fixture.py with an empty disposable database.
 import { advancePurchasePayment, choosePurchaseCategory, closePurchaseInvoice, fillPurchaseRow, purchaseRow, waitForPurchaseForm } from "./purchase-browser-helpers.mjs";
 import assert from "node:assert/strict";
@@ -60,14 +61,20 @@ try {
   await page.goto(`${base}/page/settings-page.html#warehouse-categories`);
   await ready();
   const sections = page.locator("#settingsNavigation details");
-  assert.deepEqual(await sections.locator("summary span").allTextContents(), ["کالا", "انبار"]);
-  assert.deepEqual(await sections.nth(0).locator("button span").allTextContents(),
+  assert.deepEqual(await sections.locator("summary span").allTextContents(),
+    ["حساب و مجموعه", "مالی و اسناد", "کالا", "انبار", "برنامه"]);
+  const productsGroup = sections.filter({ has: page.locator("#settings-tab-products") });
+  const warehouseGroup = sections.filter({ has: page.locator("#settings-tab-warehouse-products") });
+  assert.deepEqual(await productsGroup.locator("button span").allTextContents(),
     ["کالاها", "دسته‌بندی کالا", "واحد", "برندها"]);
-  assert.deepEqual(await sections.nth(1).locator("button span").allTextContents(),
+  assert.deepEqual(await warehouseGroup.locator("button span").allTextContents(),
     ["دسته‌بندی انبار کالا", "کالا (انبار)"]);
-  await sections.nth(0).locator("summary").click();
-  assert.equal(await sections.nth(0).getAttribute("open"), null);
-  await sections.nth(0).locator("summary").click();
+  assert.equal(await productsGroup.getAttribute("open"), null);
+  await productsGroup.locator("summary").click();
+  assert.notEqual(await productsGroup.getAttribute("open"), null);
+  await productsGroup.locator("summary").click();
+  assert.equal(await productsGroup.getAttribute("open"), null);
+  await productsGroup.locator("summary").click();
   await page.locator("#inventory-categories-name").fill("مواد اولیه آزمایش");
   await page.locator("#inventory-categories-submit").click();
   await page
@@ -83,10 +90,10 @@ try {
   await page.locator("#inventory-categories-name").fill("مواد اولیه تولید");
   await page.locator("#inventory-categories-submit").click();
   await page.locator("#inventory-categories-list").getByText("مواد اولیه تولید", { exact: true }).waitFor();
-  await page.locator('[data-settings-target="inventory"]').click();
+  await clickSettingsSection(page, "inventory");
   await page.locator("#inventory-categories-list").getByText("عمومی", { exact: true }).waitFor();
   assert.equal(await page.locator("#inventory-categories-list").getByText("مواد اولیه تولید").count(), 0);
-  await page.locator('[data-settings-target="units"]').click();
+  await clickSettingsSection(page, "units");
   await page.locator("#inventory-units-name").fill("متر آزمایش");
   await page.locator("#inventory-units-form button").click();
   await page
@@ -109,7 +116,7 @@ try {
     await page.locator("#settingsProductRequiresBrand").check();
     await page.locator("#settingsProductBrand").selectOption(String(brand.id));
   }
-  await page.locator("#settings-tab-products").click();
+  await clickSettingsSection(page, "products");
   await page.locator("#openCreateProductButton").click();
   await fillFrame();
   await page.locator("#settingsProductCategory").selectOption({ label: "عمومی" });
@@ -120,7 +127,7 @@ try {
   assert.equal(saleResult.status(), 201, await saleResult.text());
   const salesFrame = await saleResult.json();
   await page.locator(`[data-product-id="${salesFrame.id}"]`).waitFor();
-  await page.locator('[data-settings-target="warehouse-products"]').click();
+  await clickSettingsSection(page, "warehouse-products");
   await page.locator("#openCreateProductButton").click();
   await fillFrame();
   await page.locator("#settingsProductWarehouseCategory").selectOption({ label: "مواد اولیه تولید" });
@@ -213,7 +220,7 @@ try {
   });
   assert.equal(sale.status(), 201, await sale.text());
   const order = await sale.json();
-  await page.locator("#settings-tab-warehouse-products").click();
+  await clickSettingsSection(page, "warehouse-products");
   const warehouseCard = page.locator(`[data-product-id="${warehouseTwin.id}"]`);
   const secondWarehouseCard = page.locator(`[data-product-id="${removable.id}"]`);
   await warehouseCard.getByText(/موجودی انبار ۰/).waitFor();
@@ -228,7 +235,7 @@ try {
   await page.locator("#financeDeleteSubmit").click();
   await warehouseCard.waitFor({ state: "detached" });
   await secondWarehouseCard.waitFor({ state: "detached" });
-  await page.locator("#settings-tab-products").click();
+  await clickSettingsSection(page, "products");
   const salesCard = page.locator(`[data-product-id="${salesOnly.id}"]`);
   await salesCard.getByText(/موجودی فروش ۱۰/).waitFor();
   assert.equal(await salesCard.getByRole("button", { name: /^حذف کالا/ }).isDisabled(), true);
@@ -255,7 +262,7 @@ try {
   await page.locator("#inventory-category-delete-description").getByText(/۱ کالا بدون دسته‌بندی انبار می‌مانند/).waitFor();
   await page.locator("#inventory-category-delete-confirm").click();
   await newCategory.waitFor({ state: "detached" });
-  await page.locator('[data-settings-target="warehouse-products"]').click();
+  await clickSettingsSection(page, "warehouse-products");
   await page.locator(`[data-product-id="${product.id}"]`).getByText(/بدون دسته‌بندی انبار/).waitFor();
   assert.deepEqual(errors, []);
   console.log(
