@@ -20,6 +20,11 @@ await page.addInitScript(() => {
 });
 const ready = () => page.locator('html[data-page-state="ready"]').waitFor();
 const settled = () => page.locator("#createOrderModal[open]:not([data-morph])").waitFor();
+const indicatorFades = () => page.waitForFunction(() => {
+  const dot = document.querySelector(".navbar-indicator");
+  const opacity = Number(getComputedStyle(dot).opacity);
+  return opacity > 0 && opacity < 1 && dot.closest(".document-dock-morphing");
+});
 const motions = () => page.evaluate(() => window.panelMotion);
 const shape = () => page.evaluate(() => {
   const panel = document.querySelector("#createOrderModal");
@@ -51,7 +56,7 @@ try {
 
   await page.goto(`${base}/page/orders-page.html`);
   await ready();
-  await page.locator(".orders-create").click();
+  await Promise.all([indicatorFades(), page.locator(".orders-create").click()]);
   await settled();
   await waitForPurchaseForm(page);
   const saleMotion = await motions();
@@ -73,7 +78,7 @@ try {
     await hold;
     await route.continue();
   });
-  await page.locator("#buyItemsButton").click();
+  await Promise.all([indicatorFades(), page.locator("#buyItemsButton").click()]);
   await settled();
   assert.equal(await page.locator("#orderPay").isDisabled(), true);
   assert.deepEqual(await motions(), saleMotion);

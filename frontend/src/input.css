@@ -501,6 +501,16 @@ html:has(> body > .navigation-content) {
   visibility: inherit;
 }
 
+.document-dock-morphing .navbar-indicator {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .navbar-indicator {
+    transition: opacity 160ms cubic-bezier(.22, 1, .36, 1);
+  }
+}
+
 .navbar-item:focus-visible {
   outline: 2px solid var(--color-persian-blue);
   outline-offset: 2px;
