@@ -55,6 +55,7 @@ export function createProductPicker(dialog, onSelect, { chooseCategory = false }
   let input, catalog = [], byId = new Map();
   let matches, query, options, active, group, categoryId, categories = [];
   let categoryProducts = new Map();
+  let positionFrame = null;
 
   function restore(field) {
     const product = byId.get(Number(field.dataset.productId));
@@ -66,14 +67,22 @@ export function createProductPicker(dialog, onSelect, { chooseCategory = false }
   }
   function close() {
     if (!input) return;
+    if (positionFrame !== null) {
+      cancelAnimationFrame(positionFrame);
+      positionFrame = null;
+    }
     menu.hidePopover();
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");
     restore(input);
     input = null;
   }
-  function reposition() {
-    if (input && !positionOrderDropdown(menu, input, dialog)) close();
+  function schedulePosition() {
+    if (!input || positionFrame !== null) return;
+    positionFrame = requestAnimationFrame(() => {
+      positionFrame = null;
+      if (!positionOrderDropdown(menu, input, dialog)) close();
+    });
   }
   function appendOptions() {
     const fragment = document.createDocumentFragment();
@@ -176,10 +185,10 @@ export function createProductPicker(dialog, onSelect, { chooseCategory = false }
     if (input && event.target !== input && !event.composedPath().includes(menu)) close();
   });
   dialog.addEventListener("scroll", (event) => {
-    if (!menu.contains(event.target)) reposition();
+    if (!menu.contains(event.target)) schedulePosition();
   }, true);
-  window.addEventListener("resize", reposition);
-  window.visualViewport?.addEventListener("resize", reposition);
+  window.addEventListener("resize", schedulePosition);
+  window.visualViewport?.addEventListener("resize", schedulePosition);
 
   return {
     close,
