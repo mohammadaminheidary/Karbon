@@ -289,7 +289,6 @@ async function showSettingsSection(
   const group = selected?.closest(".settings-nav-disclosure");
   if (group) group.open = true;
   moveSettingsIndicator(selected);
-  if (selected) revealSettingsButton(selected);
 
 
   const panel = document.querySelector(`[data-settings-panel="${panelName}"]`);
@@ -308,54 +307,80 @@ async function showSettingsSection(
   }
 }
 
-function revealSettingsButton(button) {
-  const nav = getElement("settingsNavigation");
-  const { top, bottom } = button.getBoundingClientRect();
-  const navTop = nav.getBoundingClientRect().top;
-  const navBottom = navTop + nav.clientHeight;
-  const inset = 4;
-  const offset = Math.min(0, top - navTop - inset) + Math.max(0, bottom - navBottom + inset);
-  if (offset) nav.scrollTop += offset;
-}
-
 function initializeSettingsIndicator(nav) {
   const indicator = nav.querySelector(".settings-nav-indicator");
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const positionedStyles = {};
   let activeButton;
   let animation;
+  let positionFrame = null;
+  let revealAfterLayout = false;
 
-  function position() {
+  function position(reveal = false) {
     const group = activeButton?.closest(".settings-nav-disclosure");
-    indicator.hidden = !activeButton || Boolean(group && !group.open);
-    if (indicator.hidden) return;
+    const hidden = !activeButton || Boolean(group && !group.open);
+    if (indicator.hidden !== hidden) indicator.hidden = hidden;
+    if (hidden) return;
 
     const button = activeButton.getBoundingClientRect();
     const container = nav.getBoundingClientRect();
-    Object.assign(indicator.style, {
+    const scrollTop = nav.scrollTop;
+    const styles = {
       left: `${button.left - container.left - nav.clientLeft + nav.scrollLeft}px`,
-      top: `${button.top - container.top - nav.clientTop + nav.scrollTop}px`,
+      top: `${button.top - container.top - nav.clientTop + scrollTop}px`,
       width: `${button.width}px`,
       height: `${button.height}px`,
+    };
+    for (const [property, value] of Object.entries(styles)) {
+      if (positionedStyles[property] !== value) {
+        indicator.style[property] = value;
+        positionedStyles[property] = value;
+      }
+    }
+    if (reveal) {
+      const inset = 4;
+      const navBottom = container.top + nav.clientHeight;
+      const offset = Math.min(0, button.top - container.top - inset) +
+        Math.max(0, button.bottom - navBottom + inset);
+      if (offset) nav.scrollTop = scrollTop + offset;
+    }
+    return button;
+  }
+
+  function schedulePosition() {
+    if (positionFrame !== null) return;
+    positionFrame = requestAnimationFrame(() => {
+      positionFrame = null;
+      position(revealAfterLayout);
+      revealAfterLayout = false;
     });
   }
 
-  const layout = new ResizeObserver(position);
+  const layout = new ResizeObserver(schedulePosition);
   layout.observe(nav);
   for (const children of nav.querySelectorAll(".settings-nav-children")) {
     layout.observe(children);
   }
-  nav.addEventListener("toggle", position, { capture: true });
+  nav.addEventListener("toggle", schedulePosition, { capture: true });
+  nav.addEventListener("transitionend", (event) => {
+    if (event.propertyName !== "grid-template-rows" || !event.target.matches(".settings-nav-children")) return;
+    const group = event.target.parentElement;
+    if (!group.open || !group.contains(activeButton)) return;
+    revealAfterLayout = true;
+    schedulePosition();
+  });
   motion.addEventListener("change", () => animation?.cancel());
 
   return (button) => {
-    if (button === activeButton) return;
-    const previous = indicator.hidden ? null : indicator.getBoundingClientRect();
-    animation?.cancel();
+    const changed = button !== activeButton;
+    const previous = changed && !indicator.hidden && !motion.matches
+      ? indicator.getBoundingClientRect()
+      : null;
+    if (changed) animation?.cancel();
     activeButton = button;
-    position();
-    if (!previous || indicator.hidden || motion.matches) return;
+    const next = position(true);
+    if (!previous || !next) return;
 
-    const next = indicator.getBoundingClientRect();
     animation = indicator.animate(
       [
         { transform: `translate(${previous.left - next.left}px, ${previous.top - next.top}px) scale(${previous.width / next.width}, ${previous.height / next.height})` },
@@ -369,12 +394,6 @@ function initializeSettingsIndicator(nav) {
 function setupSettingsNavigation() {
   const nav = getElement("settingsNavigation");
   moveSettingsIndicator = initializeSettingsIndicator(nav);
-  nav.addEventListener("transitionend", (event) => {
-    if (event.propertyName !== "grid-template-rows" || !event.target.matches(".settings-nav-children")) return;
-    const group = event.target.parentElement;
-    const selected = group.querySelector('[data-settings-target][aria-current="true"]');
-    if (group.open && selected) revealSettingsButton(selected);
-  });
 
   document
     .querySelectorAll(
